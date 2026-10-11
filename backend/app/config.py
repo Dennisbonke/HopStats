@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     app_name: str = "HopStats"
     host: str = "127.0.0.1"
     port: int = 8000
-    database_url: str = "sqlite:////data/hopstats.sqlite3"
+    database_url: str = "sqlite:///./hopstats.sqlite3"
     log_level: str = "info"
     frontend_dist: str = "frontend/dist"
 

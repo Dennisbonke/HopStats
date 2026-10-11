@@ -23,6 +23,8 @@ cd frontend && npm run dev
 ```
 
 Vite proxies `/api` to FastAPI. The API health check is `GET /api/v1/health`.
+Local development stores SQLite in `./hopstats.sqlite3` by default, so it does not require a `/data`
+directory. Docker Compose explicitly uses `/data/hopstats.sqlite3` on its named persistent volume.
 
 ## Docker Compose
 
@@ -35,7 +37,9 @@ curl http://127.0.0.1:8000/api/v1/health
 The compiled frontend and API are served by one container. SQLite is stored at `/data/hopstats.sqlite3`
 in named volume `hopstats-data`, so container recreation does not erase it. Use `HOPSTATS_PORT` and
 `HOPSTATS_BIND_ADDRESS` to change the published address/port. ARM64 builds are supported; CI performs a
-cross-platform image build, while runtime execution on ARM64 must be verified on ARM hardware.
+cross-platform image build, while runtime execution on ARM64 must be verified on ARM hardware. CI also runs an
+amd64 smoke container, checks the health endpoint and frontend, and verifies the SQLite file remains present
+after container recreation; logical data persistence will be tested once M2 adds write operations.
 
 ## Tests and checks
 

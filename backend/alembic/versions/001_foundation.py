@@ -8,24 +8,114 @@ branch_labels = None
 depends_on = None
 
 def upgrade():
-    statements = [
-        "CREATE TABLE users (id INTEGER PRIMARY KEY, username VARCHAR(100) NOT NULL UNIQUE, created_at DATETIME NOT NULL)",
-        "CREATE TABLE breweries (id INTEGER PRIMARY KEY, source_system VARCHAR(50) NOT NULL, external_id VARCHAR(100), name VARCHAR(255) NOT NULL, country VARCHAR(100), city VARCHAR(100), state VARCHAR(100), UNIQUE(source_system, external_id))",
-        "CREATE TABLE beer_styles (id INTEGER PRIMARY KEY, name VARCHAR(150) NOT NULL UNIQUE, parent_id INTEGER REFERENCES beer_styles(id))",
-        "CREATE TABLE beers (id INTEGER PRIMARY KEY, source_system VARCHAR(50), external_id VARCHAR(100), brewery_id INTEGER REFERENCES breweries(id), style_id INTEGER REFERENCES beer_styles(id), name VARCHAR(255) NOT NULL, abv NUMERIC(5,2), ibu NUMERIC(6,2), photo_url TEXT, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, UNIQUE(source_system, external_id))",
-        "CREATE TABLE venues (id INTEGER PRIMARY KEY, source_system VARCHAR(50) NOT NULL, external_id VARCHAR(100), name VARCHAR(255) NOT NULL, city VARCHAR(100), state VARCHAR(100), country VARCHAR(100), latitude NUMERIC(9,6), longitude NUMERIC(9,6), UNIQUE(source_system, external_id))",
-        "CREATE TABLE checkins (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), source_system VARCHAR(50) NOT NULL, external_id VARCHAR(100) NOT NULL, beer_id INTEGER NOT NULL REFERENCES beers(id), venue_id INTEGER REFERENCES venues(id), occurred_at_utc DATETIME NOT NULL, original_offset_minutes INTEGER, rating NUMERIC(3,2), comment TEXT, serving_type VARCHAR(100), purchase_venue VARCHAR(255), photo_url TEXT, source_payload_json TEXT, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, UNIQUE(user_id, source_system, external_id))",
-        "CREATE TABLE locations (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), parent_id INTEGER REFERENCES locations(id), name VARCHAR(255) NOT NULL, description TEXT, UNIQUE(user_id, parent_id, name))",
-        "CREATE TABLE location_aliases (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), location_id INTEGER NOT NULL REFERENCES locations(id), alias VARCHAR(255) NOT NULL, normalized_alias VARCHAR(255) NOT NULL, UNIQUE(user_id, normalized_alias))",
-        "CREATE TABLE location_resolution_rules (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), pattern VARCHAR(255) NOT NULL, match_kind VARCHAR(20) NOT NULL, location_id INTEGER NOT NULL REFERENCES locations(id), priority INTEGER NOT NULL)",
-        "CREATE TABLE inventory_sources (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), source_system VARCHAR(50) NOT NULL, name VARCHAR(100) NOT NULL, is_authoritative BOOLEAN NOT NULL, created_at DATETIME NOT NULL, UNIQUE(user_id, source_system, name))",
-        "CREATE TABLE inventory_items (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), inventory_source_id INTEGER NOT NULL REFERENCES inventory_sources(id), source_item_id VARCHAR(100) NOT NULL, beer_id INTEGER NOT NULL REFERENCES beers(id), location_id INTEGER REFERENCES locations(id), quantity INTEGER NOT NULL CHECK(quantity >= 0), container VARCHAR(100), notes TEXT, purchase_date DATE, bottled_date DATE, best_before DATE, raw_best_before VARCHAR(50), purchase_location VARCHAR(255), purchase_price NUMERIC(10,2), created_at_source DATETIME, source_payload_json TEXT, imported_at DATETIME NOT NULL, match_status VARCHAR(20) NOT NULL, matched_checkin_beer_id INTEGER REFERENCES beers(id), UNIQUE(inventory_source_id, source_item_id))",
-        "CREATE TABLE import_runs (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), source_type VARCHAR(50) NOT NULL, filename VARCHAR(255) NOT NULL, sha256 VARCHAR(64) NOT NULL, source_exported_at DATETIME, started_at DATETIME NOT NULL, completed_at DATETIME, status VARCHAR(20) NOT NULL, inserted_count INTEGER NOT NULL, updated_count INTEGER NOT NULL, unchanged_count INTEGER NOT NULL, rejected_count INTEGER NOT NULL, error_summary TEXT)",
-        "CREATE TABLE import_errors (id INTEGER PRIMARY KEY, import_run_id INTEGER NOT NULL REFERENCES import_runs(id), row_number INTEGER NOT NULL, field VARCHAR(100), reason TEXT NOT NULL)",
-    ]
-    for statement in statements:
-        op.execute(statement)
+    op.create_table(
+        "users",
+        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("username", sa.String(100), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.UniqueConstraint("username"),
+    )
+    op.create_table(
+        "breweries",
+        sa.Column("id", sa.Integer(), primary_key=True), sa.Column("source_system", sa.String(50), nullable=False),
+        sa.Column("external_id", sa.String(100)), sa.Column("name", sa.String(255), nullable=False),
+        sa.Column("country", sa.String(100)), sa.Column("city", sa.String(100)), sa.Column("state", sa.String(100)),
+        sa.UniqueConstraint("source_system", "external_id"),
+    )
+    op.create_table(
+        "beer_styles",
+        sa.Column("id", sa.Integer(), primary_key=True), sa.Column("name", sa.String(150), nullable=False),
+        sa.Column("parent_id", sa.Integer(), sa.ForeignKey("beer_styles.id")), sa.UniqueConstraint("name"),
+    )
+    op.create_table(
+        "beers",
+        sa.Column("id", sa.Integer(), primary_key=True), sa.Column("source_system", sa.String(50)),
+        sa.Column("external_id", sa.String(100)), sa.Column("brewery_id", sa.Integer(), sa.ForeignKey("breweries.id")),
+        sa.Column("style_id", sa.Integer(), sa.ForeignKey("beer_styles.id")), sa.Column("name", sa.String(255), nullable=False),
+        sa.Column("abv", sa.Numeric(5, 2)), sa.Column("ibu", sa.Numeric(6, 2)), sa.Column("photo_url", sa.Text()),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False), sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.UniqueConstraint("source_system", "external_id"),
+    )
+    op.create_table(
+        "venues",
+        sa.Column("id", sa.Integer(), primary_key=True), sa.Column("source_system", sa.String(50), nullable=False),
+        sa.Column("external_id", sa.String(100)), sa.Column("name", sa.String(255), nullable=False),
+        sa.Column("city", sa.String(100)), sa.Column("state", sa.String(100)), sa.Column("country", sa.String(100)),
+        sa.Column("latitude", sa.Numeric(9, 6)), sa.Column("longitude", sa.Numeric(9, 6)),
+        sa.UniqueConstraint("source_system", "external_id"),
+    )
+    op.create_table(
+        "checkins",
+        sa.Column("id", sa.Integer(), primary_key=True), sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("source_system", sa.String(50), nullable=False), sa.Column("external_id", sa.String(100), nullable=False),
+        sa.Column("beer_id", sa.Integer(), sa.ForeignKey("beers.id"), nullable=False), sa.Column("venue_id", sa.Integer(), sa.ForeignKey("venues.id")),
+        sa.Column("occurred_at_utc", sa.DateTime(timezone=True), nullable=False), sa.Column("original_offset_minutes", sa.Integer()),
+        sa.Column("rating", sa.Numeric(3, 2)), sa.Column("comment", sa.Text()), sa.Column("serving_type", sa.String(100)),
+        sa.Column("purchase_venue", sa.String(255)), sa.Column("photo_url", sa.Text()), sa.Column("source_payload_json", sa.Text()),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False), sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.UniqueConstraint("user_id", "source_system", "external_id"),
+    )
+    op.create_table(
+        "locations",
+        sa.Column("id", sa.Integer(), primary_key=True), sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("parent_id", sa.Integer()), sa.Column("name", sa.String(255), nullable=False),
+        sa.Column("description", sa.Text()), sa.UniqueConstraint("user_id", "parent_id", "name"), sa.UniqueConstraint("id", "user_id"),
+        sa.ForeignKeyConstraint(["parent_id", "user_id"], ["locations.id", "locations.user_id"]),
+    )
+    op.create_index("uq_locations_top_level", "locations", ["user_id", "name"], unique=True, sqlite_where=sa.text("parent_id IS NULL"))
+    op.create_table(
+        "location_aliases",
+        sa.Column("id", sa.Integer(), primary_key=True), sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("location_id", sa.Integer(), nullable=False), sa.Column("alias", sa.String(255), nullable=False),
+        sa.Column("normalized_alias", sa.String(255), nullable=False), sa.UniqueConstraint("user_id", "normalized_alias"),
+        sa.ForeignKeyConstraint(["location_id", "user_id"], ["locations.id", "locations.user_id"]),
+    )
+    op.create_table(
+        "location_resolution_rules",
+        sa.Column("id", sa.Integer(), primary_key=True), sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("pattern", sa.String(255), nullable=False), sa.Column("match_kind", sa.String(20), nullable=False),
+        sa.Column("location_id", sa.Integer(), nullable=False), sa.Column("priority", sa.Integer(), nullable=False),
+        sa.ForeignKeyConstraint(["location_id", "user_id"], ["locations.id", "locations.user_id"]),
+    )
+    op.create_table(
+        "inventory_sources",
+        sa.Column("id", sa.Integer(), primary_key=True), sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("source_system", sa.String(50), nullable=False), sa.Column("name", sa.String(100), nullable=False),
+        sa.Column("is_authoritative", sa.Boolean(), nullable=False), sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.UniqueConstraint("user_id", "source_system", "name"), sa.UniqueConstraint("id", "user_id"),
+    )
+    op.create_table(
+        "inventory_items",
+        sa.Column("id", sa.Integer(), primary_key=True), sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("inventory_source_id", sa.Integer(), nullable=False), sa.Column("source_item_id", sa.String(100), nullable=False),
+        sa.Column("beer_id", sa.Integer(), sa.ForeignKey("beers.id"), nullable=False), sa.Column("location_id", sa.Integer()),
+        sa.Column("quantity", sa.Integer(), nullable=False), sa.Column("container", sa.String(100)), sa.Column("notes", sa.Text()),
+        sa.Column("purchase_date", sa.Date()), sa.Column("bottled_date", sa.Date()), sa.Column("best_before", sa.Date()),
+        sa.Column("raw_best_before", sa.String(50)), sa.Column("purchase_location", sa.String(255)), sa.Column("purchase_price", sa.Numeric(10, 2)),
+        sa.Column("created_at_source", sa.DateTime(timezone=True)), sa.Column("source_payload_json", sa.Text()),
+        sa.Column("imported_at", sa.DateTime(timezone=True), nullable=False), sa.Column("match_status", sa.String(20), nullable=False),
+        sa.Column("matched_checkin_beer_id", sa.Integer(), sa.ForeignKey("beers.id")), sa.CheckConstraint("quantity >= 0"),
+        sa.UniqueConstraint("inventory_source_id", "source_item_id"),
+        sa.ForeignKeyConstraint(["inventory_source_id", "user_id"], ["inventory_sources.id", "inventory_sources.user_id"]),
+        sa.ForeignKeyConstraint(["location_id", "user_id"], ["locations.id", "locations.user_id"]),
+    )
+    op.create_table(
+        "import_runs",
+        sa.Column("id", sa.Integer(), primary_key=True), sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("source_type", sa.String(50), nullable=False), sa.Column("filename", sa.String(255), nullable=False),
+        sa.Column("sha256", sa.String(64), nullable=False), sa.Column("source_exported_at", sa.DateTime(timezone=True)),
+        sa.Column("started_at", sa.DateTime(timezone=True), nullable=False), sa.Column("completed_at", sa.DateTime(timezone=True)),
+        sa.Column("status", sa.String(20), nullable=False), sa.Column("inserted_count", sa.Integer(), nullable=False),
+        sa.Column("updated_count", sa.Integer(), nullable=False), sa.Column("unchanged_count", sa.Integer(), nullable=False),
+        sa.Column("rejected_count", sa.Integer(), nullable=False), sa.Column("error_summary", sa.Text()),
+    )
+    op.create_table(
+        "import_errors", sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("import_run_id", sa.Integer(), sa.ForeignKey("import_runs.id"), nullable=False),
+        sa.Column("row_number", sa.Integer(), nullable=False), sa.Column("field", sa.String(100)), sa.Column("reason", sa.Text(), nullable=False),
+    )
 
 def downgrade():
+    op.drop_index("uq_locations_top_level", table_name="locations")
     for table in ("import_errors", "import_runs", "inventory_items", "inventory_sources", "location_resolution_rules", "location_aliases", "locations", "checkins", "venues", "beers", "beer_styles", "breweries", "users"):
         op.drop_table(table)

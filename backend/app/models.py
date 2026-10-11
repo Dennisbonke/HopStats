@@ -7,11 +7,14 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
+    Index,
     Integer,
     Numeric,
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -97,22 +100,36 @@ class Checkin(Base):
 
 class Location(Base):
     __tablename__ = "locations"
-    __table_args__ = (UniqueConstraint("user_id", "parent_id", "name"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "parent_id", "name"),
+        UniqueConstraint("id", "user_id"),
+        Index(
+            "uq_locations_top_level",
+            "user_id",
+            "name",
+            unique=True,
+            sqlite_where=text("parent_id IS NULL"),
+        ),
+        ForeignKeyConstraint(["parent_id", "user_id"], ["locations.id", "locations.user_id"]),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    parent_id: Mapped[int | None] = mapped_column(ForeignKey("locations.id"))
+    parent_id: Mapped[int | None] = mapped_column()
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(Text)
 
 
 class LocationAlias(Base):
     __tablename__ = "location_aliases"
-    __table_args__ = (UniqueConstraint("user_id", "normalized_alias"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    location_id: Mapped[int] = mapped_column(ForeignKey("locations.id"))
+    location_id: Mapped[int] = mapped_column()
     alias: Mapped[str] = mapped_column(String(255))
     normalized_alias: Mapped[str] = mapped_column(String(255))
+    __table_args__ = (
+        UniqueConstraint("user_id", "normalized_alias"),
+        ForeignKeyConstraint(["location_id", "user_id"], ["locations.id", "locations.user_id"]),
+    )
 
 
 class LocationResolutionRule(Base):
@@ -121,13 +138,19 @@ class LocationResolutionRule(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     pattern: Mapped[str] = mapped_column(String(255))
     match_kind: Mapped[str] = mapped_column(String(20))
-    location_id: Mapped[int] = mapped_column(ForeignKey("locations.id"))
+    location_id: Mapped[int] = mapped_column()
     priority: Mapped[int] = mapped_column(Integer, default=0)
+    __table_args__ = (
+        ForeignKeyConstraint(["location_id", "user_id"], ["locations.id", "locations.user_id"]),
+    )
 
 
 class InventorySource(Base):
     __tablename__ = "inventory_sources"
-    __table_args__ = (UniqueConstraint("user_id", "source_system", "name"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "source_system", "name"),
+        UniqueConstraint("id", "user_id"),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     source_system: Mapped[str] = mapped_column(String(50))
@@ -141,6 +164,14 @@ class InventoryItem(Base):
     __table_args__ = (
         UniqueConstraint("inventory_source_id", "source_item_id"),
         CheckConstraint("quantity >= 0"),
+        ForeignKeyConstraint(
+            ["inventory_source_id", "user_id"],
+            ["inventory_sources.id", "inventory_sources.user_id"],
+        ),
+        ForeignKeyConstraint(
+            ["location_id", "user_id"],
+            ["locations.id", "locations.user_id"],
+        ),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
