@@ -1,0 +1,22 @@
+services:
+  hopstats:
+    build: .
+    ports:
+      - "${HOPSTATS_BIND_ADDRESS:-127.0.0.1}:${HOPSTATS_PORT:-8000}:8000"
+    environment:
+      HOPSTATS_HOST: 0.0.0.0
+      HOPSTATS_PORT: 8000
+      HOPSTATS_DATABASE_URL: sqlite:////data/hopstats.sqlite3
+      HOPSTATS_LOG_LEVEL: ${HOPSTATS_LOG_LEVEL:-info}
+    volumes:
+      - hopstats-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  hopstats-data:
