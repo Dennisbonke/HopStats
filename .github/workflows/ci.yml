@@ -1,0 +1,62 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install -e '.[dev]'
+      - run: ruff check backend && ruff format --check backend
+      - run: pytest
+  frontend:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with: { context: ., push: false, platforms: 'linux/amd64,linux/arm64' }
+  docker-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build runtime image
+        run: docker build --tag hopstats-smoke .
+      - name: Verify API, frontend, and persistent database volume
+        shell: bash
+        run: |
+          set -euo pipefail
+          volume="hopstats-smoke-data"
+          docker volume create "$volume"
+          cleanup() { docker rm -f hopstats-smoke-container >/dev/null 2>&1 || true; docker volume rm "$volume" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker run --detach --name hopstats-smoke-container --publish 8000:8000 \
+            --env HOPSTATS_DATABASE_URL=sqlite:////data/hopstats.sqlite3 --volume "$volume:/data" hopstats-smoke
+          for _ in {1..30}; do curl --fail --silent http://127.0.0.1:8000/api/v1/health && break || sleep 1; done
+          curl --fail --silent http://127.0.0.1:8000/ | grep -q HopStats
+          docker exec hopstats-smoke-container test -s /data/hopstats.sqlite3
+          docker rm --force hopstats-smoke-container
+          docker run --detach --name hopstats-smoke-container --publish 8000:8000 \
+            --env HOPSTATS_DATABASE_URL=sqlite:////data/hopstats.sqlite3 --volume "$volume:/data" hopstats-smoke
+          for _ in {1..30}; do curl --fail --silent http://127.0.0.1:8000/api/v1/health && break || sleep 1; done
+          docker exec hopstats-smoke-container test -s /data/hopstats.sqlite3
+  dependency-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Dependabot configuration
+        run: ruby -e 'require "yaml"; YAML.load_file(".github/dependabot.yml")'

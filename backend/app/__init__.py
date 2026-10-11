@@ -1,0 +1,1 @@
+"""HopStats backend application."""

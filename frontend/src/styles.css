@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+:root {
+  font-family: system-ui, sans-serif;
+  color: #172033;
+  background: #f5f7fb;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+.app {
+  min-height: 100vh;
+}
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem max(1rem, calc((100% - 70rem) / 2));
+  background: #172033;
+  color: white;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.brand {
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+nav {
+  display: flex;
+  gap: 0.4rem;
+}
+nav a {
+  color: #cbd5e1;
+  text-decoration: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.4rem;
+}
+nav a.active,
+nav a:hover {
+  background: #334155;
+  color: white;
+}
+main {
+  max-width: 70rem;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+section {
+  background: white;
+  padding: 2rem;
+  border-radius: 0.7rem;
+  box-shadow: 0 1px 3px #0001;
+}
+h2 {
+  margin-top: 0;
+}
+.status {
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+.connected {
+  color: #16803c;
+}
+.offline {
+  color: #b42318;
+}
+.loading {
+  color: #946200;
+}
+@media (max-width: 520px) {
+  header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  nav {
+    width: 100%;
+    justify-content: space-between;
+  }
+  nav a {
+    flex: 1;
+    text-align: center;
+  }
+}
