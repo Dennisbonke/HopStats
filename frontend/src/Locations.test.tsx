@@ -1,4 +1,10 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import App from "./App";
@@ -29,6 +35,11 @@ beforeEach(() => {
               description: null,
               path: "Main Storage",
               aliases: ["Cellar stash"],
+              alias_details: [
+                { id: 11, alias: "Cellar stash", managed_by_config: true },
+              ],
+              managed_by_config: true,
+              ownership: "configuration",
               record_count: 3,
               total_units: 5,
               children: [
@@ -39,6 +50,9 @@ beforeEach(() => {
                   description: null,
                   path: "Main Storage → Cellar",
                   aliases: [],
+                  alias_details: [],
+                  managed_by_config: false,
+                  ownership: "database",
                   record_count: 3,
                   total_units: 5,
                   children: [],
@@ -67,4 +81,41 @@ test("shows hierarchy, aliases, descendant counts, and unresolved link", async (
   expect(screen.getByText("Aliases: Cellar stash")).toBeInTheDocument();
   expect(screen.getAllByText("3 records").length).toBe(2);
   expect(screen.getByText("View unresolved inventory")).toBeInTheDocument();
+});
+
+test("shows configured locations as read-only and submits UI mutations", async () => {
+  const fetchMock = vi.mocked(globalThis.fetch);
+  render(
+    <MemoryRouter initialEntries={["/locations"]}>
+      <App />
+    </MemoryRouter>,
+  );
+  await screen.findByText("Main Storage → Cellar");
+  expect(
+    screen.getByText(/read-only in the web interface/),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Save location" })).toBeDisabled();
+  expect(
+    screen.getByRole("button", { name: "Transfer to UI management" }),
+  ).toBeInTheDocument();
+
+  const nameInput = screen.getAllByLabelText("Name")[0];
+  fireEvent.change(nameInput, { target: { value: "New storage" } });
+  fireEvent.submit(nameInput.closest("form")!);
+  await waitFor(() =>
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/locations",
+      expect.objectContaining({ method: "POST" }),
+    ),
+  );
+
+  const aliasInput = screen.getByPlaceholderText("Add an alias");
+  fireEvent.change(aliasInput, { target: { value: "Phone shelf" } });
+  fireEvent.submit(aliasInput.closest("form")!);
+  await waitFor(() =>
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/locations/1/aliases",
+      expect.objectContaining({ method: "POST" }),
+    ),
+  );
 });

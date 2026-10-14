@@ -21,6 +21,7 @@ from .models import User
 from .services.auth import find_user
 from .services.locations import (
     LocationConfigurationError,
+    LocationService,
     load_location_config,
     seed_location_config,
 )
@@ -69,6 +70,8 @@ def initialize_database() -> None:
         if config is not None:
             user_id = _location_config_owner_id(session, settings)
             seed_location_config(session, user_id, config)
+            session.flush()
+            LocationService(session).reconcile(user_id)
             session.commit()
 
 

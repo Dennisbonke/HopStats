@@ -162,6 +162,7 @@ class Location(Base):
     parent_id: Mapped[int | None] = mapped_column()
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(Text)
+    managed_by_config: Mapped[bool | None] = mapped_column(Boolean, default=False)
 
 
 class LocationAlias(Base):

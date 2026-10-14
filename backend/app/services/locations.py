@@ -7,17 +7,36 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..models import InventoryItem, InventorySource, Location, LocationAlias, LocationResolutionRule
+from ..models import (
+    InventoryItem,
+    InventorySource,
+    Location,
+    LocationAlias,
+    LocationResolutionRule,
+)
 from ..schemas.locations import (
     LocationDetailResponse,
     LocationListResponse,
     LocationNodeResponse,
     UnresolvedLocationResponse,
 )
-from .location_resolution import LocationResolution, LocationResolver, normalize_location
+from .location_resolution import (
+    LocationResolution,
+    LocationResolver,
+    display_location,
+    normalize_location,
+)
 
 
 class LocationConfigurationError(ValueError):
+    pass
+
+
+class LocationConflictError(LocationConfigurationError):
+    pass
+
+
+class LocationValidationError(LocationConfigurationError):
     pass
 
 
@@ -42,9 +61,9 @@ class LocationService:
         parent_id: int | None = None,
         description: str | None = None,
     ) -> Location:
-        name = " ".join(name.split()).strip()
+        name = display_location(name)
         if not name:
-            raise LocationConfigurationError("location name cannot be empty")
+            raise LocationValidationError("location name cannot be empty")
         if (
             parent_id is not None
             and self.session.scalar(
@@ -52,12 +71,22 @@ class LocationService:
             )
             is None
         ):
-            raise LocationConfigurationError("parent location not found for this user")
+            raise LocationValidationError("parent location not found for this user")
         sibling = self.session.scalars(
             select(Location).where(Location.user_id == user_id, Location.parent_id == parent_id)
         ).all()
         if any(normalize_location(item.name) == normalize_location(name) for item in sibling):
-            raise LocationConfigurationError("location name must be unique among siblings")
+            raise LocationConflictError("location name must be unique among siblings")
+        if (
+            self.session.scalar(
+                select(LocationAlias.id).where(
+                    LocationAlias.user_id == user_id,
+                    LocationAlias.normalized_alias == normalize_location(name),
+                )
+            )
+            is not None
+        ):
+            raise LocationConflictError("location name conflicts with an existing alias")
         location = Location(
             user_id=user_id, parent_id=parent_id, name=name, description=description
         )
@@ -71,8 +100,12 @@ class LocationService:
         )
         if location is None:
             raise LocationNotFound("location not found")
+        if location.managed_by_config is not False:
+            raise LocationConflictError(
+                "location ownership is not database-managed; classify it before moving or renaming"
+            )
         if parent_id == location_id:
-            raise LocationConfigurationError("location cannot be its own parent")
+            raise LocationConflictError("location cannot be its own parent")
         if parent_id is not None:
             if (
                 self.session.scalar(
@@ -80,9 +113,9 @@ class LocationService:
                 )
                 is None
             ):
-                raise LocationConfigurationError("parent location not found for this user")
+                raise LocationValidationError("parent location not found for this user")
             if parent_id in self._descendant_ids(user_id, location_id):
-                raise LocationConfigurationError("location parent change would create a cycle")
+                raise LocationConflictError("location parent change would create a cycle")
         sibling = self.session.scalars(
             select(Location).where(
                 Location.user_id == user_id,
@@ -93,10 +126,122 @@ class LocationService:
         if any(
             normalize_location(item.name) == normalize_location(location.name) for item in sibling
         ):
-            raise LocationConfigurationError("location name must be unique among siblings")
+            raise LocationConflictError("location name must be unique among siblings")
         location.parent_id = parent_id
         self.session.flush()
         return location
+
+    def update_location(
+        self,
+        user_id: int,
+        location_id: int,
+        *,
+        name: str | None = None,
+        parent_id: int | None = None,
+        description: str | None = None,
+        update_parent: bool = False,
+        update_description: bool = False,
+    ) -> Location:
+        location = self._get_location(user_id, location_id)
+        if location.managed_by_config is not False:
+            raise LocationConflictError(
+                "location ownership is not database-managed; classify it before editing"
+            )
+        if name is not None:
+            normalized_name = display_location(name)
+            if not normalized_name:
+                raise LocationValidationError("location name cannot be empty")
+            location.name = normalized_name
+        if update_parent:
+            self._validate_parent_change(user_id, location, parent_id)
+            location.parent_id = parent_id
+        if update_description:
+            location.description = description.strip() if description else None
+        self._validate_sibling_name(user_id, location)
+        if (
+            self.session.scalar(
+                select(LocationAlias.id).where(
+                    LocationAlias.user_id == user_id,
+                    LocationAlias.normalized_alias == normalize_location(location.name),
+                    LocationAlias.location_id != location.id,
+                )
+            )
+            is not None
+        ):
+            raise LocationConflictError("location name conflicts with an existing alias")
+        self.session.flush()
+        return location
+
+    def transfer_to_database(self, user_id: int, location_id: int) -> Location:
+        """Explicitly transfer a legacy/configured subtree to UI ownership."""
+        location = self._get_location(user_id, location_id)
+        location_ids = self._descendant_ids(user_id, location_id)
+        for item in self.session.scalars(
+            select(Location).where(Location.user_id == user_id, Location.id.in_(location_ids))
+        ):
+            item.managed_by_config = False
+        for alias in self.session.scalars(
+            select(LocationAlias).where(
+                LocationAlias.user_id == user_id,
+                LocationAlias.location_id.in_(location_ids),
+                LocationAlias.managed_by_config.is_(True),
+            )
+        ):
+            alias.managed_by_config = False
+        for rule in self.session.scalars(
+            select(LocationResolutionRule).where(
+                LocationResolutionRule.user_id == user_id,
+                LocationResolutionRule.location_id.in_(location_ids),
+                LocationResolutionRule.managed_by_config.is_(True),
+            )
+        ):
+            rule.managed_by_config = False
+        self.session.flush()
+        return location
+
+    def delete_location(self, user_id: int, location_id: int) -> None:
+        location = self._get_location(user_id, location_id)
+        if location.managed_by_config is not False:
+            raise LocationConflictError("location ownership is not database-managed")
+        if (
+            self.session.scalar(
+                select(Location.id).where(
+                    Location.user_id == user_id, Location.parent_id == location_id
+                )
+            )
+            is not None
+        ):
+            raise LocationConflictError("location has child locations")
+        if (
+            self.session.scalar(
+                select(InventoryItem.id).where(
+                    InventoryItem.user_id == user_id, InventoryItem.location_id == location_id
+                )
+            )
+            is not None
+        ):
+            raise LocationConflictError("location is referenced by inventory records")
+        if (
+            self.session.scalar(
+                select(LocationAlias.id).where(
+                    LocationAlias.user_id == user_id, LocationAlias.location_id == location_id
+                )
+            )
+            is not None
+        ):
+            raise LocationConflictError("location still has aliases; remove them first")
+        if (
+            self.session.scalar(
+                select(LocationResolutionRule.id).where(
+                    LocationResolutionRule.user_id == user_id,
+                    LocationResolutionRule.location_id == location_id,
+                )
+            )
+            is not None
+        ):
+            raise LocationConflictError("location still has resolution rules")
+        self.session.delete(location)
+        self.session.flush()
 
     def create_alias(
         self,
@@ -105,6 +250,7 @@ class LocationService:
         alias: str,
         *,
         managed_by_config: bool = False,
+        allow_existing: bool = False,
     ) -> LocationAlias:
         if (
             self.session.scalar(
@@ -112,10 +258,19 @@ class LocationService:
             )
             is None
         ):
-            raise LocationConfigurationError("location not found for this user")
+            raise LocationNotFound("location not found")
+        alias = display_location(alias)
         normalized = normalize_location(alias)
         if not normalized:
-            raise LocationConfigurationError("alias cannot be empty")
+            raise LocationValidationError("alias cannot be empty")
+        canonical_conflict = any(
+            normalize_location(location.name) == normalized
+            for location in self.session.scalars(
+                select(Location).where(Location.user_id == user_id)
+            )
+        )
+        if canonical_conflict:
+            raise LocationConflictError("alias conflicts with another location name")
         existing = self.session.scalar(
             select(LocationAlias).where(
                 LocationAlias.user_id == user_id, LocationAlias.normalized_alias == normalized
@@ -123,8 +278,10 @@ class LocationService:
         )
         if existing is not None:
             if existing.location_id != location_id:
-                raise LocationConfigurationError("alias conflicts with another location")
-            existing.alias = alias.strip()
+                raise LocationConflictError("alias conflicts with another location")
+            if not allow_existing:
+                raise LocationConflictError("alias already exists")
+            existing.alias = alias
             if managed_by_config and existing.managed_by_config:
                 existing.managed_by_config = True
             return existing
@@ -139,6 +296,62 @@ class LocationService:
         self.session.flush()
         return result
 
+    def update_alias(
+        self, user_id: int, location_id: int, alias_id: int, alias: str
+    ) -> LocationAlias:
+        self._get_location(user_id, location_id)
+        existing = self.session.scalar(
+            select(LocationAlias).where(
+                LocationAlias.id == alias_id,
+                LocationAlias.user_id == user_id,
+                LocationAlias.location_id == location_id,
+            )
+        )
+        if existing is None:
+            raise LocationNotFound("alias not found")
+        if existing.managed_by_config:
+            raise LocationConflictError("configuration-managed aliases cannot be edited")
+        display = display_location(alias)
+        normalized = normalize_location(display)
+        if not normalized:
+            raise LocationValidationError("alias cannot be empty")
+        if any(
+            normalize_location(location.name) == normalized
+            for location in self.session.scalars(
+                select(Location).where(Location.user_id == user_id)
+            )
+        ):
+            raise LocationConflictError("alias conflicts with another location name")
+        duplicate = self.session.scalar(
+            select(LocationAlias).where(
+                LocationAlias.user_id == user_id,
+                LocationAlias.normalized_alias == normalized,
+                LocationAlias.id != alias_id,
+            )
+        )
+        if duplicate is not None:
+            raise LocationConflictError("alias already exists")
+        existing.alias = display
+        existing.normalized_alias = normalized
+        self.session.flush()
+        return existing
+
+    def delete_alias(self, user_id: int, location_id: int, alias_id: int) -> None:
+        self._get_location(user_id, location_id)
+        alias = self.session.scalar(
+            select(LocationAlias).where(
+                LocationAlias.id == alias_id,
+                LocationAlias.user_id == user_id,
+                LocationAlias.location_id == location_id,
+            )
+        )
+        if alias is None:
+            raise LocationNotFound("alias not found")
+        if alias.managed_by_config:
+            raise LocationConflictError("configuration-managed aliases cannot be deleted")
+        self.session.delete(alias)
+        self.session.flush()
+
     def create_rule(
         self,
         user_id: int,
@@ -150,16 +363,16 @@ class LocationService:
         managed_by_config: bool = False,
     ) -> LocationResolutionRule:
         if match_kind not in {"exact", "line", "prefix"}:
-            raise LocationConfigurationError("unsupported location rule kind")
+            raise LocationValidationError("unsupported location rule kind")
         if not isinstance(pattern, str) or not normalize_location(pattern):
-            raise LocationConfigurationError("location rule pattern cannot be empty")
+            raise LocationValidationError("location rule pattern cannot be empty")
         if (
             self.session.scalar(
                 select(Location.id).where(Location.id == location_id, Location.user_id == user_id)
             )
             is None
         ):
-            raise LocationConfigurationError("location not found for this user")
+            raise LocationValidationError("location not found for this user")
         normalized = normalize_location(pattern)
         existing = next(
             (
@@ -176,7 +389,7 @@ class LocationService:
         )
         if existing is not None:
             if existing.location_id != location_id:
-                raise LocationConfigurationError("rule conflicts with another location")
+                raise LocationConflictError("rule conflicts with another location")
             existing.priority = priority
             if managed_by_config and existing.managed_by_config:
                 existing.managed_by_config = True
@@ -219,6 +432,29 @@ class LocationService:
             changed += self._apply_resolution(item, result)
         return changed
 
+    def reconciliation_summary(self, user_id: int, changed_records: int) -> dict[str, int]:
+        source_id = self._source_id(user_id)
+        unresolved = ambiguous = 0
+        if source_id is not None:
+            unresolved, ambiguous = self.session.execute(
+                select(
+                    func.count(InventoryItem.id).filter(
+                        InventoryItem.location_resolution_status == "unresolved"
+                    ),
+                    func.count(InventoryItem.id).filter(
+                        InventoryItem.location_resolution_status == "ambiguous"
+                    ),
+                ).where(
+                    InventoryItem.user_id == user_id,
+                    InventoryItem.inventory_source_id == source_id,
+                )
+            ).one()
+        return {
+            "changed_records": changed_records,
+            "unresolved_records": int(unresolved or 0),
+            "ambiguous_records": int(ambiguous or 0),
+        }
+
     @staticmethod
     def _apply_resolution(item: InventoryItem, result: LocationResolution) -> int:
         values: dict[str, Any] = {
@@ -241,12 +477,35 @@ class LocationService:
         ).all()
         counts = self._counts(user_id)
         aliases: dict[int, list[str]] = defaultdict(list)
+        alias_details: dict[int, list[dict[str, Any]]] = defaultdict(list)
         for alias in self.session.scalars(
             select(LocationAlias)
             .where(LocationAlias.user_id == user_id)
             .order_by(LocationAlias.alias)
         ):
             aliases[alias.location_id].append(alias.alias)
+            alias_details[alias.location_id].append(
+                {
+                    "id": alias.id,
+                    "alias": alias.alias,
+                    "managed_by_config": alias.managed_by_config,
+                }
+            )
+        rules: dict[int, list[dict[str, Any]]] = defaultdict(list)
+        for rule in self.session.scalars(
+            select(LocationResolutionRule)
+            .where(LocationResolutionRule.user_id == user_id)
+            .order_by(LocationResolutionRule.priority.desc(), LocationResolutionRule.id)
+        ):
+            rules[rule.location_id].append(
+                {
+                    "id": rule.id,
+                    "pattern": rule.pattern,
+                    "match_kind": rule.match_kind,
+                    "priority": rule.priority,
+                    "managed_by_config": rule.managed_by_config,
+                }
+            )
         by_id = {location.id: location for location in locations}
         paths = self._paths(by_id)
         children: dict[int | None, list[Location]] = defaultdict(list)
@@ -262,6 +521,16 @@ class LocationService:
                 description=location.description,
                 path=paths[location.id],
                 aliases=aliases[location.id],
+                alias_details=alias_details[location.id],
+                rules=rules[location.id],
+                managed_by_config=location.managed_by_config,
+                ownership=(
+                    "configuration"
+                    if location.managed_by_config is True
+                    else "database"
+                    if location.managed_by_config is False
+                    else "unknown"
+                ),
                 record_count=count.records,
                 total_units=count.units,
                 children=[node(child) for child in children[location.id]],
@@ -360,6 +629,43 @@ class LocationService:
         )
         return set(self.session.scalars(select(tree.c.id)).all())
 
+    def _get_location(self, user_id: int, location_id: int) -> Location:
+        location = self.session.scalar(
+            select(Location).where(Location.id == location_id, Location.user_id == user_id)
+        )
+        if location is None:
+            raise LocationNotFound("location not found")
+        return location
+
+    def _validate_parent_change(
+        self, user_id: int, location: Location, parent_id: int | None
+    ) -> None:
+        if parent_id == location.id:
+            raise LocationConflictError("location cannot be its own parent")
+        if parent_id is not None:
+            if (
+                self.session.scalar(
+                    select(Location.id).where(Location.id == parent_id, Location.user_id == user_id)
+                )
+                is None
+            ):
+                raise LocationValidationError("parent location not found for this user")
+            if parent_id in self._descendant_ids(user_id, location.id):
+                raise LocationConflictError("location parent change would create a cycle")
+
+    def _validate_sibling_name(self, user_id: int, location: Location) -> None:
+        siblings = self.session.scalars(
+            select(Location).where(
+                Location.user_id == user_id,
+                Location.parent_id == location.parent_id,
+                Location.id != location.id,
+            )
+        ).all()
+        if any(
+            normalize_location(item.name) == normalize_location(location.name) for item in siblings
+        ):
+            raise LocationConflictError("location name must be unique among siblings")
+
     @staticmethod
     def _paths(by_id: dict[int, Location]) -> dict[int, str]:
         paths: dict[int, str] = {}
@@ -424,16 +730,18 @@ def seed_location_config(session: Session, user_id: int, config: dict[str, Any] 
             location = service.create_location(
                 user_id, entry["name"], parent_id, entry.get("description")
             )
+            location.managed_by_config = True
             seeded += 1
-        elif entry.get("description") is not None:
+        elif location.managed_by_config and entry.get("description") is not None:
             location.description = entry["description"]
         for alias in entry.get("aliases", []):
             desired_aliases.add(normalize_location(alias))
-            service.create_alias(user_id, location.id, alias, managed_by_config=True)
+            service.create_alias(
+                user_id, location.id, alias, managed_by_config=True, allow_existing=True
+            )
         for rule in entry.get("rules", []):
-            normalized_pattern = normalize_location(rule["pattern"])
             match_kind = rule.get("match_kind", "line")
-            desired_rules.add((location.id, match_kind, normalized_pattern))
+            desired_rules.add((location.id, match_kind, normalize_location(rule["pattern"])))
             service.create_rule(
                 user_id,
                 location.id,
@@ -449,7 +757,8 @@ def seed_location_config(session: Session, user_id: int, config: dict[str, Any] 
         visit(entry, None)
     for alias in session.scalars(
         select(LocationAlias).where(
-            LocationAlias.user_id == user_id, LocationAlias.managed_by_config.is_(True)
+            LocationAlias.user_id == user_id,
+            LocationAlias.managed_by_config.is_(True),
         )
     ).all():
         if alias.normalized_alias not in desired_aliases:
@@ -463,6 +772,7 @@ def seed_location_config(session: Session, user_id: int, config: dict[str, Any] 
         key = (rule.location_id, rule.match_kind, normalize_location(rule.pattern))
         if key not in desired_rules:
             session.delete(rule)
+    session.flush()
     return seeded
 
 
@@ -473,6 +783,8 @@ def _validate_location_config(config: dict[str, Any]) -> None:
     def visit(entry: Any) -> None:
         if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
             raise LocationConfigurationError("each configured location needs a name")
+        if not normalize_location(entry["name"]):
+            raise LocationConfigurationError("configured location name cannot be empty")
         if not isinstance(entry.get("aliases", []), list) or not all(
             isinstance(alias, str) and normalize_location(alias)
             for alias in entry.get("aliases", [])
