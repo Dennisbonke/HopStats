@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import select
 
 from backend.app.db import SessionLocal
-from backend.app.models import InventoryItem, Location, User
+from backend.app.models import InventoryItem, Location, LocationAlias, LocationResolutionRule, User
 from backend.app.services.import_service import ImportService
 from backend.app.services.location_resolution import LocationResolver, normalize_location
 from backend.app.services.locations import (
@@ -90,7 +90,17 @@ def test_normalization_and_alias_conflict():
         service.create_alias(user_id, first.id, "Back shelf")
         with pytest.raises(LocationConfigurationError):
             service.create_alias(user_id, second.id, " back   shelf ")
+        with pytest.raises(LocationConfigurationError):
+            service.create_rule(user_id, first.id, "   ", "line")
         session.commit()
+
+    with SessionLocal() as session:
+        with pytest.raises(LocationConfigurationError):
+            seed_location_config(
+                session,
+                user_id,
+                {"locations": [{"name": "Invalid", "rules": [{"pattern": "  "}]}]},
+            )
 
 
 def test_resolves_exact_alias_lines_rules_and_ambiguity(client):
@@ -136,6 +146,17 @@ def test_nested_counts_filtering_and_unresolved_records(client):
     unresolved = client.get("/api/v1/inventory?unresolved=true")
     assert unresolved.json()["total"] == 1
     assert client.get("/api/v1/locations/999").status_code == 404
+
+    ImportService().import_inventory(
+        user_id,
+        "reduced.csv",
+        stash_csv(stash_row("item-1", "cellar stash", "2")),
+        True,
+        allow_undated=True,
+    )
+    reduced = client.get(f"/api/v1/locations/{root_id}").json()
+    assert reduced["record_count"] == 1
+    assert reduced["total_units"] == 2
 
 
 def test_cycle_prevention_repeatable_seed_and_explicit_assignment(client):
@@ -184,3 +205,117 @@ def test_cycle_prevention_repeatable_seed_and_explicit_assignment(client):
         assert item.location_id == shelf.id
         assert item.location_assignment_kind == "explicit"
         assert item.location_resolution_source == "manual"
+
+
+def test_automatic_assignments_are_recomputed_and_cross_user_parents_are_rejected(client):
+    user_id, _, cellar_id, _ = make_tree()
+    ImportService().import_inventory(
+        user_id, "stash.csv", stash_csv(stash_row("item-1", "cellar stash")), True
+    )
+    with SessionLocal() as session:
+        item = session.scalar(select(InventoryItem).where(InventoryItem.source_item_id == "item-1"))
+        assert item.location_id == cellar_id
+        assert item.location_assignment_kind == "automatic"
+        assert LocationService(session).reconcile(user_id) == 0
+        session.commit()
+
+    ImportService().import_inventory(
+        user_id,
+        "changed-notes.csv",
+        stash_csv(stash_row("item-1", "unrelated prose")),
+        True,
+        allow_undated=True,
+    )
+    with SessionLocal() as session:
+        item = session.scalar(select(InventoryItem).where(InventoryItem.source_item_id == "item-1"))
+        assert item.location_id is None
+        assert item.location_resolution_status == "unresolved"
+        other = User(username="other")
+        session.add(other)
+        session.flush()
+        foreign = LocationService(session).create_location(other.id, "Other Storage")
+        with pytest.raises(LocationConfigurationError):
+            LocationService(session).create_location(user_id, "Child", foreign.id)
+        session.commit()
+
+
+def test_configuration_reconciliation_removes_only_obsolete_managed_definitions(client):
+    user_id = local_user_id()
+    old_config = {
+        "locations": [
+            {
+                "name": "Configured Storage",
+                "aliases": ["Old alias"],
+                "rules": [{"pattern": "Old box:", "match_kind": "prefix"}],
+            }
+        ]
+    }
+    with SessionLocal() as session:
+        location_id = seed_location_config(session, user_id, old_config)
+        assert location_id == 1
+        location = session.scalar(select(Location).where(Location.name == "Configured Storage"))
+        service = LocationService(session)
+        service.create_alias(user_id, location.id, "Manual alias")
+        service.create_rule(user_id, location.id, "Manual box:", "prefix")
+        session.commit()
+
+    ImportService().import_inventory(
+        user_id,
+        "configured.csv",
+        stash_csv(
+            stash_row("alias-item", "Old alias"),
+            stash_row("rule-item", "Old box: summer stock"),
+        ),
+        True,
+    )
+    with SessionLocal() as session:
+        items = session.scalars(select(InventoryItem).order_by(InventoryItem.source_item_id)).all()
+        assert [item.location_id for item in items] == [1, 1]
+
+    new_config = {
+        "locations": [
+            {
+                "name": "Configured Storage",
+                "aliases": ["New alias"],
+                "rules": [{"pattern": "New box:", "match_kind": "prefix"}],
+            }
+        ]
+    }
+    with SessionLocal() as session:
+        assert seed_location_config(session, user_id, new_config) == 0
+        session.commit()
+        assert (
+            session.scalar(
+                select(LocationAlias).where(LocationAlias.normalized_alias == "old alias")
+            )
+            is None
+        )
+        assert (
+            session.scalar(
+                select(LocationResolutionRule).where(LocationResolutionRule.pattern == "old box:")
+            )
+            is None
+        )
+        assert (
+            session.scalar(
+                select(LocationAlias).where(LocationAlias.normalized_alias == "manual alias")
+            )
+            is not None
+        )
+        assert (
+            session.scalar(
+                select(LocationResolutionRule).where(
+                    LocationResolutionRule.pattern == "manual box:"
+                )
+            )
+            is not None
+        )
+        assert LocationService(session).reconcile(user_id) == 2
+        session.commit()
+
+    with SessionLocal() as session:
+        items = session.scalars(select(InventoryItem).order_by(InventoryItem.source_item_id)).all()
+        assert all(item.location_id is None for item in items)
+        resolver = LocationResolver(session, user_id)
+        assert resolver.resolve("New alias").location_id == 1
+        assert resolver.resolve("New box: summer stock").location_id == 1

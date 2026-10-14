@@ -136,6 +136,7 @@ class LocationAlias(Base):
     location_id: Mapped[int] = mapped_column()
     alias: Mapped[str] = mapped_column(String(255))
     normalized_alias: Mapped[str] = mapped_column(String(255))
+    managed_by_config: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     __table_args__ = (
         UniqueConstraint("user_id", "normalized_alias"),
         ForeignKeyConstraint(["location_id", "user_id"], ["locations.id", "locations.user_id"]),
@@ -150,6 +151,7 @@ class LocationResolutionRule(Base):
     match_kind: Mapped[str] = mapped_column(String(20))
     location_id: Mapped[int] = mapped_column()
     priority: Mapped[int] = mapped_column(Integer, default=0)
+    managed_by_config: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     __table_args__ = (
         ForeignKeyConstraint(["location_id", "user_id"], ["locations.id", "locations.user_id"]),
     )

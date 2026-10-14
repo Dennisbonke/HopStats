@@ -98,7 +98,14 @@ class LocationService:
         self.session.flush()
         return location
 
-    def create_alias(self, user_id: int, location_id: int, alias: str) -> LocationAlias:
+    def create_alias(
+        self,
+        user_id: int,
+        location_id: int,
+        alias: str,
+        *,
+        managed_by_config: bool = False,
+    ) -> LocationAlias:
         if (
             self.session.scalar(
                 select(Location.id).where(Location.id == location_id, Location.user_id == user_id)
@@ -118,12 +125,15 @@ class LocationService:
             if existing.location_id != location_id:
                 raise LocationConfigurationError("alias conflicts with another location")
             existing.alias = alias.strip()
+            if managed_by_config and existing.managed_by_config:
+                existing.managed_by_config = True
             return existing
         result = LocationAlias(
             user_id=user_id,
             location_id=location_id,
             alias=alias.strip(),
             normalized_alias=normalized,
+            managed_by_config=managed_by_config,
         )
         self.session.add(result)
         self.session.flush()
@@ -136,9 +146,13 @@ class LocationService:
         pattern: str,
         match_kind: str,
         priority: int = 0,
+        *,
+        managed_by_config: bool = False,
     ) -> LocationResolutionRule:
         if match_kind not in {"exact", "line", "prefix"}:
             raise LocationConfigurationError("unsupported location rule kind")
+        if not isinstance(pattern, str) or not normalize_location(pattern):
+            raise LocationConfigurationError("location rule pattern cannot be empty")
         if (
             self.session.scalar(
                 select(Location.id).where(Location.id == location_id, Location.user_id == user_id)
@@ -146,18 +160,26 @@ class LocationService:
             is None
         ):
             raise LocationConfigurationError("location not found for this user")
-        normalized = " ".join(pattern.split()).strip()
-        existing = self.session.scalar(
-            select(LocationResolutionRule).where(
-                LocationResolutionRule.user_id == user_id,
-                LocationResolutionRule.pattern == normalized,
-                LocationResolutionRule.match_kind == match_kind,
-            )
+        normalized = normalize_location(pattern)
+        existing = next(
+            (
+                rule
+                for rule in self.session.scalars(
+                    select(LocationResolutionRule).where(
+                        LocationResolutionRule.user_id == user_id,
+                        LocationResolutionRule.match_kind == match_kind,
+                    )
+                )
+                if normalize_location(rule.pattern) == normalized
+            ),
+            None,
         )
         if existing is not None:
             if existing.location_id != location_id:
                 raise LocationConfigurationError("rule conflicts with another location")
             existing.priority = priority
+            if managed_by_config and existing.managed_by_config:
+                existing.managed_by_config = True
             return existing
         result = LocationResolutionRule(
             user_id=user_id,
@@ -165,6 +187,7 @@ class LocationService:
             pattern=normalized,
             match_kind=match_kind,
             priority=priority,
+            managed_by_config=managed_by_config,
         )
         self.session.add(result)
         self.session.flush()
@@ -182,12 +205,12 @@ class LocationService:
 
     def reconcile(self, user_id: int) -> int:
         resolver = LocationResolver(self.session, user_id)
-        source_ids = select(InventorySource.id).where(
-            InventorySource.user_id == user_id, InventorySource.is_authoritative.is_(True)
-        )
+        source_id = self._source_id(user_id)
+        if source_id is None:
+            return 0
         items = self.session.scalars(
             select(InventoryItem).where(
-                InventoryItem.user_id == user_id, InventoryItem.inventory_source_id.in_(source_ids)
+                InventoryItem.user_id == user_id, InventoryItem.inventory_source_id == source_id
             )
         ).all()
         changed = 0
@@ -268,9 +291,9 @@ class LocationService:
         return LocationDetailResponse(**found.model_dump()) if found else None
 
     def _counts(self, user_id: int) -> dict[int, LocationCounts]:
-        source_ids = select(InventorySource.id).where(
-            InventorySource.user_id == user_id, InventorySource.is_authoritative.is_(True)
-        )
+        source_id = self._source_id(user_id)
+        if source_id is None:
+            return {}
         descendants = (
             select(Location.id.label("root_id"), Location.id.label("descendant_id"))
             .where(Location.user_id == user_id)
@@ -292,26 +315,37 @@ class LocationService:
                 InventoryItem,
                 (InventoryItem.location_id == descendants.c.descendant_id)
                 & (InventoryItem.user_id == user_id)
-                & InventoryItem.inventory_source_id.in_(source_ids),
+                & (InventoryItem.inventory_source_id == source_id),
             )
             .group_by(descendants.c.root_id)
         ).all()
         return {row[0]: LocationCounts(int(row[1]), int(row[2] or 0)) for row in rows}
 
     def _unresolved_counts(self, user_id: int) -> tuple[int, int]:
-        source_ids = select(InventorySource.id).where(
-            InventorySource.user_id == user_id, InventorySource.is_authoritative.is_(True)
-        )
+        source_id = self._source_id(user_id)
+        if source_id is None:
+            return 0, 0
         records, units = self.session.execute(
             select(
                 func.count(InventoryItem.id), func.coalesce(func.sum(InventoryItem.quantity), 0)
             ).where(
                 InventoryItem.user_id == user_id,
                 InventoryItem.location_id.is_(None),
-                InventoryItem.inventory_source_id.in_(source_ids),
+                InventoryItem.inventory_source_id == source_id,
             )
         ).one()
         return int(records), int(units or 0)
+
+    def _source_id(self, user_id: int) -> int | None:
+        return self.session.scalar(
+            select(InventorySource.id)
+            .where(
+                InventorySource.user_id == user_id,
+                InventorySource.is_authoritative.is_(True),
+            )
+            .order_by(InventorySource.created_at.desc(), InventorySource.id.desc())
+            .limit(1)
+        )
 
     def _descendant_ids(self, user_id: int, location_id: int) -> set[int]:
         tree = (
@@ -365,8 +399,11 @@ def load_location_config(path: str | None) -> dict[str, Any] | None:
 def seed_location_config(session: Session, user_id: int, config: dict[str, Any] | None) -> int:
     if not config:
         return 0
+    _validate_location_config(config)
     service = LocationService(session)
     seeded = 0
+    desired_aliases: set[str] = set()
+    desired_rules: set[tuple[int, str, str]] = set()
 
     def visit(entry: dict[str, Any], parent_id: int | None) -> None:
         nonlocal seeded
@@ -391,20 +428,71 @@ def seed_location_config(session: Session, user_id: int, config: dict[str, Any] 
         elif entry.get("description") is not None:
             location.description = entry["description"]
         for alias in entry.get("aliases", []):
-            service.create_alias(user_id, location.id, alias)
+            desired_aliases.add(normalize_location(alias))
+            service.create_alias(user_id, location.id, alias, managed_by_config=True)
         for rule in entry.get("rules", []):
-            if not isinstance(rule, dict):
-                raise LocationConfigurationError("configured rules must be objects")
+            normalized_pattern = normalize_location(rule["pattern"])
+            match_kind = rule.get("match_kind", "line")
+            desired_rules.add((location.id, match_kind, normalized_pattern))
             service.create_rule(
                 user_id,
                 location.id,
-                rule.get("pattern", ""),
-                rule.get("match_kind", "line"),
+                rule["pattern"],
+                match_kind,
                 int(rule.get("priority", 0)),
+                managed_by_config=True,
             )
         for child in entry.get("children", []):
             visit(child, location.id)
 
     for entry in config["locations"]:
         visit(entry, None)
+    for alias in session.scalars(
+        select(LocationAlias).where(
+            LocationAlias.user_id == user_id, LocationAlias.managed_by_config.is_(True)
+        )
+    ).all():
+        if alias.normalized_alias not in desired_aliases:
+            session.delete(alias)
+    for rule in session.scalars(
+        select(LocationResolutionRule).where(
+            LocationResolutionRule.user_id == user_id,
+            LocationResolutionRule.managed_by_config.is_(True),
+        )
+    ).all():
+        key = (rule.location_id, rule.match_kind, normalize_location(rule.pattern))
+        if key not in desired_rules:
+            session.delete(rule)
     return seeded
+
+
+def _validate_location_config(config: dict[str, Any]) -> None:
+    if not isinstance(config.get("locations"), list):
+        raise LocationConfigurationError("location configuration must contain a locations list")
+
+    def visit(entry: Any) -> None:
+        if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
+            raise LocationConfigurationError("each configured location needs a name")
+        if not isinstance(entry.get("aliases", []), list) or not all(
+            isinstance(alias, str) and normalize_location(alias)
+            for alias in entry.get("aliases", [])
+        ):
+            raise LocationConfigurationError("configured aliases cannot be empty")
+        rules = entry.get("rules", [])
+        if not isinstance(rules, list):
+            raise LocationConfigurationError("configured rules must be a list")
+        for rule in rules:
+            if not isinstance(rule, dict):
+                raise LocationConfigurationError("configured rules must be objects")
+            if not isinstance(rule.get("pattern"), str) or not normalize_location(rule["pattern"]):
+                raise LocationConfigurationError("location rule pattern cannot be empty")
+            if rule.get("match_kind", "line") not in {"exact", "line", "prefix"}:
+                raise LocationConfigurationError("unsupported location rule kind")
+        children = entry.get("children", [])
+        if not isinstance(children, list):
+            raise LocationConfigurationError("configured children must be a list")
+        for child in children:
+            visit(child)
+
+    for entry in config["locations"]:
+        visit(entry)

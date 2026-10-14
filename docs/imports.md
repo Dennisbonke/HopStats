@@ -103,9 +103,14 @@ are preserved unchanged.
 
 Set `HOPSTATS_LOCATION_CONFIG` to a private JSON file based on
 [`config/locations.example.json`](../config/locations.example.json). The
-configuration is safe to apply repeatedly: locations, aliases, and rules are
-upserted rather than duplicated. Do not commit real aliases, notes, exports, or
-personal storage mappings.
+configuration is safe to apply repeatedly. Location hierarchy entries are
+additive, while aliases and resolution rules declared in the file are
+authoritative for definitions previously created by that configuration. Removed
+configuration-managed aliases/rules are safely removed from the database;
+manually maintained aliases/rules are never deleted or claimed by the config.
+Rows created before location-configuration provenance was introduced are treated
+as manual for safety and are not removed automatically.
+Do not commit real aliases, notes, exports, or personal storage mappings.
 
 After changing aliases or rules, reconcile existing records without re-uploading
 the stash:

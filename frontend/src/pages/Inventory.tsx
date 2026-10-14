@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   fetchInventory,
@@ -316,6 +316,7 @@ export default function Inventory() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<InventoryItem | null>(null);
+  const inventoryRequestGeneration = useRef(0);
 
   useEffect(() => {
     Promise.all([fetchLocations(), fetchInventoryStyles()])
@@ -327,6 +328,7 @@ export default function Inventory() {
   }, []);
 
   useEffect(() => {
+    const generation = ++inventoryRequestGeneration.current;
     const params = new URLSearchParams({
       page: String(page),
       page_size: "25",
@@ -341,11 +343,20 @@ export default function Inventory() {
       params.set("include_descendants", String(includeDescendants));
     }
     setLoading(true);
+    setError(null);
     fetchInventory(params)
-      .then(setData)
-      .then(() => setError(null))
-      .catch(() => setError("Inventory data is temporarily unavailable."))
-      .finally(() => setLoading(false));
+      .then((result) => {
+        if (generation === inventoryRequestGeneration.current) setData(result);
+      })
+      .catch(() => {
+        if (generation === inventoryRequestGeneration.current) {
+          setError("Inventory data is temporarily unavailable.");
+        }
+      })
+      .finally(() => {
+        if (generation === inventoryRequestGeneration.current)
+          setLoading(false);
+      });
   }, [appliedSearch, includeDescendants, location, match, page, sort, style]);
 
   function submit(event: FormEvent) {

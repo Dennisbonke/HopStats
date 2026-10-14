@@ -47,6 +47,8 @@ Inventory is read-only and available from **Inventory**. **Locations** shows the
 descendant-inclusive counts, and unresolved records. The PoC has no authentication; keep it on loopback
 or a trusted LAN and never expose it directly to the public internet.
 
+See [docs/inventory.md](docs/inventory.md) for the inventory and locations API contract.
+
 ## Docker Compose
 
 ```bash

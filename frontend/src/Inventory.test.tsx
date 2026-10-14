@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -145,4 +145,65 @@ test("shows a useful empty inventory state", async () => {
   expect(
     await screen.findByText("No inventory records match these filters."),
   ).toBeInTheDocument();
+});
+
+test("ignores out-of-order inventory responses and stale errors", async () => {
+  const user = userEvent.setup();
+  const requests: Array<{
+    resolve: (response: unknown) => void;
+    reject: (error: Error) => void;
+  }> = [];
+  const oldItem = { ...item, beer_name: "Old result" };
+  const newItem = { ...item, beer_name: "New result" };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockImplementation((url: string) => {
+      if (url === "/api/v1/health") return Promise.resolve({ ok: true });
+      if (url.startsWith("/api/v1/inventory/styles")) {
+        return Promise.resolve({ ok: true, json: async () => [] });
+      }
+      if (url.startsWith("/api/v1/inventory")) {
+        return new Promise((resolve, reject) =>
+          requests.push({ resolve, reject }),
+        );
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          locations: [],
+          unresolved: { record_count: 0, total_units: 0 },
+        }),
+      });
+    }),
+  );
+  render(
+    <MemoryRouter initialEntries={["/inventory"]}>
+      <App />
+    </MemoryRouter>,
+  );
+  await waitFor(() => expect(requests).toHaveLength(1));
+  expect(screen.getByText("Loading inventory…")).toBeInTheDocument();
+
+  await user.type(screen.getByPlaceholderText("Search inventory…"), "new");
+  await user.click(screen.getByRole("button", { name: "Search" }));
+  await waitFor(() => expect(requests).toHaveLength(2));
+  requests[1].resolve({
+    ok: true,
+    json: async () => ({
+      items: [newItem],
+      page: 1,
+      page_size: 25,
+      total: 1,
+      total_pages: 1,
+    }),
+  });
+  expect((await screen.findAllByText("New result")).length).toBeGreaterThan(0);
+
+  requests[0].reject(new Error("stale request failed"));
+  await waitFor(() =>
+    expect(
+      screen.queryByText("Inventory data is temporarily unavailable."),
+    ).not.toBeInTheDocument(),
+  );
+  expect(screen.queryByText("Old result")).not.toBeInTheDocument();
 });
