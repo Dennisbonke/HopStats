@@ -29,6 +29,7 @@ class BeerRecord:
     abv: Decimal | None = None
     ibu: Decimal | None = None
     photo_url: str | None = None
+    provisional_key: str | None = None
 
 
 @dataclass(frozen=True)

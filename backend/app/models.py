@@ -49,10 +49,20 @@ class BeerStyle(Base):
 
 class Beer(Base):
     __tablename__ = "beers"
-    __table_args__ = (UniqueConstraint("source_system", "external_id"),)
+    __table_args__ = (
+        UniqueConstraint("source_system", "external_id"),
+        Index(
+            "uq_beers_source_provisional",
+            "source_system",
+            "provisional_key",
+            unique=True,
+            sqlite_where=text("provisional_key IS NOT NULL"),
+        ),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     source_system: Mapped[str | None] = mapped_column(String(50))
     external_id: Mapped[str | None] = mapped_column(String(100))
+    provisional_key: Mapped[str | None] = mapped_column(String(500))
     brewery_id: Mapped[int | None] = mapped_column(ForeignKey("breweries.id"))
     style_id: Mapped[int | None] = mapped_column(ForeignKey("beer_styles.id"))
     name: Mapped[str] = mapped_column(String(255))
@@ -214,6 +224,7 @@ class ImportRun(Base):
     removed_count: Mapped[int] = mapped_column(Integer, default=0)
     rejected_count: Mapped[int] = mapped_column(Integer, default=0)
     error_summary: Mapped[str | None] = mapped_column(Text)
+    error_code: Mapped[str | None] = mapped_column(String(40))
 
 
 class ImportError(Base):

@@ -83,6 +83,19 @@ def test_unknown_schema_is_rejected():
         select_importer(["item_id", "checkin_id", "beer_name", "brewery_name", "quantity"])
 
 
+def test_padded_headers_are_normalized_for_detection_and_row_parsing():
+    csv = " item_id , beer_name , brewery_name , quantity \nitem-1,Beer,Brewery,2\n"
+    parsed = UntappdStashCsvImporter().parse(BytesIO(csv.encode()))
+    assert parsed.records[0].source_item_id == "item-1"
+    assert parsed.records[0].quantity == 2
+
+
+def test_duplicate_headers_after_normalization_are_rejected():
+    csv = "item_id, item_id ,beer_name,brewery_name,quantity\nitem-1,item-1,Beer,Brewery,1\n"
+    with pytest.raises(ImportValidationError, match="duplicate column"):
+        UntappdStashCsvImporter().parse(BytesIO(csv.encode()))
+
+
 def test_invalid_quantity_is_rejected():
     csv = "item_id,beer_name,brewery_name,quantity\nitem,Beer,Brewery,1.5\n"
     with pytest.raises(ImportValidationError, match="nonnegative integer"):
@@ -92,3 +105,63 @@ def test_invalid_quantity_is_rejected():
 def test_empty_csv_is_rejected():
     with pytest.raises(ImportValidationError, match="empty"):
         UntappdStashCsvImporter().parse(BytesIO(b""))
+
+
+def stash_value_csv(**overrides: str) -> bytes:
+    headers = [
+        "item_id",
+        "beer_name",
+        "brewery_name",
+        "quantity",
+        "beer_abv",
+        "purchase_price",
+        "best_by_date_iso",
+    ]
+    row = {
+        "item_id": "item-1",
+        "beer_name": "Beer",
+        "brewery_name": "Brewery",
+        "quantity": "1",
+        "beer_abv": "5.00",
+        "purchase_price": "4.50",
+        **overrides,
+    }
+    output = StringIO()
+    writer = csv.DictWriter(output, fieldnames=headers)
+    writer.writeheader()
+    writer.writerow(row)
+    return output.getvalue().encode()
+
+
+@pytest.mark.parametrize("field, value", [("beer_abv", "NaN"), ("beer_abv", "Infinity")])
+def test_non_finite_numeric_values_are_rejected(field, value):
+    with pytest.raises(ImportValidationError, match="finite"):
+        UntappdStashCsvImporter().parse(BytesIO(stash_value_csv(**{field: value})))
+
+
+@pytest.mark.parametrize("value", ["100000000.00", "4.501", "1e100"])
+def test_numeric_values_incompatible_with_database_precision_are_rejected(value):
+    with pytest.raises(ImportValidationError, match="precision"):
+        UntappdStashCsvImporter().parse(BytesIO(stash_value_csv(purchase_price=value)))
+
+
+@pytest.mark.parametrize("value", ["2026-02-30", "2026-01-01-not-a-date"])
+def test_malformed_complete_dates_are_rejected(value):
+    with pytest.raises(ImportValidationError, match="ISO date"):
+        UntappdStashCsvImporter().parse(BytesIO(stash_value_csv(best_by_date_iso=value)))
+
+
+def test_valid_full_datetime_date_value_is_parsed_without_truncation():
+    csv = stash_value_csv(best_by_date_iso="2026-01-01T12:30:00")
+    record = UntappdStashCsvImporter().parse(BytesIO(csv)).records[0]
+    assert record.best_before.isoformat() == "2026-01-01"
+
+
+def test_large_csv_is_parsed_without_dataframe_dependencies():
+    rows = [f"item-{index},Beer {index},Brewery,1,5.00,4.50" for index in range(2_000)]
+    payload = (
+        b"item_id,beer_name,brewery_name,quantity,beer_abv,purchase_price\n"
+        + ("\n".join(rows) + "\n").encode()
+    )
+    parsed = UntappdStashCsvImporter().parse(BytesIO(payload))
+    assert len(parsed.records) == 2_000

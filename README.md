@@ -1,8 +1,8 @@
 # HopStats
 
 HopStats is an open-source, self-hosted foundation for future Untappd analytics and beer inventory browsing.
-M1 provides the application shell, database schema/migrations, health API, and deployment foundation. Import,
-dashboard metrics, and inventory browsing are intentionally not implemented yet.
+M2 provides safe, repeatable imports for native Untappd check-in and stash CSV exports. Dashboard metrics and
+inventory browsing remain deferred.
 
 > **Development note:** This project is vibecoded.
 
@@ -26,6 +26,23 @@ Vite proxies `/api` to FastAPI. The API health check is `GET /api/v1/health`.
 Local development stores SQLite in `./hopstats.sqlite3` by default, so it does not require a `/data`
 directory. Docker Compose explicitly uses `/data/hopstats.sqlite3` on its named persistent volume.
 
+## CSV imports
+
+Open **Imports** in the web app and choose either the native Untappd check-in
+CSV or native Untappd stash CSV. Check-in imports are additive and idempotent.
+Stash imports are authoritative full snapshots and require an explicit
+confirmation; a valid snapshot removes source items absent from the new file.
+Malformed or invalid files never partially change the database. Import history
+shows counts and validation errors. The default upload limit is 10 MiB; set
+`HOPSTATS_MAX_UPLOAD_BYTES` to change it. Uploaded files are not retained.
+Existing replacements from undated exports require a second warning
+acknowledgement; dated exports older than the latest trusted snapshot are also
+blocked unless explicitly overridden. Imports are designed for the default
+single-worker deployment.
+
+See [docs/imports.md](docs/imports.md) for supported headers, matching rules,
+the importer extension contract, privacy guidance, and known limitations.
+
 ## Docker Compose
 
 ```bash
@@ -39,7 +56,7 @@ in named volume `hopstats-data`, so container recreation does not erase it. Use 
 `HOPSTATS_BIND_ADDRESS` to change the published address/port. ARM64 builds are supported; CI performs a
 cross-platform image build, while runtime execution on ARM64 must be verified on ARM hardware. CI also runs an
 amd64 smoke container, checks the health endpoint and frontend, and verifies the SQLite file remains present
-after container recreation; logical data persistence will be tested once M2 adds write operations.
+after container recreation; import persistence is covered by the backend integration tests.
 
 ## Tests and checks
 
@@ -49,7 +66,7 @@ ruff check backend && ruff format --check backend
 cd frontend && npm run lint && npm run format && npm run typecheck && npm test && npm run build
 ```
 
-The M1 acceptance checks also validate the weekly Dependabot configuration in
+The acceptance checks also validate the weekly Dependabot configuration in
 `.github/dependabot.yml`.
 
 ## Security limitations

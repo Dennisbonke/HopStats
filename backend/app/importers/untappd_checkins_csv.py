@@ -7,6 +7,7 @@ from ..schemas.imports import (
     NormalizedCheckin,
     ParsedImport,
     StyleRecord,
+    ValidationIssue,
     VenueRecord,
 )
 from .base import ImportValidationError
@@ -104,6 +105,11 @@ class UntappdCheckinsCsvImporter:
                 if external_id in seen:
                     raise ImportValidationError(
                         f"row {row_number}: duplicate checkin_id {external_id}",
+                        (
+                            ValidationIssue(
+                                row_number, "checkin_id", "duplicate external identifier"
+                            ),
+                        ),
                     )
                 seen.add(external_id)
                 brewery_id = required_value(row, "brewery_id", row_number)
@@ -113,10 +119,13 @@ class UntappdCheckinsCsvImporter:
                 occurred_at, offset = iso_timestamp(
                     row, "created_at", row_number, "timezone_offset"
                 )
-                abv = decimal_value(row, "beer_abv", row_number)
-                ibu = decimal_value(row, "beer_ibu", row_number)
+                abv = decimal_value(row, "beer_abv", row_number, 5, 2)
+                ibu = decimal_value(row, "beer_ibu", row_number, 6, 2)
                 rating = ensure_range(
-                    decimal_value(row, "rating_score", row_number), "rating_score", row_number, 5
+                    decimal_value(row, "rating_score", row_number, 3, 2),
+                    "rating_score",
+                    row_number,
+                    5,
                 )
                 venue = None
                 if value(row, "venue_name") or value(row, "venue_id"):
@@ -127,8 +136,8 @@ class UntappdCheckinsCsvImporter:
                         city=value(row, "venue_city"),
                         state=value(row, "venue_state"),
                         country=value(row, "venue_country"),
-                        latitude=decimal_value(row, "venue_lat", row_number),
-                        longitude=decimal_value(row, "venue_lng", row_number),
+                        latitude=decimal_value(row, "venue_lat", row_number, 9, 6),
+                        longitude=decimal_value(row, "venue_lng", row_number, 9, 6),
                     )
                 brewery = BreweryRecord(
                     source_system="untappd",

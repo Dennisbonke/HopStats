@@ -105,4 +105,4 @@ def test_invalid_checkin_import_does_not_partially_persist_and_is_audited(client
         stored = session.get(ImportRun, invalid.id)
         assert stored.status == "failed"
         assert stored.rejected_count == 1
-        assert session.query(ImportError).filter_by(import_run_id=invalid.id).count() == 0
+        assert session.query(ImportError).filter_by(import_run_id=invalid.id).count() == 1

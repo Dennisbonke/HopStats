@@ -1,4 +1,5 @@
 import csv
+from datetime import UTC, datetime
 from io import StringIO
 
 from sqlalchemy import select
@@ -35,7 +36,12 @@ def stash_csv(*rows: dict[str, str]) -> bytes:
     return output.getvalue().encode()
 
 
-def stash_row(item_id: str, name: str = "Pilsner", quantity: str = "1") -> dict[str, str]:
+def stash_row(
+    item_id: str,
+    name: str = "Pilsner",
+    quantity: str = "1",
+    bottled_date: str = "0000-00-00 00:00:00",
+) -> dict[str, str]:
     return {
         "item_id": item_id,
         "beer_name": name,
@@ -48,7 +54,7 @@ def stash_row(item_id: str, name: str = "Pilsner", quantity: str = "1") -> dict[
         "quantity": quantity,
         "container": "Bottle",
         "purchase_date": "2026-09-01",
-        "bottled_date": "0000-00-00 00:00:00",
+        "bottled_date": bottled_date,
         "best_by_date_iso": "2100-01-01",
         "purchase_location": "Brew Shop",
         "purchase_price": "4.50",
@@ -112,7 +118,11 @@ def test_inventory_snapshot_is_idempotent_and_authoritative(client):
         second.removed_count,
     ) == (0, 0, 2, 0)
     changed = service.import_inventory(
-        user_id, "stash.csv", stash_csv(stash_row("item-1", quantity="4")), confirmed=True
+        user_id,
+        "stash.csv",
+        stash_csv(stash_row("item-1", quantity="4")),
+        confirmed=True,
+        allow_undated=True,
     )
     assert (
         changed.inserted_count,
@@ -166,6 +176,53 @@ def test_invalid_snapshot_and_missing_confirmation_preserve_previous_inventory(c
         assert len(failed) == 2
 
 
+def test_older_snapshot_requires_explicit_override(client):
+    service = ImportService()
+    user_id = local_user_id()
+    service.import_inventory(
+        user_id,
+        "new.csv",
+        stash_csv(stash_row("new-item")),
+        True,
+        source_exported_at=datetime(2026, 10, 6, tzinfo=UTC),
+    )
+    older = service.import_inventory(
+        user_id,
+        "old.csv",
+        stash_csv(stash_row("old-item")),
+        True,
+        source_exported_at=datetime(2026, 10, 1, tzinfo=UTC),
+    )
+    assert older.status == "failed"
+    assert older.error_code == "older_snapshot"
+    with SessionLocal() as session:
+        assert session.scalar(select(InventoryItem.source_item_id)) == "new-item"
+
+
+def test_undated_replacement_requires_acknowledgement_but_identical_reimport_is_safe(client):
+    service = ImportService()
+    user_id = local_user_id()
+    payload = stash_csv(stash_row("current-item"))
+    first = service.import_inventory(user_id, "stash.csv", payload, True)
+    identical = service.import_inventory(user_id, "stash.csv", payload, True)
+    rejected = service.import_inventory(
+        user_id, "undated-new.csv", stash_csv(stash_row("new-item")), True
+    )
+    replaced = service.import_inventory(
+        user_id,
+        "undated-new.csv",
+        stash_csv(stash_row("new-item")),
+        True,
+        allow_undated=True,
+    )
+    assert first.status == "completed"
+    assert identical.status == "completed"
+    assert rejected.error_code == "undated_snapshot"
+    assert replaced.status == "completed"
+    with SessionLocal() as session:
+        assert session.scalar(select(InventoryItem.source_item_id)) == "new-item"
+
+
 def test_ambiguous_match_is_not_auto_merged(client):
     service = ImportService()
     user_id = local_user_id()
@@ -178,6 +235,113 @@ def test_ambiguous_match_is_not_auto_merged(client):
         item = session.scalar(select(InventoryItem).where(InventoryItem.source_item_id == "item-1"))
         assert item.match_status == "ambiguous"
         assert item.matched_checkin_beer_id is None
+
+
+def test_distinct_release_dates_keep_distinct_provisional_beer_identities(client):
+    service = ImportService()
+    user_id = local_user_id()
+    service.import_inventory(
+        user_id,
+        "releases.csv",
+        stash_csv(
+            stash_row("item-1", bottled_date="2025-01-01"),
+            stash_row("item-2", bottled_date="2026-01-01"),
+        ),
+        True,
+    )
+    with SessionLocal() as session:
+        items = session.scalars(select(InventoryItem).order_by(InventoryItem.source_item_id)).all()
+        assert items[0].beer_id != items[1].beer_id
+        assert session.query(Beer).filter_by(source_system="untappd_stash").count() == 2
+
+
+def test_changed_release_metadata_reconciles_without_duplicate_key(client):
+    service = ImportService()
+    user_id = local_user_id()
+    service.import_inventory(
+        user_id,
+        "corrected.csv",
+        stash_csv(stash_row("item-1", bottled_date="2025-01-01")),
+        True,
+    )
+    with SessionLocal() as session:
+        original = session.scalar(
+            select(InventoryItem).where(InventoryItem.source_item_id == "item-1")
+        )
+        original_beer_id = original.beer_id
+
+    service.import_inventory(
+        user_id,
+        "corrected.csv",
+        stash_csv(stash_row("item-1", bottled_date="2026-01-01")),
+        True,
+        allow_undated=True,
+    )
+    with SessionLocal() as session:
+        item = session.scalar(select(InventoryItem).where(InventoryItem.source_item_id == "item-1"))
+        beer = session.get(Beer, item.beer_id)
+        assert item.beer_id == original_beer_id
+        assert beer.provisional_key is not None
+        assert "2026-01-01" in beer.provisional_key
+        assert session.query(Beer).filter_by(source_system="untappd_stash").count() == 1
+
+
+def test_changed_shared_release_splits_then_reuses_corrected_identity(client):
+    service = ImportService()
+    user_id = local_user_id()
+    service.import_inventory(
+        user_id,
+        "shared.csv",
+        stash_csv(
+            stash_row("item-1", bottled_date="2025-01-01"),
+            stash_row("item-2", bottled_date="2025-01-01"),
+        ),
+        True,
+    )
+    service.import_inventory(
+        user_id,
+        "shared.csv",
+        stash_csv(
+            stash_row("item-1", bottled_date="2026-01-01"),
+            stash_row("item-2", bottled_date="2025-01-01"),
+        ),
+        True,
+        allow_undated=True,
+    )
+    with SessionLocal() as session:
+        items = session.scalars(select(InventoryItem).order_by(InventoryItem.source_item_id)).all()
+        assert items[0].beer_id != items[1].beer_id
+        corrected_id = items[0].beer_id
+        assert session.query(Beer).filter_by(source_system="untappd_stash").count() == 2
+
+    # Reimporting the corrected release does not create a third identity.
+    service.import_inventory(
+        user_id,
+        "shared.csv",
+        stash_csv(
+            stash_row("item-1", bottled_date="2026-01-01"),
+            stash_row("item-2", bottled_date="2025-01-01"),
+        ),
+        True,
+        allow_undated=True,
+    )
+    with SessionLocal() as session:
+        item = session.scalar(select(InventoryItem).where(InventoryItem.source_item_id == "item-1"))
+        assert item.beer_id == corrected_id
+        assert session.query(Beer).filter_by(source_system="untappd_stash").count() == 2
+
+    # Reimporting the same rows reuses both release identities.
+    service.import_inventory(
+        user_id,
+        "releases.csv",
+        stash_csv(
+            stash_row("item-1", bottled_date="2025-01-01"),
+            stash_row("item-2", bottled_date="2026-01-01"),
+        ),
+        True,
+    )
+    with SessionLocal() as session:
+        assert session.query(Beer).filter_by(source_system="untappd_stash").count() == 2
 
 
 def test_match_candidates_are_user_scoped(client):

@@ -21,6 +21,14 @@ class SnapshotConfirmationRequired(InventorySnapshotError):
     pass
 
 
+class OlderSnapshotRejected(InventorySnapshotError):
+    pass
+
+
+class UndatedSnapshotRejected(InventorySnapshotError):
+    pass
+
+
 def upsert_inventory_snapshot(
     session: Session,
     user_id: int,
@@ -65,7 +73,16 @@ def upsert_inventory_snapshot(
         if record.source_item_id in seen:
             raise InventorySnapshotError(f"duplicate item_id {record.source_item_id}")
         seen.add(record.source_item_id)
-        beer = catalog.beer(record.beer)
+        existing = existing_items.get(record.source_item_id)
+        if existing is None:
+            beer = catalog.beer(record.beer)
+        else:
+            existing_beer = session.get(Beer, existing.beer_id)
+            beer = (
+                catalog.reconcile_inventory_beer(existing_beer, record.beer)
+                if existing_beer is not None
+                else catalog.beer(record.beer)
+            )
         match_status, matched = match_inventory_beer(session, beer, user_id)
         values = {
             "user_id": user_id,
@@ -88,7 +105,6 @@ def upsert_inventory_snapshot(
             "match_status": match_status,
             "matched_checkin_beer_id": matched.id if matched else None,
         }
-        existing = existing_items.get(record.source_item_id)
         if existing is None:
             session.add(InventoryItem(imported_at=datetime.now(UTC), **values))
             inserted += 1

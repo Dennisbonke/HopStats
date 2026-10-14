@@ -1,7 +1,9 @@
 import csv
+import email.utils
 import io
 import json
 import re
+import unicodedata
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
@@ -25,6 +27,9 @@ def read_csv(stream) -> tuple[list[str], list[dict[str, str]], list[ValidationIs
             raise ImportValidationError("CSV file is empty or has no header row")
         if len(set(headers)) != len(headers):
             raise ImportValidationError("CSV header contains duplicate column names")
+        # DictReader uses its fieldnames as row-dictionary keys. Replace the
+        # raw names so schema detection and row parsing use one contract.
+        reader.fieldnames = headers
         rows: list[dict[str, str]] = []
         issues: list[ValidationIssue] = []
         for row_number, row in enumerate(reader, start=2):
@@ -65,17 +70,41 @@ def required_value(row: dict[str, str], field: str, row_number: int) -> str:
     return result
 
 
-def decimal_value(row: dict[str, str], field: str, row_number: int) -> Decimal | None:
+def decimal_value(
+    row: dict[str, str],
+    field: str,
+    row_number: int,
+    precision: int | None = None,
+    scale: int | None = None,
+) -> Decimal | None:
     raw = value(row, field)
     if raw is None:
         return None
     try:
-        return Decimal(raw)
+        number = Decimal(raw)
     except InvalidOperation as exc:
         raise ImportValidationError(
             f"row {row_number}: {field} must be numeric",
             (ValidationIssue(row_number, field, "invalid decimal"),),
         ) from exc
+    if not number.is_finite():
+        raise ImportValidationError(
+            f"row {row_number}: {field} must be finite",
+            (ValidationIssue(row_number, field, "NaN and Infinity are not valid"),),
+        )
+    if precision is not None and scale is not None and not fits_numeric(number, precision, scale):
+        raise ImportValidationError(
+            f"row {row_number}: {field} exceeds database precision",
+            (ValidationIssue(row_number, field, "numeric precision or scale is too large"),),
+        )
+    return number
+
+
+def fits_numeric(number: Decimal, precision: int, scale: int) -> bool:
+    _, _, exponent = number.as_tuple()
+    fractional_digits = max(0, -exponent)
+    integer_digits = max(0, number.adjusted() + 1) if number else 0
+    return fractional_digits <= scale and integer_digits <= precision - scale
 
 
 def bounded_metadata(row: dict[str, str], known: set[str]) -> dict[str, Any]:
@@ -91,6 +120,36 @@ def bounded_metadata(row: dict[str, str], known: set[str]) -> dict[str, Any]:
         metadata[key] = clipped
         size += encoded_size
     return metadata
+
+
+def normalized_text(text: str | None) -> str:
+    if not text:
+        return ""
+    return " ".join(unicodedata.normalize("NFKC", text).split()).casefold()
+
+
+def provisional_identity(
+    beer_name: str,
+    brewery_name: str,
+    style: str | None,
+    abv: Decimal | None,
+    ibu: Decimal | None,
+    bottled_date: date | None,
+    best_before: date | None,
+) -> str:
+    return json.dumps(
+        [
+            normalized_text(beer_name),
+            normalized_text(brewery_name),
+            normalized_text(style),
+            str(abv) if abv is not None else None,
+            str(ibu) if ibu is not None else None,
+            bottled_date.isoformat() if bottled_date else None,
+            best_before.isoformat() if best_before else None,
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
 
 
 def iso_timestamp(
@@ -146,12 +205,21 @@ def iso_date(row: dict[str, str], field: str, row_number: int) -> date | None:
     if raw is None or raw in {"0000-00-00", "0000-00-00 00:00:00"}:
         return None
     try:
-        return date.fromisoformat(raw[:10])
-    except ValueError as exc:
-        raise ImportValidationError(
-            f"row {row_number}: {field} must be an ISO date",
-            (ValidationIssue(row_number, field, "invalid date"),),
-        ) from exc
+        return date.fromisoformat(raw)
+    except ValueError:
+        try:
+            # Some Untappd date fields include a time component. Parse the
+            # complete value, without timezone conversion or string slicing.
+            return datetime.fromisoformat(raw).date()
+        except ValueError:
+            try:
+                # The native stash export uses RFC 2822 dates for some fields.
+                return email.utils.parsedate_to_datetime(raw).date()
+            except (TypeError, ValueError) as exc:
+                raise ImportValidationError(
+                    f"row {row_number}: {field} must be an ISO date or RFC date",
+                    (ValidationIssue(row_number, field, "invalid date"),),
+                ) from exc
 
 
 def quantity(row: dict[str, str], field: str, row_number: int) -> int:
@@ -161,7 +229,13 @@ def quantity(row: dict[str, str], field: str, row_number: int) -> int:
             f"row {row_number}: {field} must be a nonnegative integer",
             (ValidationIssue(row_number, field, "invalid quantity"),),
         )
-    return int(raw)
+    parsed = int(raw)
+    if parsed > 2**63 - 1:
+        raise ImportValidationError(
+            f"row {row_number}: {field} exceeds database integer range",
+            (ValidationIssue(row_number, field, "quantity is too large"),),
+        )
+    return parsed
 
 
 def ensure_range(

@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./hopstats.sqlite3"
     log_level: str = "info"
     frontend_dist: str = "frontend/dist"
+    max_upload_bytes: int = 10 * 1024 * 1024
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="HOPSTATS_", extra="ignore")
 

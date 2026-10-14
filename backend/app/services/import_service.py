@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..db import SessionLocal
-from ..importers.base import ImportValidationError
+from ..importers.base import ImportValidationError, UnsupportedSchemaError
 from ..importers.common import read_csv
 from ..importers.registry import select_importer
 from ..models import Checkin, ImportRun
@@ -16,7 +16,12 @@ from ..models import ImportError as ImportErrorRecord
 from ..schemas.imports import NormalizedCheckin, ParsedImport, ValidationIssue
 from .catalog import CatalogService, metadata_json
 from .import_lock import import_lock
-from .inventory_snapshots import upsert_inventory_snapshot
+from .inventory_snapshots import (
+    OlderSnapshotRejected,
+    SnapshotConfirmationRequired,
+    UndatedSnapshotRejected,
+    upsert_inventory_snapshot,
+)
 
 
 def now_utc() -> datetime:
@@ -62,9 +67,20 @@ class ImportService:
         filename: str,
         payload: bytes,
         confirmed: bool,
+        source_exported_at: datetime | None = None,
+        allow_older: bool = False,
+        allow_undated: bool = False,
     ) -> ImportRun:
         with import_lock(user_id, "inventory"):
-            return self._import_inventory(user_id, filename, payload, confirmed)
+            return self._import_inventory(
+                user_id,
+                filename,
+                payload,
+                confirmed,
+                source_exported_at,
+                allow_older,
+                allow_undated,
+            )
 
     def _import_inventory(
         self,
@@ -72,17 +88,58 @@ class ImportService:
         filename: str,
         payload: bytes,
         confirmed: bool,
+        source_exported_at: datetime | None,
+        allow_older: bool,
+        allow_undated: bool,
     ) -> ImportRun:
-        run = self._start_run(user_id, "inventory", filename, payload)
+        run = self._start_run(user_id, "inventory", filename, payload, source_exported_at)
         try:
             parsed = self._parse(payload)
             if parsed.kind != "untappd_stash_csv":
                 raise ImportValidationError("file is not an Untappd stash CSV")
             if not confirmed:
-                raise ImportValidationError(
+                raise SnapshotConfirmationRequired(
                     "inventory imports replace the complete stash snapshot; "
                     "confirmation is required"
                 )
+            if source_exported_at is None and not allow_undated:
+                with self.session_factory() as session:
+                    previous = session.scalar(
+                        select(ImportRun)
+                        .where(
+                            ImportRun.user_id == user_id,
+                            ImportRun.source_type == "inventory",
+                            ImportRun.status == "completed",
+                        )
+                        .order_by(ImportRun.started_at.desc())
+                    )
+                if previous and previous.sha256 != run.sha256:
+                    raise UndatedSnapshotRejected(
+                        "snapshot has no trusted export date; set allow_undated "
+                        "to replace the current snapshot"
+                    )
+            if source_exported_at is not None and not allow_older:
+                with self.session_factory() as session:
+                    previous = session.scalar(
+                        select(ImportRun)
+                        .where(
+                            ImportRun.user_id == user_id,
+                            ImportRun.source_type == "inventory",
+                            ImportRun.status == "completed",
+                            ImportRun.source_exported_at.is_not(None),
+                        )
+                        .order_by(ImportRun.source_exported_at.desc())
+                    )
+                previous_date = previous.source_exported_at if previous else None
+                if (
+                    previous_date
+                    and previous.sha256 != run.sha256
+                    and _naive_utc(source_exported_at) < _naive_utc(previous_date)
+                ):
+                    raise OlderSnapshotRejected(
+                        "snapshot is older than the latest imported snapshot; "
+                        "set allow_older to replace it"
+                    )
         except Exception as exc:
             return self._fail_run(run.id, exc, _issues(exc))
 
@@ -154,13 +211,19 @@ class ImportService:
         return inserted, updated, unchanged
 
     def _start_run(
-        self, user_id: int, source_type: str, filename: str, payload: bytes
+        self,
+        user_id: int,
+        source_type: str,
+        filename: str,
+        payload: bytes,
+        source_exported_at: datetime | None = None,
     ) -> ImportRun:
         run = ImportRun(
             user_id=user_id,
             source_type=source_type,
             filename=filename[:255],
             sha256=hashlib.sha256(payload).hexdigest(),
+            source_exported_at=source_exported_at,
             started_at=now_utc(),
             status="processing",
             inserted_count=0,
@@ -197,6 +260,7 @@ class ImportService:
             run.completed_at = now_utc()
             run.rejected_count = max(1, len(issues))
             run.error_summary = str(error)[:2000]
+            run.error_code = _error_code(error)
             for issue in issues:
                 session.add(
                     ImportErrorRecord(
@@ -213,3 +277,23 @@ class ImportService:
 def _issues(error: Exception) -> tuple[ValidationIssue, ...]:
     issues = getattr(error, "issues", ())
     return tuple(issue for issue in issues if isinstance(issue, ValidationIssue))
+
+
+def _error_code(error: Exception) -> str:
+    if isinstance(error, UnsupportedSchemaError):
+        return "unsupported_schema"
+    if isinstance(error, SnapshotConfirmationRequired):
+        return "confirmation_required"
+    if isinstance(error, OlderSnapshotRejected):
+        return "older_snapshot"
+    if isinstance(error, UndatedSnapshotRejected):
+        return "undated_snapshot"
+    if isinstance(error, ImportValidationError):
+        return "invalid_csv"
+    return "persistence_failure"
+
+
+def _naive_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(UTC).replace(tzinfo=None)

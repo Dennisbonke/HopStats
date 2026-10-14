@@ -1,10 +1,10 @@
 import json
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..models import Beer, BeerStyle, Brewery, Venue
+from ..models import Beer, BeerStyle, Brewery, InventoryItem, Venue
 from ..schemas.imports import BeerRecord, BreweryRecord, StyleRecord, VenueRecord
 from .beer_matching import normalize_name
 
@@ -86,9 +86,21 @@ class CatalogService:
                     Beer.external_id == record.external_id,
                 )
             )
+        if entity is None and record.external_id is None and record.provisional_key is not None:
+            entity = self.session.scalar(
+                select(Beer).where(
+                    Beer.source_system == record.source_system,
+                    Beer.provisional_key == record.provisional_key,
+                )
+            )
         brewery = self.brewery(record.brewery) if record.brewery is not None else None
         style = self.style(record.style)
-        if entity is None and record.external_id is None and brewery is not None:
+        if (
+            entity is None
+            and record.external_id is None
+            and record.provisional_key is None
+            and brewery is not None
+        ):
             provisional = self.session.scalars(
                 select(Beer).where(
                     Beer.source_system == record.source_system,
@@ -108,6 +120,7 @@ class CatalogService:
             entity = Beer(
                 source_system=record.source_system,
                 external_id=record.external_id,
+                provisional_key=record.provisional_key,
                 name=record.name,
                 brewery_id=brewery.id if brewery else None,
                 style_id=style.id if style else None,
@@ -120,6 +133,13 @@ class CatalogService:
             self.session.add(entity)
             self.session.flush()
             return entity
+        return self.update_beer(entity, record)
+
+    def update_beer(
+        self, entity: Beer, record: BeerRecord, update_provisional_key: bool = True
+    ) -> Beer:
+        brewery = self.brewery(record.brewery) if record.brewery is not None else None
+        style = self.style(record.style)
         changed = False
         for field, incoming in (
             ("name", record.name),
@@ -128,6 +148,13 @@ class CatalogService:
             ("photo_url", record.photo_url),
         ):
             changed = _set_if_meaningful(entity, field, incoming) or changed
+        if (
+            update_provisional_key
+            and entity.provisional_key != record.provisional_key
+            and record.provisional_key is not None
+        ):
+            entity.provisional_key = record.provisional_key
+            changed = True
         if brewery is not None and entity.brewery_id != brewery.id:
             entity.brewery_id = brewery.id
             changed = True
@@ -137,6 +164,33 @@ class CatalogService:
         if changed:
             entity.updated_at = datetime.now(UTC)
         return entity
+
+    def reconcile_inventory_beer(self, entity: Beer, record: BeerRecord) -> Beer:
+        """Reconcile a changed provisional key without merging shared identities."""
+        if entity.source_system != "untappd_stash" or record.provisional_key is None:
+            return self.update_beer(entity, record, update_provisional_key=False)
+        if entity.provisional_key == record.provisional_key:
+            return self.update_beer(entity, record)
+
+        desired = self.session.scalar(
+            select(Beer).where(
+                Beer.source_system == "untappd_stash",
+                Beer.provisional_key == record.provisional_key,
+                Beer.id != entity.id,
+            )
+        )
+        if desired is not None:
+            return self.update_beer(desired, record)
+
+        reference_count = self.session.scalar(
+            select(func.count(InventoryItem.id)).where(InventoryItem.beer_id == entity.id)
+        )
+        if reference_count == 1:
+            return self.update_beer(entity, record)
+
+        # Other inventory rows still depend on the old identity. Creating a
+        # keyed row for this corrected item avoids mutating their identity.
+        return self.beer(record)
 
     def venue(self, record: VenueRecord | None) -> Venue | None:
         if record is None:

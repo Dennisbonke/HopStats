@@ -20,22 +20,20 @@ def matching_beers(session: Session, beer: Beer, user_id: int | None = None) -> 
         brewery_name = (
             session.scalar(select(Brewery.name).where(Brewery.id == beer.brewery_id)) or ""
         )
-    query = select(Beer).where(Beer.source_system == "untappd")
+    query = (
+        select(Beer, Brewery.name)
+        .outerjoin(Brewery, Brewery.id == Beer.brewery_id)
+        .where(Beer.source_system == "untappd")
+    )
     if user_id is not None:
         query = query.join(Checkin, Checkin.beer_id == Beer.id).where(Checkin.user_id == user_id)
-    candidates = session.scalars(query.distinct()).all()
+    candidates = session.execute(query.distinct()).all()
     return [
         candidate
-        for candidate in candidates
+        for candidate, candidate_brewery_name in candidates
         if normalize_name(candidate.name) == normalize_name(beer.name)
-        and normalize_name(_brewery_name(session, candidate)) == normalize_name(brewery_name)
+        and normalize_name(candidate_brewery_name) == normalize_name(brewery_name)
     ]
-
-
-def _brewery_name(session: Session, beer: Beer) -> str:
-    if beer.brewery_id is None:
-        return ""
-    return session.scalar(select(Brewery.name).where(Brewery.id == beer.brewery_id)) or ""
 
 
 def match_inventory_beer(
