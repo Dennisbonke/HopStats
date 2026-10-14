@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..models import Beer, BeerStyle, Brewery, Venue
 from ..schemas.imports import BeerRecord, BreweryRecord, StyleRecord, VenueRecord
+from .beer_matching import normalize_name
 
 
 def _set_if_meaningful(entity, field: str, incoming):
@@ -38,6 +39,21 @@ class CatalogService:
                     Brewery.source_system == record.source_system,
                     Brewery.external_id == record.external_id,
                 )
+            )
+        if entity is None and record.external_id is None:
+            candidates = self.session.scalars(
+                select(Brewery).where(
+                    Brewery.source_system == record.source_system,
+                    Brewery.external_id.is_(None),
+                )
+            ).all()
+            entity = next(
+                (
+                    candidate
+                    for candidate in candidates
+                    if normalize_name(candidate.name) == normalize_name(record.name)
+                ),
+                None,
             )
         if entity is None:
             entity = Brewery(
@@ -72,6 +88,22 @@ class CatalogService:
             )
         brewery = self.brewery(record.brewery) if record.brewery is not None else None
         style = self.style(record.style)
+        if entity is None and record.external_id is None and brewery is not None:
+            provisional = self.session.scalars(
+                select(Beer).where(
+                    Beer.source_system == record.source_system,
+                    Beer.brewery_id == brewery.id,
+                    Beer.external_id.is_(None),
+                )
+            ).all()
+            entity = next(
+                (
+                    candidate
+                    for candidate in provisional
+                    if normalize_name(candidate.name) == normalize_name(record.name)
+                ),
+                None,
+            )
         if entity is None:
             entity = Beer(
                 source_system=record.source_system,

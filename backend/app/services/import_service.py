@@ -15,6 +15,8 @@ from ..models import Checkin, ImportRun
 from ..models import ImportError as ImportErrorRecord
 from ..schemas.imports import NormalizedCheckin, ParsedImport, ValidationIssue
 from .catalog import CatalogService, metadata_json
+from .import_lock import import_lock
+from .inventory_snapshots import upsert_inventory_snapshot
 
 
 def now_utc() -> datetime:
@@ -28,6 +30,10 @@ class ImportService:
         self.session_factory = session_factory
 
     def import_checkins(self, user_id: int, filename: str, payload: bytes) -> ImportRun:
+        with import_lock(user_id, "checkins"):
+            return self._import_checkins(user_id, filename, payload)
+
+    def _import_checkins(self, user_id: int, filename: str, payload: bytes) -> ImportRun:
         run = self._start_run(user_id, "checkins", filename, payload)
         try:
             parsed = self._parse(payload)
@@ -42,9 +48,53 @@ class ImportService:
                     inserted, updated, unchanged = self._persist_checkins(
                         session, user_id, parsed.records
                     )
+                    session.flush()
+                    from .inventory_snapshots import reconcile_inventory_matches
+
+                    reconcile_inventory_matches(session, user_id)
             return self._complete_run(run.id, inserted, updated, unchanged, 0)
         except Exception as exc:
             return self._fail_run(run.id, exc, ())
+
+    def import_inventory(
+        self,
+        user_id: int,
+        filename: str,
+        payload: bytes,
+        confirmed: bool,
+    ) -> ImportRun:
+        with import_lock(user_id, "inventory"):
+            return self._import_inventory(user_id, filename, payload, confirmed)
+
+    def _import_inventory(
+        self,
+        user_id: int,
+        filename: str,
+        payload: bytes,
+        confirmed: bool,
+    ) -> ImportRun:
+        run = self._start_run(user_id, "inventory", filename, payload)
+        try:
+            parsed = self._parse(payload)
+            if parsed.kind != "untappd_stash_csv":
+                raise ImportValidationError("file is not an Untappd stash CSV")
+            if not confirmed:
+                raise ImportValidationError(
+                    "inventory imports replace the complete stash snapshot; "
+                    "confirmation is required"
+                )
+        except Exception as exc:
+            return self._fail_run(run.id, exc, _issues(exc))
+
+        try:
+            with self.session_factory() as session:
+                with session.begin():
+                    inserted, updated, unchanged, removed = upsert_inventory_snapshot(
+                        session, user_id, parsed.records, confirmed
+                    )
+            return self._complete_run(run.id, inserted, updated, unchanged, removed)
+        except Exception as exc:
+            return self._fail_run(run.id, exc, _issues(exc))
 
     def _parse(self, payload: bytes) -> ParsedImport:
         headers, _, _ = read_csv(BytesIO(payload))

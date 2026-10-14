@@ -190,6 +190,8 @@ class InventoryItem(Base):
     purchase_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     created_at_source: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     source_payload_json: Mapped[str | None] = mapped_column(Text)
+    photo_url: Mapped[str | None] = mapped_column(Text)
+    best_before_suspicious: Mapped[bool] = mapped_column(Boolean, default=False)
     imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     match_status: Mapped[str] = mapped_column(String(20), default="unmatched")
     matched_checkin_beer_id: Mapped[int | None] = mapped_column(ForeignKey("beers.id"))
