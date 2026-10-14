@@ -174,6 +174,19 @@ class InventoryItem(Base):
     __table_args__ = (
         UniqueConstraint("inventory_source_id", "source_item_id"),
         CheckConstraint("quantity >= 0"),
+        Index("ix_inventory_items_user_source", "user_id", "inventory_source_id"),
+        Index(
+            "ix_inventory_items_user_source_location",
+            "user_id",
+            "inventory_source_id",
+            "location_id",
+        ),
+        Index(
+            "ix_inventory_items_user_source_match",
+            "user_id",
+            "inventory_source_id",
+            "match_status",
+        ),
         ForeignKeyConstraint(
             ["inventory_source_id", "user_id"],
             ["inventory_sources.id", "inventory_sources.user_id"],
@@ -189,6 +202,14 @@ class InventoryItem(Base):
     source_item_id: Mapped[str] = mapped_column(String(100))
     beer_id: Mapped[int] = mapped_column(ForeignKey("beers.id"))
     location_id: Mapped[int | None] = mapped_column(ForeignKey("locations.id"))
+    location_resolution_status: Mapped[str] = mapped_column(
+        String(20), default="unresolved", server_default="unresolved"
+    )
+    location_resolution_source: Mapped[str | None] = mapped_column(String(30))
+    location_resolution_detail: Mapped[str | None] = mapped_column(Text)
+    location_assignment_kind: Mapped[str] = mapped_column(
+        String(20), default="automatic", server_default="automatic"
+    )
     quantity: Mapped[int] = mapped_column(Integer)
     container: Mapped[str | None] = mapped_column(String(100))
     notes: Mapped[str | None] = mapped_column(Text)
