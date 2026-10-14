@@ -1,8 +1,8 @@
 # HopStats
 
 HopStats is an open-source, self-hosted Untappd analytics and beer inventory browser.
-M5 provides local username/password authentication, persistent SQLite sessions, safe repeatable imports, dashboard
-metrics, read-only inventory browsing, and authenticated hierarchical storage location management.
+M7 provides local username/password authentication, persistent SQLite sessions, safe repeatable imports, dashboard
+metrics, read-only inventory browsing, authenticated hierarchical storage location management, and check-in analytics.
 
 > **Development note:** This project is vibecoded.
 
@@ -48,6 +48,10 @@ children, descriptions, stable-ID moves/renames, and aliases while showing the c
 descendant-inclusive counts, and unresolved records. All application data APIs require the authenticated owner.
 
 See [docs/inventory.md](docs/inventory.md) for the inventory and locations API contract.
+
+**Analytics** provides user-scoped check-in discovery/repeat breakdowns and
+activity/lifetime trend charts. See [docs/analytics.md](docs/analytics.md) for
+metric definitions, date/timezone rules, the API contract, and query design.
 
 ## Docker Compose
 
