@@ -13,6 +13,12 @@ def normalize_location(value: str | None) -> str:
     return " ".join(unicodedata.normalize("NFKC", value).split()).casefold()
 
 
+def display_location(value: str | None) -> str:
+    if not value:
+        return ""
+    return " ".join(unicodedata.normalize("NFKC", value).split()).strip()
+
+
 @dataclass(frozen=True)
 class LocationResolution:
     status: str

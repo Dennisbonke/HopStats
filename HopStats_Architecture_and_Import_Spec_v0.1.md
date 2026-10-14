@@ -157,7 +157,8 @@ Version all endpoints, validate pagination limits, and return consistent error J
 1. **Dashboard:** eight stat cards; clear empty states; dataset freshness badges; explain provisional “untried” metric.
 2. **Imports:** check-in and stash upload areas; file format labels; confirmation before replacing inventory snapshot; outcome counts and errors.
 3. **Inventory:** mobile-friendly search/filter, quantity, brewery, ABV, best-before, location breadcrumb, match indicator; read-only.
-4. **Locations:** browse hierarchy and unresolved items; aliases can be seeded via config in PoC.
+4. **Locations:** authenticated hierarchy and alias management; JSON remains a private provisioning
+   mechanism for explicitly configuration-managed entries, while resolution rules stay read-only.
 
 ## 9. Suggested repository layout
 

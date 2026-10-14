@@ -2,7 +2,7 @@
 
 HopStats is an open-source, self-hosted Untappd analytics and beer inventory browser.
 M5 provides local username/password authentication, persistent SQLite sessions, safe repeatable imports, dashboard
-metrics, read-only inventory browsing, and private-configured hierarchical storage locations.
+metrics, read-only inventory browsing, and authenticated hierarchical storage location management.
 
 > **Development note:** This project is vibecoded.
 
@@ -43,7 +43,8 @@ single-worker deployment.
 See [docs/imports.md](docs/imports.md) for supported headers, matching rules,
 the importer extension contract, privacy guidance, and known limitations.
 
-Inventory is read-only and available from **Inventory**. **Locations** shows the configured hierarchy,
+Inventory is read-only and available from **Inventory**. **Locations** manages database-owned roots,
+children, descriptions, stable-ID moves/renames, and aliases while showing the configured hierarchy,
 descendant-inclusive counts, and unresolved records. All application data APIs require the authenticated owner.
 
 See [docs/inventory.md](docs/inventory.md) for the inventory and locations API contract.

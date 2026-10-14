@@ -1,6 +1,8 @@
 # Inventory and locations API
 
-The read-only API is scoped to the authenticated user's existing records. M5 has private CLI provisioning and no
+The inventory API is read-only and scoped to the authenticated user's existing
+records. Location management is available to authenticated users from the
+Locations page and its scoped API. M5 has private CLI provisioning and no
 public registration. Use HTTPS for internet-facing deployments.
 
 ## Inventory
@@ -36,6 +38,31 @@ full path, aliases, record count, and total units. Parent counts include all
 descendants. The response also has an `unresolved` count and unit total.
 
 `GET /api/v1/locations/{id}` returns one canonical node with its descendants.
-Unknown or inaccessible IDs return `404`. There are no public mutation
+Unknown or inaccessible IDs return `404`. Inventory has no public mutation
 endpoints; configure locations privately through `HOPSTATS_LOCATION_CONFIG` and
 its explicit owner setting as described in [the import guide](imports.md).
+
+## Location management API
+
+All write endpoints require the authenticated session and the M5 double-submit
+CSRF header. IDs are always scoped to the session's numeric user ID.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/v1/locations` | Create a database-managed root or child |
+| `PATCH` | `/api/v1/locations/{id}` | Rename, move, or edit description |
+| `POST` | `/api/v1/locations/{id}/ownership` | Explicitly transfer a legacy/configured subtree to UI ownership |
+| `DELETE` | `/api/v1/locations/{id}` | Delete an empty eligible leaf |
+| `POST` | `/api/v1/locations/{id}/aliases` | Add a UI-managed alias |
+| `PATCH` | `/api/v1/locations/{id}/aliases/{alias_id}` | Edit a UI-managed alias |
+| `DELETE` | `/api/v1/locations/{id}/aliases/{alias_id}` | Remove a UI-managed alias |
+
+Mutation responses include a reconciliation summary. `409` indicates a naming,
+ownership, hierarchy, or deletion conflict; `404` hides resources outside the
+authenticated account; `422` indicates invalid input. Alias and rule responses
+include stable IDs and `managed_by_config` provenance. Resolution rules remain
+read-only in M6. Ownership transfer requires
+`confirm_configuration_removed=true`; the server also rejects transfer while
+the configured account's private JSON setting is active. It transfers the
+selected subtree and its managed aliases/rules to database ownership without
+changing IDs or inventory assignments.

@@ -105,13 +105,37 @@ Set `HOPSTATS_LOCATION_CONFIG` to a private JSON file based on
 [`config/locations.example.json`](../config/locations.example.json), and identify
 its owner explicitly with `HOPSTATS_LOCATION_CONFIG_USER_ID` (the immutable
 numeric `users.id`). The configuration is safe to apply repeatedly. Location
-hierarchy entries are additive, while aliases and resolution rules declared in
-the file are authoritative for definitions previously created by that
-configuration. Removed configuration-managed aliases/rules are safely removed
-from the database; manually maintained aliases/rules are never deleted or
-claimed by the config. Rows created before location-configuration provenance
-was introduced are treated as manual for safety and are not removed
-automatically.
+hierarchy entries are additive. Aliases and resolution rules declared in the
+file are authoritative only for definitions previously marked
+`managed_by_config=true`: obsolete managed aliases/rules are removed on the
+next startup, while database-managed definitions are never deleted or claimed.
+Canonical locations are never deleted merely because they are absent from the
+file. Rows created before location-configuration provenance was introduced are
+treated as unknown for safety and are not removed automatically.
+
+The authenticated **Locations** page is now the normal administration surface
+for database-managed locations. It creates database-owned roots and children,
+supports stable-ID rename/move/description edits, and manages UI aliases. Every
+mutation reconciles automatic inventory assignments synchronously; explicit
+assignments and original notes are preserved. Configuration-managed locations,
+aliases, and rules are shown with their provenance and remain read-only.
+
+The `locations.managed_by_config` migration field is `true` for locations
+created from JSON, `false` for new UI locations, and `NULL` for legacy rows
+whose provenance cannot be reconstructed. Legacy unknown rows are preserved
+and locked against structural edits rather than guessed or recreated. The
+Locations page provides an explicit owner-controlled **Classify as UI-managed**
+or **Transfer to UI management** action. It transfers the selected subtree,
+aliases, and rules without changing IDs, and requires confirmation that the
+owning account's private JSON configuration has been removed. The API rejects
+transfers while that configuration is active, preventing a later restart from
+recreating the old hierarchy. Back up the SQLite database before changing
+ownership or configuration.
+
+For a failed deployment, stop the application, preserve the failed database,
+and restore the last known-good SQLite file from the Docker volume backup
+before restarting. Alembic migrations are additive here and do not rewrite
+location IDs, aliases, rules, or inventory assignments.
 
 For initial single-account provisioning, `HOPSTATS_LOCATION_CONFIG_USERNAME`
 may be used instead. If neither owner setting is supplied, a configuration is
