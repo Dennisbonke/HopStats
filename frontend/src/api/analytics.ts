@@ -1,5 +1,7 @@
 import { apiFetch } from "./client";
 
+export class AnalyticsApiError extends Error {}
+
 export type AnalyticsBucket = {
   key: string;
   label: string;
@@ -28,11 +30,21 @@ export type CheckinAnalytics = {
   buckets: AnalyticsBucket[];
 };
 
-export async function fetchCheckinAnalytics(params: URLSearchParams) {
+export async function fetchCheckinAnalytics(
+  params: URLSearchParams,
+  signal?: AbortSignal,
+) {
   const response = await apiFetch(
     `/api/v1/analytics/checkins?${params.toString()}`,
+    { signal },
   );
-  if (!response.ok)
-    throw new Error(`Analytics request failed (${response.status})`);
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as {
+      detail?: string;
+    } | null;
+    throw new AnalyticsApiError(
+      body?.detail ?? `Analytics request failed (${response.status})`,
+    );
+  }
   return (await response.json()) as CheckinAnalytics;
 }

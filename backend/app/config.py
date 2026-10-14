@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     log_level: str = "info"
     frontend_dist: str = "frontend/dist"
     max_upload_bytes: int = 10 * 1024 * 1024
+    analytics_max_buckets: int = Field(default=366, gt=0, le=730)
     location_config: str | None = None
     location_config_user_id: int | None = Field(default=None, gt=0)
     location_config_username: str | None = None

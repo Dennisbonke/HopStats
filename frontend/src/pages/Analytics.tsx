@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -14,6 +14,7 @@ import {
   YAxis,
 } from "recharts";
 import {
+  AnalyticsApiError,
   AnalyticsBucket,
   CheckinAnalytics,
   fetchCheckinAnalytics,
@@ -166,6 +167,7 @@ export default function Analytics() {
   const [data, setData] = useState<CheckinAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const requestSequence = useRef(0);
   const [mode, setMode] = useState<"activity" | "cumulative">("activity");
   const [visible, setVisible] = useState({ total: true, discoveries: true });
   const actualGranularity =
@@ -192,20 +194,39 @@ export default function Analytics() {
   }, [period, granularity, requestParams, searchParams, setSearchParams]);
 
   useEffect(() => {
+    const requestId = ++requestSequence.current;
     if (invalidRange) {
       setData(null);
       setLoading(false);
       setError(null);
-      return;
+      return () => {
+        if (requestSequence.current === requestId) requestSequence.current++;
+      };
     }
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
-    fetchCheckinAnalytics(requestParams)
-      .then(setData)
-      .catch(() =>
-        setError("Analytics are temporarily unavailable. Please try again."),
-      )
-      .finally(() => setLoading(false));
+    setData(null);
+    fetchCheckinAnalytics(requestParams, controller.signal)
+      .then((result) => {
+        if (requestSequence.current === requestId) setData(result);
+      })
+      .catch((requestError: unknown) => {
+        if (requestSequence.current === requestId) {
+          setError(
+            requestError instanceof AnalyticsApiError
+              ? requestError.message
+              : "Analytics are temporarily unavailable. Please try again.",
+          );
+        }
+      })
+      .finally(() => {
+        if (requestSequence.current === requestId) setLoading(false);
+      });
+    return () => {
+      controller.abort();
+      if (requestSequence.current === requestId) requestSequence.current++;
+    };
   }, [period, start, end, invalidRange, requestParams]);
 
   function choosePeriod(next: Period) {

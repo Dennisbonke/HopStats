@@ -166,3 +166,28 @@ def test_analytics_rejects_invalid_range_and_timezone(client):
     )
     assert reversed_range.status_code == 422
     assert invalid_timezone.status_code == 422
+
+
+def test_analytics_daily_bucket_cap_rejects_without_truncating(client):
+    daily = client.get("/api/v1/analytics/checkins?start=2024-01-01&end=2025-01-01&granularity=day")
+    assert daily.status_code == 422
+    assert "more than 366 buckets" in daily.json()["detail"]
+
+    monthly = client.get(
+        "/api/v1/analytics/checkins?start=2024-01-01&end=2025-01-01&granularity=month"
+    )
+    assert monthly.status_code == 200
+    assert len(monthly.json()["buckets"]) == 13
+
+
+def test_analytics_daily_bucket_cap_can_be_configured(client, monkeypatch):
+    from backend.app.config import get_settings
+
+    monkeypatch.setenv("HOPSTATS_ANALYTICS_MAX_BUCKETS", "400")
+    get_settings.cache_clear()
+    response = client.get(
+        "/api/v1/analytics/checkins?start=2024-01-01&end=2025-01-01&granularity=day"
+    )
+    get_settings.cache_clear()
+    assert response.status_code == 200
+    assert len(response.json()["buckets"]) == 367

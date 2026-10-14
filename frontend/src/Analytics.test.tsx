@@ -107,6 +107,57 @@ test("supports cumulative/activity controls and period changes", async () => {
   );
 });
 
+test("ignores out-of-order responses and stale loading/error handlers", async () => {
+  type FakeResponse = { ok: boolean; json: () => Promise<unknown> };
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    let reject!: (error: Error) => void;
+    const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+      resolve = resolvePromise;
+      reject = rejectPromise;
+    });
+    return { promise, resolve, reject };
+  }
+  const pending: ReturnType<typeof deferred<FakeResponse>>[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() => {
+      const request = deferred<FakeResponse>();
+      pending.push(request);
+      return request.promise;
+    }),
+  );
+  renderAnalytics();
+  await waitFor(() => expect(pending).toHaveLength(1));
+  fireEvent.change(screen.getByLabelText("Granularity"), {
+    target: { value: "week" },
+  });
+  await waitFor(() => expect(pending).toHaveLength(2));
+  fireEvent.change(screen.getByLabelText("Granularity"), {
+    target: { value: "month" },
+  });
+  await waitFor(() => expect(pending).toHaveLength(3));
+
+  // An old completion must neither replace current results nor clear loading.
+  pending[0].resolve({ ok: true, json: async () => sample });
+  expect(await screen.findByText("Loading analytics…")).toBeInTheDocument();
+
+  const latest = {
+    ...sample,
+    summary: { ...sample.summary, total_checkins: 99 },
+  };
+  pending[2].resolve({ ok: true, json: async () => latest });
+  expect(await screen.findByText("99")).toBeInTheDocument();
+
+  // A stale request failure must not replace the successful newest response.
+  pending[1].reject(new Error("stale request failure"));
+  await waitFor(() => {
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText("Loading analytics…")).not.toBeInTheDocument();
+  });
+  expect(screen.getByLabelText("Check-in summary")).toHaveTextContent("99");
+});
+
 test("validates reversed custom dates without requesting stale ranges", async () => {
   renderAnalytics();
   await screen.findByText("Check-in Breakdown");
@@ -129,6 +180,21 @@ test("shows fetch errors and empty data feedback", async () => {
     "Analytics are temporarily unavailable",
   );
 
+  cleanup();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: false,
+      status: 422,
+      json: async () => ({ detail: "Choose a coarser granularity." }),
+    }),
+  );
+  renderAnalytics();
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Choose a coarser granularity.",
+  );
+
+  cleanup();
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue({

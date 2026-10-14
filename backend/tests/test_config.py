@@ -37,3 +37,10 @@ def test_location_config_owner_identifiers_are_mutually_exclusive():
 def test_location_config_username_cannot_be_blank():
     with pytest.raises(ValidationError, match="cannot be blank"):
         Settings(location_config_username="  ")
+
+
+def test_analytics_bucket_limit_is_configurable_but_bounded():
+    assert Settings().analytics_max_buckets == 366
+    assert Settings(analytics_max_buckets=500).analytics_max_buckets == 500
+    with pytest.raises(ValidationError):
+        Settings(analytics_max_buckets=731)

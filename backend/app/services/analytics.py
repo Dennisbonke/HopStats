@@ -4,14 +4,13 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
 
+from ..config import get_settings
 from ..models import Checkin
 from ..schemas.analytics import (
     AnalyticsBucket,
     AnalyticsSummary,
     CheckinAnalyticsResponse,
 )
-
-MAX_BUCKETS = 2400
 
 
 class AnalyticsValidationError(ValueError):
@@ -38,7 +37,9 @@ def _next_bucket(day: date, granularity: str) -> date:
     return (day.replace(day=28) + timedelta(days=4)).replace(day=1)
 
 
-def _make_buckets(start: date, end: date, granularity: str, tz: ZoneInfo) -> list[dict]:
+def _make_buckets(
+    start: date, end: date, granularity: str, tz: ZoneInfo, max_buckets: int
+) -> list[dict]:
     current = _bucket_start(start, granularity)
     result = []
     while current <= end:
@@ -66,16 +67,19 @@ def _make_buckets(start: date, end: date, granularity: str, tz: ZoneInfo) -> lis
             }
         )
         current = following
-        if len(result) > MAX_BUCKETS:
+        if len(result) > max_buckets:
             raise AnalyticsValidationError(
-                f"range creates more than {MAX_BUCKETS} buckets; choose a coarser granularity"
+                f"range creates more than {max_buckets} buckets; choose a coarser granularity"
             )
     return result
 
 
 class AnalyticsService:
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, max_buckets: int | None = None):
         self.session = session
+        self.max_buckets = (
+            max_buckets if max_buckets is not None else get_settings().analytics_max_buckets
+        )
 
     def checkins(
         self,
@@ -123,7 +127,7 @@ class AnalyticsService:
         if granularity == "auto":
             duration = (end - start).days + 1
             granularity = "day" if duration <= 45 else "week" if duration <= 180 else "month"
-        buckets = _make_buckets(start, end, granularity, tz)
+        buckets = _make_buckets(start, end, granularity, tz, self.max_buckets)
         start_utc = _utc_boundary(start, tz)
         end_utc = _utc_boundary(end + timedelta(days=1), tz)
 

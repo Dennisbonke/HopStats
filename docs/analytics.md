@@ -8,8 +8,11 @@ in URL query parameters. Presets are resolved in the browser to inclusive
 calendar dates; `all` is sent without dates and resolved by the API. The default
 is the current calendar year. “Last 30/90 days” includes today and the preceding
 29/89 local dates. Daily ranges over 45 days default to weekly; ranges over 180
-days default to monthly. Granularity can be overridden. Very long daily ranges
-are horizontally scrollable and bounded to 2,400 buckets.
+days default to monthly. Granularity can be overridden. Daily ranges are
+horizontally scrollable and capped at 366 buckets by default (one leap-year-
+sized daily view); longer explicit daily requests return 422 rather than
+dropping data. Operators can configure a higher bounded limit as described
+below; choose a coarser granularity for longer periods.
 
 ## Definitions
 
@@ -45,7 +48,8 @@ place in the Netherlands. Import time is never used as the event date.
 | `granularity` | `auto`, `day`, `week`, or `month` (default `auto`) |
 | `timezone` | IANA timezone (default `Europe/Amsterdam`) |
 
-Invalid ranges, timezones, and unsupported bucket counts return HTTP 422.
+Invalid ranges, timezones, and requests exceeding the configured bucket cap
+return HTTP 422.
 All-time with no data returns zero summary metrics and no buckets. An explicit
 empty range returns zero-filled chronological buckets. The response contains
 the effective inclusive range, timezone, resolved granularity, summary
@@ -68,11 +72,13 @@ The filters refresh both charts and metrics with one shared request. The bar
 tooltip reports exact totals, discoveries, repeats, bucket dates, and discovery
 share. The trend chart supports activity/cumulative modes and independent
 series visibility. Recharts provides responsive/keyboard chart interaction;
-long daily displays scroll horizontally rather than dropping observations.
+daily displays scroll horizontally within the configured point limit.
 
 M7 does not analyze inventory, venues, ratings, or beer attributes. Results
 depend on the check-in rows currently stored; importing older history or
 correcting event timestamps can legitimately move discovery classifications.
-Very large datasets still require a complete per-user SQL window pass, so the
-indexes and bounded output address initial Raspberry Pi deployment needs but
-do not promise constant-time aggregation.
+The SQL bucket expression defaults to 366 branches and is configurable with
+`HOPSTATS_ANALYTICS_MAX_BUCKETS` (valid range 1–730). The hard ceiling bounds
+generated SQL for Raspberry Pi deployments; higher requests are rejected, not
+truncated. Analytics still requires a complete per-user SQL window pass and
+does not promise constant-time aggregation.
