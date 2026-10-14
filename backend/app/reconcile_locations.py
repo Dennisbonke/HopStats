@@ -9,8 +9,8 @@ from .services.locations import LocationService
 def main() -> None:
     initialize_database()
     with SessionLocal() as session:
-        user = session.query(User).filter_by(username="local").one()
-        changed = LocationService(session).reconcile(user.id)
+        users = session.query(User).order_by(User.id).all()
+        changed = sum(LocationService(session).reconcile(user.id) for user in users)
         session.commit()
     print(f"reconciled {changed} inventory location assignments")
 

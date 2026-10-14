@@ -51,22 +51,23 @@ export type InventoryStyle = { id: number; name: string };
 export async function fetchInventory(
   params: URLSearchParams,
 ): Promise<InventoryResponse> {
-  const response = await fetch(`/api/v1/inventory?${params.toString()}`);
+  const response = await apiFetch(`/api/v1/inventory?${params.toString()}`);
   if (!response.ok)
     throw new Error(`Unable to load inventory (${response.status})`);
   return (await response.json()) as InventoryResponse;
 }
 
 export async function fetchInventoryItem(id: number): Promise<InventoryItem> {
-  const response = await fetch(`/api/v1/inventory/${id}`);
+  const response = await apiFetch(`/api/v1/inventory/${id}`);
   if (!response.ok)
     throw new Error(`Unable to load inventory item (${response.status})`);
   return (await response.json()) as InventoryItem;
 }
 
 export async function fetchInventoryStyles(): Promise<InventoryStyle[]> {
-  const response = await fetch("/api/v1/inventory/styles");
+  const response = await apiFetch("/api/v1/inventory/styles");
   if (!response.ok)
     throw new Error(`Unable to load inventory styles (${response.status})`);
   return (await response.json()) as InventoryStyle[];
 }
+import { apiFetch } from "./client";

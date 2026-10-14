@@ -1,8 +1,7 @@
 # Inventory and locations API
 
-The read-only API is scoped to the seeded `local` user in the unauthenticated PoC.
-Keep the service on loopback or a trusted LAN; do not expose these endpoints to
-the public internet.
+The read-only API is scoped to the authenticated user's existing records. M5 has private CLI provisioning and no
+public registration. Use HTTPS for internet-facing deployments.
 
 ## Inventory
 
@@ -38,5 +37,5 @@ descendants. The response also has an `unresolved` count and unit total.
 
 `GET /api/v1/locations/{id}` returns one canonical node with its descendants.
 Unknown or inaccessible IDs return `404`. There are no public mutation
-endpoints; configure locations privately through `HOPSTATS_LOCATION_CONFIG` as
-described in [the import guide](imports.md).
+endpoints; configure locations privately through `HOPSTATS_LOCATION_CONFIG` and
+its explicit owner setting as described in [the import guide](imports.md).

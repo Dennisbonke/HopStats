@@ -39,6 +39,16 @@ afterEach(() => cleanup());
 test("renders import sections and empty history", async () => {
   const fetchMock = vi.fn().mockImplementation((url: string) => {
     if (url === "/api/v1/health") return Promise.resolve({ ok: true });
+    if (url === "/api/v1/auth/me")
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: 1,
+          username: "local",
+          created_at: "2026-10-14T00:00:00Z",
+        }),
+      });
     return Promise.resolve({ ok: true, json: async () => [] });
   });
   renderImports(fetchMock);
@@ -52,6 +62,16 @@ test("selects and uploads a check-in file", async () => {
     .fn()
     .mockImplementation((url: string, options?: RequestInit) => {
       if (url === "/api/v1/health") return Promise.resolve({ ok: true });
+      if (url === "/api/v1/auth/me")
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 1,
+            username: "local",
+            created_at: "2026-10-14T00:00:00Z",
+          }),
+        });
       if (options?.method === "POST") {
         return Promise.resolve({ ok: true, json: async () => completed });
       }
@@ -59,6 +79,7 @@ test("selects and uploads a check-in file", async () => {
     });
   const user = userEvent.setup();
   renderImports(fetchMock);
+  await screen.findByText("Untappd check-in CSV");
   const file = new File(["beer_name,brewery_name"], "checkins.csv", {
     type: "text/csv",
   });
@@ -84,6 +105,16 @@ test("requires stash replacement confirmation and displays validation errors", a
     .fn()
     .mockImplementation((url: string, options?: RequestInit) => {
       if (url === "/api/v1/health") return Promise.resolve({ ok: true });
+      if (url === "/api/v1/auth/me")
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 1,
+            username: "local",
+            created_at: "2026-10-14T00:00:00Z",
+          }),
+        });
       if (options?.method === "POST") {
         return Promise.resolve({
           ok: false,
@@ -95,6 +126,7 @@ test("requires stash replacement confirmation and displays validation errors", a
     });
   const user = userEvent.setup();
   renderImports(fetchMock);
+  await screen.findByText("Untappd check-in CSV");
   const file = new File(["item_id,quantity"], "stash.csv", {
     type: "text/csv",
   });
@@ -122,6 +154,16 @@ test("requires a second acknowledgement for an undated replacement", async () =>
     .fn()
     .mockImplementation((url: string, options?: RequestInit) => {
       if (url === "/api/v1/health") return Promise.resolve({ ok: true });
+      if (url === "/api/v1/auth/me")
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 1,
+            username: "local",
+            created_at: "2026-10-14T00:00:00Z",
+          }),
+        });
       if (options?.method === "POST") {
         uploads += 1;
         return uploads === 1
@@ -139,6 +181,7 @@ test("requires a second acknowledgement for an undated replacement", async () =>
     });
   const user = userEvent.setup();
   renderImports(fetchMock);
+  await screen.findByText("Untappd check-in CSV");
   const file = new File(["item_id,quantity"], "stash.csv", {
     type: "text/csv",
   });
@@ -163,12 +206,23 @@ test("displays a network error", async () => {
     .fn()
     .mockImplementation((url: string, options?: RequestInit) => {
       if (url === "/api/v1/health") return Promise.resolve({ ok: true });
+      if (url === "/api/v1/auth/me")
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 1,
+            username: "local",
+            created_at: "2026-10-14T00:00:00Z",
+          }),
+        });
       if (options?.method === "POST")
         return Promise.reject(new Error("offline"));
       return Promise.resolve({ ok: true, json: async () => [] });
     });
   const user = userEvent.setup();
   renderImports(fetchMock);
+  await screen.findByText("Untappd check-in CSV");
   const file = new File(["data"], "checkins.csv", { type: "text/csv" });
   await user.upload(screen.getAllByLabelText("Choose CSV file")[0], file);
   await user.click(screen.getAllByRole("button", { name: "Upload CSV" })[0]);

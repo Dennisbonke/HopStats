@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
+from ..api.auth import get_current_user, require_csrf
 from ..config import get_settings
 from ..db import get_db
 from ..models import ImportError as ImportErrorRecord
@@ -41,13 +42,6 @@ async def upload_bytes(upload: UploadFile) -> bytes:
     return b"".join(chunks)
 
 
-def local_user(session: Session) -> int:
-    user_id = session.scalar(select(User.id).where(User.username == "local"))
-    if user_id is None:
-        raise HTTPException(status_code=503, detail="local user is not initialized")
-    return user_id
-
-
 def result(run: ImportRun, session: Session):
     errors = session.scalars(
         select(ImportErrorRecord)
@@ -72,12 +66,12 @@ def result(run: ImportRun, session: Session):
 async def import_checkins(
     file: Annotated[UploadFile, File(...)],
     session: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+    _: Annotated[None, Depends(require_csrf)],
 ):
     payload = await upload_bytes(file)
     filename = Path(file.filename or "checkins.csv").name
-    run = await run_in_threadpool(
-        ImportService().import_checkins, local_user(session), filename, payload
-    )
+    run = await run_in_threadpool(ImportService().import_checkins, user.id, filename, payload)
     return result(run, session)
 
 
@@ -85,6 +79,8 @@ async def import_checkins(
 async def import_inventory(
     file: Annotated[UploadFile, File(...)],
     session: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+    _: Annotated[None, Depends(require_csrf)],
     confirm_replacement: Annotated[bool, Form()] = False,
     source_exported_at: Annotated[str | None, Form()] = None,
     allow_older: Annotated[bool, Form()] = False,
@@ -102,7 +98,7 @@ async def import_inventory(
             ) from exc
     run = await run_in_threadpool(
         ImportService().import_inventory,
-        local_user(session),
+        user.id,
         filename,
         payload,
         confirm_replacement,
@@ -114,10 +110,12 @@ async def import_inventory(
 
 
 @router.get("", response_model=list[ImportSummaryResponse])
-def import_history(session: Annotated[Session, Depends(get_db)]):
+def import_history(
+    session: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(get_current_user)]
+):
     runs = session.scalars(
         select(ImportRun)
-        .where(ImportRun.user_id == local_user(session))
+        .where(ImportRun.user_id == user.id)
         .order_by(ImportRun.started_at.desc())
         .limit(100)
     ).all()
@@ -125,9 +123,13 @@ def import_history(session: Annotated[Session, Depends(get_db)]):
 
 
 @router.get("/{import_id}", response_model=ImportDetailResponse)
-def import_detail(import_id: int, session: Annotated[Session, Depends(get_db)]):
+def import_detail(
+    import_id: int,
+    session: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+):
     run = session.get(ImportRun, import_id)
-    if run is None or run.user_id != local_user(session):
+    if run is None or run.user_id != user.id:
         raise HTTPException(status_code=404, detail="import run not found")
     errors = session.scalars(
         select(ImportErrorRecord)

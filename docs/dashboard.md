@@ -1,6 +1,6 @@
 # Dashboard analytics
 
-`GET /api/v1/dashboard` reports aggregates for the local user from persisted
+`GET /api/v1/dashboard` reports aggregates for the authenticated user from persisted
 check-ins and the current authoritative Untappd stash snapshot. Check-in
 aggregates only read `checkins`, so stash-only catalog rows cannot inflate
 check-in totals.

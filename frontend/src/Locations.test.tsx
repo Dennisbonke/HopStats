@@ -8,6 +8,16 @@ beforeEach(() => {
     "fetch",
     vi.fn().mockImplementation((url: string) => {
       if (url === "/api/v1/health") return Promise.resolve({ ok: true });
+      if (url === "/api/v1/auth/me")
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 1,
+            username: "local",
+            created_at: "2026-10-14T00:00:00Z",
+          }),
+        });
       return Promise.resolve({
         ok: true,
         json: async () => ({

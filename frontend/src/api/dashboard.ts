@@ -27,9 +27,10 @@ export type DashboardData = {
 };
 
 export async function fetchDashboard(): Promise<DashboardData> {
-  const response = await fetch("/api/v1/dashboard");
+  const response = await apiFetch("/api/v1/dashboard");
   if (!response.ok) {
     throw new Error(`Unable to load dashboard (${response.status})`);
   }
   return (await response.json()) as DashboardData;
 }
+import { apiFetch } from "./client";

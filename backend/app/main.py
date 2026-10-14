@@ -6,9 +6,11 @@ from alembic.config import Config
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from .api.auth import router as auth_router
 from .api.dashboard import router as dashboard_router
 from .api.imports import router as imports_router
 from .api.inventory import router as inventory_router
@@ -16,7 +18,43 @@ from .api.locations import router as locations_router
 from .config import get_settings
 from .db import check_database, get_db
 from .models import User
-from .services.locations import load_location_config, seed_location_config
+from .services.auth import find_user
+from .services.locations import (
+    LocationConfigurationError,
+    load_location_config,
+    seed_location_config,
+)
+
+
+def _location_config_owner_id(session: Session, settings) -> int:
+    if settings.location_config_user_id is not None:
+        user = session.get(User, settings.location_config_user_id)
+        if user is None:
+            raise LocationConfigurationError(
+                "configured location owner user ID does not exist: "
+                f"{settings.location_config_user_id}"
+            )
+        return user.id
+
+    if settings.location_config_username is not None:
+        user = find_user(session, username=settings.location_config_username)
+        if user is None:
+            raise LocationConfigurationError(
+                "configured location owner username does not exist: "
+                f"{settings.location_config_username}"
+            )
+        return user.id
+
+    users = session.scalars(select(User).order_by(User.id)).all()
+    if len(users) == 1:
+        return users[0].id
+    if not users:
+        raise LocationConfigurationError(
+            "location configuration has no account owner; set HOPSTATS_LOCATION_CONFIG_USER_ID"
+        )
+    raise LocationConfigurationError(
+        "location configuration owner is ambiguous; set HOPSTATS_LOCATION_CONFIG_USER_ID"
+    )
 
 
 def initialize_database() -> None:
@@ -27,17 +65,15 @@ def initialize_database() -> None:
     from .db import SessionLocal
 
     with SessionLocal() as session:
-        if session.query(User).filter_by(username="local").one_or_none() is None:
-            session.add(User(username="local"))
-            session.commit()
         config = load_location_config(settings.location_config)
-        if config:
-            user = session.query(User).filter_by(username="local").one()
-            seed_location_config(session, user.id, config)
+        if config is not None:
+            user_id = _location_config_owner_id(session, settings)
+            seed_location_config(session, user_id, config)
             session.commit()
 
 
 app = FastAPI(title="HopStats API", version="0.1.0")
+app.include_router(auth_router)
 app.include_router(imports_router)
 app.include_router(dashboard_router)
 app.include_router(inventory_router)
@@ -66,7 +102,11 @@ if frontend.is_dir():
     async def spa(path: str):
         if path.startswith("api/"):
             return JSONResponse({"detail": "Not found"}, status_code=404)
-        candidate = frontend / path
+        candidate = (frontend / path).resolve()
+        try:
+            candidate.relative_to(frontend.resolve())
+        except ValueError:
+            candidate = frontend / "index.html"
         if candidate.is_file():
             return FileResponse(candidate)
         return FileResponse(frontend / "index.html")

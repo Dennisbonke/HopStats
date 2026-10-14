@@ -50,6 +50,25 @@ def test_checkin_parser_normalizes_timestamp_and_preserves_metadata():
     assert record.source_metadata["tagged_friends"] == "friends"
 
 
+def test_checkin_parser_accepts_native_naive_untappd_timestamp_as_utc():
+    output = StringIO()
+    writer = csv.DictWriter(output, fieldnames=CHECKIN_HEADER.split(","))
+    writer.writeheader()
+    writer.writerow(
+        {
+            "beer_name": "Native Export Beer",
+            "brewery_name": "Brew Co",
+            "created_at": "2018-06-23 22:39:46",
+            "checkin_id": "check-native",
+            "bid": "beer-native",
+            "brewery_id": "brew-native",
+        }
+    )
+    record = UntappdCheckinsCsvImporter().parse(BytesIO(output.getvalue().encode())).records[0]
+    assert record.occurred_at_utc.isoformat() == "2018-06-23T22:39:46"
+    assert record.original_offset_minutes == 0
+
+
 def test_stash_parser_handles_sentinels_and_suspicious_date():
     csv = (
         "item_id,beer_name,brewery_name,beer_type,beer_abv,beer_ibu,created_at,notes,quantity,container,"

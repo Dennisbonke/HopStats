@@ -16,8 +16,9 @@ export type LocationData = {
 };
 
 export async function fetchLocations(): Promise<LocationData> {
-  const response = await fetch("/api/v1/locations");
+  const response = await apiFetch("/api/v1/locations");
   if (!response.ok)
     throw new Error(`Unable to load locations (${response.status})`);
   return (await response.json()) as LocationData;
 }
+import { apiFetch } from "./client";

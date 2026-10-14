@@ -1,22 +1,15 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..api.auth import get_current_user
 from ..db import get_db
 from ..models import User
 from ..schemas.inventory import InventoryItemResponse, InventoryListResponse, InventoryStyleResponse
 from ..services.inventory import InventoryFilterError, InventoryLocationNotFound, InventoryService
 
 router = APIRouter(prefix="/api/v1/inventory", tags=["inventory"])
-
-
-def local_user(session: Session) -> int:
-    user_id = session.scalar(select(User.id).where(User.username == "local"))
-    if user_id is None:
-        raise HTTPException(status_code=503, detail="local user is not initialized")
-    return user_id
 
 
 def service_error(error: ValueError) -> HTTPException:
@@ -28,6 +21,7 @@ def service_error(error: ValueError) -> HTTPException:
 @router.get("", response_model=InventoryListResponse)
 def inventory_list(
     session: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
     search: str | None = None,
     location_id: int | None = None,
     include_descendants: bool = True,
@@ -40,7 +34,7 @@ def inventory_list(
 ):
     try:
         return InventoryService(session).list_inventory(
-            local_user(session),
+            user.id,
             search=search,
             location_id=location_id,
             include_descendants=include_descendants,
@@ -56,13 +50,19 @@ def inventory_list(
 
 
 @router.get("/styles", response_model=list[InventoryStyleResponse])
-def inventory_styles(session: Annotated[Session, Depends(get_db)]):
-    return InventoryService(session).styles(local_user(session))
+def inventory_styles(
+    session: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(get_current_user)]
+):
+    return InventoryService(session).styles(user.id)
 
 
 @router.get("/{item_id}", response_model=InventoryItemResponse)
-def inventory_detail(item_id: int, session: Annotated[Session, Depends(get_db)]):
-    item = InventoryService(session).get_inventory(local_user(session), item_id)
+def inventory_detail(
+    item_id: int,
+    session: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    item = InventoryService(session).get_inventory(user.id, item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="inventory item not found")
     return item
