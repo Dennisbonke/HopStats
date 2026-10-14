@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { NavLink, Route, Routes, useNavigate } from "react-router-dom";
 import { fetchCurrentUser, logout, CurrentUser } from "./api/auth";
 import { checkBackend } from "./api/health";
@@ -6,12 +6,14 @@ import Imports from "./pages/Imports";
 import Dashboard from "./pages/Dashboard";
 import Inventory from "./pages/Inventory";
 import Locations from "./pages/Locations";
+const Analytics = lazy(() => import("./pages/Analytics"));
 import Login from "./pages/Login";
 
 const links = [
   ["/", "Dashboard"],
   ["/inventory", "Inventory"],
   ["/locations", "Locations"],
+  ["/analytics", "Analytics"],
   ["/imports", "Imports"],
 ];
 
@@ -145,6 +147,14 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/locations" element={<Locations />} />
+          <Route
+            path="/analytics"
+            element={
+              <Suspense fallback={<p role="status">Loading analytics…</p>}>
+                <Analytics />
+              </Suspense>
+            }
+          />
           <Route path="/imports" element={<Imports />} />
           <Route path="*" element={<Placeholder title="Page not found" />} />
         </Routes>

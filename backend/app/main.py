@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from .api.analytics import router as analytics_router
 from .api.auth import router as auth_router
 from .api.dashboard import router as dashboard_router
 from .api.imports import router as imports_router
@@ -77,6 +78,7 @@ def initialize_database() -> None:
 
 app = FastAPI(title="HopStats API", version="0.1.0")
 app.include_router(auth_router)
+app.include_router(analytics_router)
 app.include_router(imports_router)
 app.include_router(dashboard_router)
 app.include_router(inventory_router)
