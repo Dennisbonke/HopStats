@@ -8,6 +8,7 @@ from ..models import Beer, InventoryItem, InventorySource
 from ..schemas.imports import NormalizedInventoryItem
 from .beer_matching import match_inventory_beer
 from .catalog import CatalogService, metadata_json
+from .location_resolution import LocationResolution, LocationResolver
 
 SOURCE_SYSTEM = "untappd_stash"
 SOURCE_NAME = "Untappd stash"
@@ -69,6 +70,7 @@ def upsert_inventory_snapshot(
     seen: set[str] = set()
     inserted = updated = unchanged = 0
     catalog = CatalogService(session)
+    resolver = LocationResolver(session, user_id)
     for record in records:
         if record.source_item_id in seen:
             raise InventorySnapshotError(f"duplicate item_id {record.source_item_id}")
@@ -84,6 +86,18 @@ def upsert_inventory_snapshot(
                 else catalog.beer(record.beer)
             )
         match_status, matched = match_inventory_beer(session, beer, user_id)
+        if (
+            existing is not None
+            and existing.location_assignment_kind == "explicit"
+            and existing.location_id
+        ):
+            location_result = LocationResolution(
+                "resolved", existing.location_id, "manual", "Explicit assignment preserved."
+            )
+            assignment_kind = "explicit"
+        else:
+            location_result = resolver.resolve(record.notes)
+            assignment_kind = "automatic"
         values = {
             "user_id": user_id,
             "inventory_source_id": source.id,
@@ -104,6 +118,11 @@ def upsert_inventory_snapshot(
             "best_before_suspicious": record.suspicious_best_before,
             "match_status": match_status,
             "matched_checkin_beer_id": matched.id if matched else None,
+            "location_id": location_result.location_id,
+            "location_resolution_status": location_result.status,
+            "location_resolution_source": location_result.source,
+            "location_resolution_detail": location_result.detail,
+            "location_assignment_kind": assignment_kind,
         }
         if existing is None:
             session.add(InventoryItem(imported_at=datetime.now(UTC), **values))

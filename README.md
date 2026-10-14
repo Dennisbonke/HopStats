@@ -1,8 +1,8 @@
 # HopStats
 
-HopStats is an open-source, self-hosted foundation for future Untappd analytics and beer inventory browsing.
-M2 provides safe, repeatable imports for native Untappd check-in and stash CSV exports. Dashboard metrics and
-inventory browsing remain deferred.
+HopStats is an open-source, self-hosted Untappd analytics and beer inventory browser.
+M4 provides safe, repeatable imports, dashboard metrics, read-only inventory browsing, and private-configured
+hierarchical storage locations.
 
 > **Development note:** This project is vibecoded.
 
@@ -42,6 +42,12 @@ single-worker deployment.
 
 See [docs/imports.md](docs/imports.md) for supported headers, matching rules,
 the importer extension contract, privacy guidance, and known limitations.
+
+Inventory is read-only and available from **Inventory**. **Locations** shows the configured hierarchy,
+descendant-inclusive counts, and unresolved records. The PoC has no authentication; keep it on loopback
+or a trusted LAN and never expose it directly to the public internet.
+
+See [docs/inventory.md](docs/inventory.md) for the inventory and locations API contract.
 
 ## Docker Compose
 

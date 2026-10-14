@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     log_level: str = "info"
     frontend_dist: str = "frontend/dist"
     max_upload_bytes: int = 10 * 1024 * 1024
+    location_config: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="HOPSTATS_", extra="ignore")
 

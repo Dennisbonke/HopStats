@@ -1,0 +1,21 @@
+{
+  "locations": [
+    {
+      "name": "Example Storage",
+      "description": "Synthetic example only",
+      "aliases": ["Example cellar"],
+      "children": [
+        {
+          "name": "Shelf A",
+          "rules": [
+            {
+              "pattern": "Shelf A:",
+              "match_kind": "prefix",
+              "priority": 10
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -95,6 +95,37 @@ replace a conflicting non-empty value, but empty values never erase useful
 metadata. Purchase location remains separate from storage notes, and M2 does
 not infer canonical storage locations.
 
+## Storage locations
+
+Storage locations are resolved separately from beer matching. `purchase_location`
+remains the place where a beer was acquired; it is never used as storage. Notes
+are preserved unchanged.
+
+Set `HOPSTATS_LOCATION_CONFIG` to a private JSON file based on
+[`config/locations.example.json`](../config/locations.example.json). The
+configuration is safe to apply repeatedly. Location hierarchy entries are
+additive, while aliases and resolution rules declared in the file are
+authoritative for definitions previously created by that configuration. Removed
+configuration-managed aliases/rules are safely removed from the database;
+manually maintained aliases/rules are never deleted or claimed by the config.
+Rows created before location-configuration provenance was introduced are treated
+as manual for safety and are not removed automatically.
+Do not commit real aliases, notes, exports, or personal storage mappings.
+
+After changing aliases or rules, reconcile existing records without re-uploading
+the stash:
+
+```bash
+HOPSTATS_LOCATION_CONFIG=/path/to/private-locations.json \
+  python -m backend.app.reconcile_locations
+```
+
+Only automatically resolved records are recalculated. Explicit assignments are
+preserved. Resolution precedence is: explicit assignment, exact normalized
+canonical name or alias, exact matching notes line, configured exact/line/prefix
+rule by descending priority, then unresolved. Equal-priority rules for different
+locations produce `ambiguous`; unrelated note text is not searched by substring.
+
 ## Adding an importer
 
 Implement the `Importer` protocol in `backend/app/importers/base.py`:
@@ -116,8 +147,7 @@ are available.
 There is no authentication in this PoC. Keep the service bound to loopback or
 a trusted LAN. Do not upload personal exports to issue trackers or commit
 them to the repository. There is no fuzzy matching, manual matching UI,
-inventory browsing, full location resolution, background worker, or JSON
-support in M2.
+background worker, or JSON support.
 
 Import serialization uses process-local locks. The supported deployment is one
 Uvicorn process with one worker, as used by the Dockerfile and Compose setup;

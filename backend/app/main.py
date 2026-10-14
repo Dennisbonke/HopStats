@@ -11,9 +11,12 @@ from sqlalchemy.orm import Session
 
 from .api.dashboard import router as dashboard_router
 from .api.imports import router as imports_router
+from .api.inventory import router as inventory_router
+from .api.locations import router as locations_router
 from .config import get_settings
 from .db import check_database, get_db
 from .models import User
+from .services.locations import load_location_config, seed_location_config
 
 
 def initialize_database() -> None:
@@ -27,11 +30,18 @@ def initialize_database() -> None:
         if session.query(User).filter_by(username="local").one_or_none() is None:
             session.add(User(username="local"))
             session.commit()
+        config = load_location_config(settings.location_config)
+        if config:
+            user = session.query(User).filter_by(username="local").one()
+            seed_location_config(session, user.id, config)
+            session.commit()
 
 
 app = FastAPI(title="HopStats API", version="0.1.0")
 app.include_router(imports_router)
 app.include_router(dashboard_router)
+app.include_router(inventory_router)
+app.include_router(locations_router)
 
 
 @app.on_event("startup")
