@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from .api.dashboard import router as dashboard_router
 from .api.imports import router as imports_router
 from .config import get_settings
 from .db import check_database, get_db
@@ -30,6 +31,7 @@ def initialize_database() -> None:
 
 app = FastAPI(title="HopStats API", version="0.1.0")
 app.include_router(imports_router)
+app.include_router(dashboard_router)
 
 
 @app.on_event("startup")
