@@ -1,4 +1,5 @@
 import hashlib
+import re
 import secrets
 from datetime import UTC, datetime, timedelta
 
@@ -14,6 +15,7 @@ password_hasher = PasswordHasher()
 # This is generated at process start and is used only to keep unknown-user login
 # timing close to known-user login timing. It is never a usable application password.
 dummy_password_hash = password_hasher.hash(secrets.token_urlsafe(32))
+USERNAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 
 
 def utc_now() -> datetime:
@@ -22,6 +24,29 @@ def utc_now() -> datetime:
 
 def hash_password(password: str) -> str:
     return password_hasher.hash(password)
+
+
+def normalize_username(username: str) -> str:
+    normalized = username.strip().casefold()
+    if not USERNAME_PATTERN.fullmatch(normalized):
+        raise ValueError(
+            "username must contain only lowercase letters, numbers, dots, underscores, or hyphens"
+        )
+    return normalized
+
+
+def find_user(
+    session: Session, *, user_id: int | None = None, username: str | None = None
+) -> User | None:
+    if (user_id is None) == (username is None):
+        raise ValueError("exactly one user identifier is required")
+    if user_id is not None:
+        return session.get(User, user_id)
+    try:
+        normalized = normalize_username(username or "")
+    except ValueError:
+        return None
+    return session.scalar(select(User).where(func.lower(User.username) == normalized))
 
 
 def verify_password(password: str, encoded_hash: str | None) -> bool:

@@ -6,6 +6,7 @@ from alembic.config import Config
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -28,13 +29,11 @@ def initialize_database() -> None:
     from .db import SessionLocal
 
     with SessionLocal() as session:
-        if session.query(User).filter_by(username="local").one_or_none() is None:
-            session.add(User(username="local"))
-            session.commit()
         config = load_location_config(settings.location_config)
         if config:
-            user = session.query(User).filter_by(username="local").one()
-            seed_location_config(session, user.id, config)
+            users = session.scalars(select(User).order_by(User.id)).all()
+            for user in users:
+                seed_location_config(session, user.id, config)
             session.commit()
 
 

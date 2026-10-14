@@ -35,7 +35,7 @@ SORT_COLUMNS = {
 
 
 class InventoryService:
-    """SQL-backed, record-level inventory browsing for one local user."""
+    """SQL-backed, record-level inventory browsing for one authenticated user."""
 
     def __init__(self, session: Session):
         self.session = session

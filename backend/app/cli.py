@@ -1,9 +1,12 @@
 """Account provisioning commands for use on the host or inside the container.
 
 Examples:
-    python -m backend.app.cli set-password --username local
+    python -m backend.app.cli bootstrap --username owner
+    python -m backend.app.cli set-password --user-id 1
+    python -m backend.app.cli rename-user --user-id 1 --username owner
+    python -m backend.app.cli create-user --username second
     python -m backend.app.cli list-accounts
-    python -m backend.app.cli revoke-sessions --username local
+    python -m backend.app.cli revoke-sessions --user-id 1
 """
 
 import argparse
@@ -18,7 +21,14 @@ from sqlalchemy import func, select
 from .config import get_settings
 from .db import SessionLocal
 from .models import AuthSession, User
-from .services.auth import add_audit_event, revoke_all_sessions, set_user_password, utc_now
+from .services.auth import (
+    add_audit_event,
+    find_user,
+    normalize_username,
+    revoke_all_sessions,
+    set_user_password,
+    utc_now,
+)
 
 
 def initialize_database() -> None:
@@ -26,10 +36,6 @@ def initialize_database() -> None:
     config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
     config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
     command.upgrade(config, "head")
-    with SessionLocal() as session:
-        if session.scalar(select(User.id).where(User.username == "local")) is None:
-            session.add(User(username="local"))
-            session.commit()
 
 
 def password_prompt() -> str:
@@ -42,20 +48,62 @@ def password_prompt() -> str:
     return password
 
 
-def find_user(session, username: str) -> User:
-    user = session.scalar(select(User).where(User.username == username))
+def require_user(session, *, user_id: int | None = None, username: str | None = None) -> User:
+    user = find_user(session, user_id=user_id, username=username)
     if user is None:
         raise SystemExit("Account not found.")
     return user
 
 
-def set_password_command(username: str) -> None:
-    password = password_prompt()
+def user_selector(parser: argparse.ArgumentParser) -> None:
+    selector = parser.add_mutually_exclusive_group(required=True)
+    selector.add_argument("--user-id", type=int)
+    selector.add_argument("--username")
+
+
+def set_password_command(*, user_id: int | None, username: str | None) -> None:
     with SessionLocal() as session:
-        user = find_user(session, username)
+        user = require_user(session, user_id=user_id, username=username)
+        password = password_prompt()
         revoked = set_user_password(session, user, password)
         session.commit()
-    print(f"Password updated for {username}; revoked {revoked} active session(s).")
+    print(f"Password updated for user {user.id}; revoked {revoked} active session(s).")
+
+
+def rename_user_command(user_id: int, username: str) -> None:
+    try:
+        normalized = normalize_username(username)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    with SessionLocal() as session:
+        user = require_user(session, user_id=user_id)
+        conflict = find_user(session, username=normalized)
+        if conflict is not None and conflict.id != user.id:
+            raise SystemExit("Username is already in use.")
+        user.username = normalized
+        add_audit_event(session, "username_changed", username=normalized, user_id=user.id)
+        session.commit()
+    print(f"Username updated for user {user_id}.")
+
+
+def create_user_command(username: str, *, require_empty: bool = False) -> None:
+    try:
+        normalized = normalize_username(username)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    with SessionLocal() as session:
+        if require_empty and session.scalar(select(User.id).limit(1)) is not None:
+            raise SystemExit("Bootstrap is only available when no accounts exist.")
+        if find_user(session, username=normalized) is not None:
+            raise SystemExit("Username is already in use.")
+        password = password_prompt()
+        user = User(username=normalized)
+        session.add(user)
+        session.flush()
+        set_user_password(session, user, password)
+        add_audit_event(session, "user_created", username=user.username, user_id=user.id)
+        session.commit()
+    print(f"Created user {user.id} ({normalized}).")
 
 
 def list_accounts() -> None:
@@ -73,20 +121,13 @@ def list_accounts() -> None:
             print(f"{user.id}\t{user.username}\t{status}\t{active} active session(s)")
 
 
-def revoke_sessions(username: str | None) -> None:
+def revoke_sessions(*, user_id: int | None, username: str | None) -> None:
     with SessionLocal() as session:
-        users = (
-            [find_user(session, username)]
-            if username
-            else session.scalars(select(User).order_by(User.id)).all()
-        )
-        revoked = 0
-        for user in users:
-            count = revoke_all_sessions(session, user.id)
-            revoked += count
-            add_audit_event(session, "sessions_revoked", username=user.username, user_id=user.id)
+        user = require_user(session, user_id=user_id, username=username)
+        revoked = revoke_all_sessions(session, user.id)
+        add_audit_event(session, "sessions_revoked", username=user.username, user_id=user.id)
         session.commit()
-    print(f"Revoked {revoked} active session(s).")
+    print(f"Revoked {revoked} active session(s) for user {user.id}.")
 
 
 def parser() -> argparse.ArgumentParser:
@@ -94,10 +135,21 @@ def parser() -> argparse.ArgumentParser:
     commands = root.add_subparsers(dest="command", required=True)
     for name in ("set-password", "change-password", "reset-password"):
         command_parser = commands.add_parser(name, help="set or replace an account password")
-        command_parser.add_argument("--username", default="local")
+        user_selector(command_parser)
+    bootstrap = commands.add_parser(
+        "bootstrap", help="create the first account in an empty database"
+    )
+    bootstrap.add_argument("--username", required=True)
+    create = commands.add_parser("create-user", help="create an additional private account")
+    create.add_argument("--username", required=True)
+    rename = commands.add_parser(
+        "rename-user", help="rename an account without changing its ID or data"
+    )
+    rename.add_argument("--user-id", type=int, required=True)
+    rename.add_argument("--username", required=True)
     commands.add_parser("list-accounts", help="list account status without secrets")
     revoke = commands.add_parser("revoke-sessions", help="invalidate active sessions")
-    revoke.add_argument("--username")
+    user_selector(revoke)
     return root
 
 
@@ -105,11 +157,17 @@ def main() -> int:
     args = parser().parse_args()
     initialize_database()
     if args.command in {"set-password", "change-password", "reset-password"}:
-        set_password_command(args.username)
+        set_password_command(user_id=args.user_id, username=args.username)
+    elif args.command == "bootstrap":
+        create_user_command(args.username, require_empty=True)
+    elif args.command == "create-user":
+        create_user_command(args.username)
+    elif args.command == "rename-user":
+        rename_user_command(args.user_id, args.username)
     elif args.command == "list-accounts":
         list_accounts()
     elif args.command == "revoke-sessions":
-        revoke_sessions(args.username)
+        revoke_sessions(user_id=args.user_id, username=args.username)
     return 0
 
 

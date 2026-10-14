@@ -24,7 +24,9 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     from backend.app.db import SessionLocal
 
     with SessionLocal() as session:
-        user = session.query(User).filter_by(username="local").one()
+        user = User(username="local")
+        session.add(user)
+        session.flush()
         set_user_password(session, user, "synthetic-test-password")
         session.commit()
     with TestClient(app) as test_client:

@@ -2,7 +2,6 @@ import secrets
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
@@ -14,7 +13,9 @@ from ..services.auth import (
     clear_login_failures,
     create_session,
     find_active_session,
+    find_user,
     login_attempt_count,
+    normalize_username,
     record_login_failure,
     utc_now,
     verify_password,
@@ -108,7 +109,10 @@ def login(
     response: Response,
     session: Annotated[Session, Depends(get_db)],
 ):
-    username = payload.username.strip()
+    try:
+        username = normalize_username(payload.username)
+    except ValueError:
+        username = payload.username.strip().casefold()[:100]
     ip = client_ip(request)
     settings = get_settings()
     attempts = login_attempt_count(session, username, ip)
@@ -117,7 +121,7 @@ def login(
         session.commit()
         raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
 
-    user = session.scalar(select(User).where(User.username == username))
+    user = find_user(session, username=username)
     valid = verify_password(payload.password, user.password_hash if user else None)
     if user is None or not valid:
         record_login_failure(session, username, ip)

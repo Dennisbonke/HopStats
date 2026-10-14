@@ -20,7 +20,7 @@ def test_health(client):
     assert response.json() == {"status": "ok"}
 
 
-def test_migration_and_default_user_are_idempotent(client):
+def test_migration_is_idempotent_for_existing_user(client):
     from backend.app.main import initialize_database
 
     initialize_database()

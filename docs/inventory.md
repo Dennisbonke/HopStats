@@ -1,7 +1,7 @@
 # Inventory and locations API
 
-The read-only API is scoped to the authenticated user's existing records. M5 provisions the existing `local` user;
-there is no public registration. Use HTTPS for internet-facing deployments.
+The read-only API is scoped to the authenticated user's existing records. M5 has private CLI provisioning and no
+public registration. Use HTTPS for internet-facing deployments.
 
 ## Inventory
 

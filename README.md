@@ -55,8 +55,9 @@ cp .env.example .env
 docker compose up -d --build
 curl http://127.0.0.1:8000/api/v1/health
 
-# Provision the existing seeded local account; this does not move any data.
-docker compose exec hopstats python -m backend.app.cli set-password --username local
+# Inspect accounts after startup. On an empty database, bootstrap the first account:
+docker compose exec hopstats python -m backend.app.cli list-accounts
+docker compose exec hopstats python -m backend.app.cli bootstrap --username owner
 ```
 
 The compiled frontend and API are served by one container. SQLite is stored at `/data/hopstats.sqlite3`
@@ -79,21 +80,25 @@ The acceptance checks also validate the weekly Dependabot configuration in
 
 ## M5 authentication and deployment
 
-The first migration adds nullable password credentials to the existing `local` user and separate
-`auth_sessions`, `auth_login_attempts`, and `auth_audit_events` tables. Existing IDs and all user-owned data remain
-unchanged. Startup applies migrations idempotently; sessions persist in `/data/hopstats.sqlite3` across restarts.
+The first migration adds nullable password credentials to existing users and separate `auth_sessions`,
+`auth_login_attempts`, and `auth_audit_events` tables. Existing IDs and all user-owned data remain unchanged. Startup
+applies migrations idempotently and never creates an implicit account; sessions persist in `/data/hopstats.sqlite3`
+across restarts.
 
 Provision the first password interactively (never as a command-line argument):
 
 ```bash
-docker compose exec hopstats python -m backend.app.cli set-password --username local
 docker compose exec hopstats python -m backend.app.cli list-accounts
-docker compose exec hopstats python -m backend.app.cli revoke-sessions --username local
+docker compose exec hopstats python -m backend.app.cli set-password --user-id 1
+docker compose exec hopstats python -m backend.app.cli rename-user --user-id 1 --username owner
+docker compose exec hopstats python -m backend.app.cli create-user --username second
+docker compose exec hopstats python -m backend.app.cli revoke-sessions --user-id 1
 ```
 
-`change-password` and `reset-password` are aliases for `set-password`; changing a password revokes every active
-session. The CLI prints account status only and never prints credentials or session tokens. There is no public
-registration or default password.
+`bootstrap --username NAME` is only for an empty database. `change-password` and `reset-password` are aliases for
+`set-password`; changing a password revokes every active session. The CLI prints account status only and never prints
+credentials or session tokens. User IDs remain stable when usernames change. There is no public registration or
+default password.
 
 The browser uses an HttpOnly opaque session cookie. Only a SHA-256 hash of each session token is stored in SQLite.
 State-changing requests use a double-submit CSRF cookie/header pair plus Origin validation. Login, logout, and imports
