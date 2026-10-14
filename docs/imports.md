@@ -145,7 +145,9 @@ are available.
 ## Limitations
 
 Imports require an authenticated HopStats session and CSRF header. Provision the existing `local` account with the
-interactive account CLI described in [authentication.md](authentication.md). Do not upload personal exports to issue
+interactive account CLI described in [authentication.md](authentication.md). Untappd check-in exports commonly omit
+timezone data; naive `created_at` values use `HOPSTATS_IMPORT_DEFAULT_TIMEZONE` (UTC by default). An explicit
+timestamp offset or `timezone_offset` column still takes precedence. Do not upload personal exports to issue
 trackers or commit them to the repository. There is no fuzzy matching, manual matching UI,
 background worker, or JSON support.
 

@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ..schemas.imports import ValidationIssue
 from .base import ImportValidationError
@@ -153,7 +154,11 @@ def provisional_identity(
 
 
 def iso_timestamp(
-    row: dict[str, str], field: str, row_number: int, offset_field: str | None = None
+    row: dict[str, str],
+    field: str,
+    row_number: int,
+    offset_field: str | None = None,
+    default_timezone: str = "UTC",
 ) -> tuple[datetime, int]:
     raw = required_value(row, field, row_number)
     parsed = raw.replace("Z", "+00:00")
@@ -169,12 +174,16 @@ def iso_timestamp(
         value(row, offset_field) if offset_field else None, row_number, offset_field
     )
     if timestamp.tzinfo is None:
-        if explicit_offset is None:
-            raise ImportValidationError(
-                f"row {row_number}: {field} has no timezone offset",
-                (ValidationIssue(row_number, field, "timezone offset is required"),),
-            )
-        timestamp = timestamp.replace(tzinfo=timezone(timedelta(minutes=explicit_offset)))
+        if explicit_offset is not None:
+            timestamp = timestamp.replace(tzinfo=timezone(timedelta(minutes=explicit_offset)))
+        else:
+            try:
+                timestamp = timestamp.replace(tzinfo=ZoneInfo(default_timezone))
+            except ZoneInfoNotFoundError as exc:
+                raise ImportValidationError(
+                    f"row {row_number}: configured default timezone is invalid",
+                    (ValidationIssue(row_number, field, "invalid default timezone"),),
+                ) from exc
     actual_offset = timestamp.utcoffset()
     if actual_offset is None:
         raise ImportValidationError(f"row {row_number}: {field} has an invalid timezone")

@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 from typing import BinaryIO
 
+from ..config import get_settings
 from ..schemas.imports import (
     BeerRecord,
     BreweryRecord,
@@ -99,6 +100,7 @@ class UntappdCheckinsCsvImporter:
             raise ImportValidationError("CSV contains malformed rows", issues)
         records: list[NormalizedCheckin] = []
         seen: set[str] = set()
+        default_timezone = get_settings().import_default_timezone
         for row_number, row in enumerate(rows, start=2):
             try:
                 external_id = required_value(row, "checkin_id", row_number)
@@ -117,7 +119,11 @@ class UntappdCheckinsCsvImporter:
                 brewery_name = required_value(row, "brewery_name", row_number)
                 beer_name = required_value(row, "beer_name", row_number)
                 occurred_at, offset = iso_timestamp(
-                    row, "created_at", row_number, "timezone_offset"
+                    row,
+                    "created_at",
+                    row_number,
+                    "timezone_offset",
+                    default_timezone,
                 )
                 abv = decimal_value(row, "beer_abv", row_number, 5, 2)
                 ibu = decimal_value(row, "beer_ibu", row_number, 6, 2)

@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     frontend_dist: str = "frontend/dist"
     max_upload_bytes: int = 10 * 1024 * 1024
     location_config: str | None = None
+    import_default_timezone: str = "UTC"
     cookie_secure: bool = False
     cookie_samesite: str = "lax"
     session_max_age_seconds: int = 60 * 60 * 24 * 30
