@@ -4,7 +4,9 @@ from io import StringIO
 import pytest
 from sqlalchemy import select
 
+from backend.app.config import get_settings
 from backend.app.db import SessionLocal
+from backend.app.main import initialize_database
 from backend.app.models import InventoryItem, Location, LocationAlias, LocationResolutionRule, User
 from backend.app.services.import_service import ImportService
 from backend.app.services.location_resolution import LocationResolver, normalize_location
@@ -80,7 +82,7 @@ def make_tree() -> tuple[int, int, int, int]:
         return user_id, root.id, cellar.id, shelf.id
 
 
-def test_normalization_and_alias_conflict():
+def test_normalization_and_alias_conflict(client):
     assert normalize_location("  Café\u00a0 stash ") == "café stash"
     user_id = local_user_id()
     with SessionLocal() as session:
@@ -319,3 +321,73 @@ def test_configuration_reconciliation_removes_only_obsolete_managed_definitions(
         resolver = LocationResolver(session, user_id)
         assert resolver.resolve("New alias").location_id == 1
         assert resolver.resolve("New box: summer stock").location_id == 1
+
+
+def test_private_location_config_has_explicit_owner_and_isolated_restart(
+    client, tmp_path, monkeypatch
+):
+    owner_id = local_user_id()
+    config_path = tmp_path / "private-locations.json"
+    config_path.write_text(
+        '{"locations":[{"name":"Owner Storage","aliases":["Owner alias"],'
+        '"rules":[{"pattern":"Owner:","match_kind":"prefix"}]}]}',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("HOPSTATS_LOCATION_CONFIG", str(config_path))
+    get_settings.cache_clear()
+    initialize_database()
+    initialize_database()
+
+    with SessionLocal() as session:
+        owner_location = session.scalar(
+            select(Location).where(Location.user_id == owner_id, Location.name == "Owner Storage")
+        )
+        assert owner_location is not None
+
+        other = User(username="other-location-owner")
+        session.add(other)
+        session.flush()
+        other_id = other.id
+        session.commit()
+
+    monkeypatch.setenv("HOPSTATS_LOCATION_CONFIG_USER_ID", str(owner_id))
+    get_settings.cache_clear()
+    initialize_database()
+    initialize_database()
+
+    with SessionLocal() as session:
+        owner_location = session.scalar(
+            select(Location).where(Location.user_id == owner_id, Location.name == "Owner Storage")
+        )
+        assert owner_location is not None
+        assert (
+            session.scalar(
+                select(Location).where(
+                    Location.user_id == other_id, Location.name == "Owner Storage"
+                )
+            )
+            is None
+        )
+        assert (
+            session.scalar(
+                select(LocationAlias).where(
+                    LocationAlias.user_id == other_id,
+                    LocationAlias.normalized_alias == "owner alias",
+                )
+            )
+            is None
+        )
+        assert (
+            session.scalar(
+                select(LocationResolutionRule).where(
+                    LocationResolutionRule.user_id == other_id,
+                    LocationResolutionRule.pattern == "owner:",
+                )
+            )
+            is None
+        )
+
+    monkeypatch.delenv("HOPSTATS_LOCATION_CONFIG_USER_ID")
+    get_settings.cache_clear()
+    with pytest.raises(LocationConfigurationError, match="ambiguous"):
+        initialize_database()

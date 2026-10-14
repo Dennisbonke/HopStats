@@ -102,21 +102,32 @@ remains the place where a beer was acquired; it is never used as storage. Notes
 are preserved unchanged.
 
 Set `HOPSTATS_LOCATION_CONFIG` to a private JSON file based on
-[`config/locations.example.json`](../config/locations.example.json). The
-configuration is safe to apply repeatedly. Location hierarchy entries are
-additive, while aliases and resolution rules declared in the file are
-authoritative for definitions previously created by that configuration. Removed
-configuration-managed aliases/rules are safely removed from the database;
-manually maintained aliases/rules are never deleted or claimed by the config.
-Rows created before location-configuration provenance was introduced are treated
-as manual for safety and are not removed automatically.
+[`config/locations.example.json`](../config/locations.example.json), and identify
+its owner explicitly with `HOPSTATS_LOCATION_CONFIG_USER_ID` (the immutable
+numeric `users.id`). The configuration is safe to apply repeatedly. Location
+hierarchy entries are additive, while aliases and resolution rules declared in
+the file are authoritative for definitions previously created by that
+configuration. Removed configuration-managed aliases/rules are safely removed
+from the database; manually maintained aliases/rules are never deleted or
+claimed by the config. Rows created before location-configuration provenance
+was introduced are treated as manual for safety and are not removed
+automatically.
+
+For initial single-account provisioning, `HOPSTATS_LOCATION_CONFIG_USERNAME`
+may be used instead. If neither owner setting is supplied, a configuration is
+applied only when exactly one account exists, preserving compatibility with
+single-user installations. Startup refuses to apply an unowned configuration
+when there are zero or multiple accounts; it never guesses an owner or copies
+private locations to other accounts. Do not set both owner settings. In Docker,
+the JSON file must also be mounted inside the container at the configured path.
 Do not commit real aliases, notes, exports, or personal storage mappings.
 
 After changing aliases or rules, reconcile existing records without re-uploading
 the stash:
 
 ```bash
-HOPSTATS_LOCATION_CONFIG=/path/to/private-locations.json \
+HOPSTATS_LOCATION_CONFIG=/run/secrets/hopstats-locations.json \
+HOPSTATS_LOCATION_CONFIG_USER_ID=1 \
   python -m backend.app.reconcile_locations
 ```
 

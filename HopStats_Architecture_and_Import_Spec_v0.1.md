@@ -41,7 +41,8 @@ Stash headers (verbatim): `item_id`, `beer_name`, `brewery_name`, `beer_type`, `
 
 ### Core catalog
 
-**users**: `id PK`, `username UNIQUE`, `created_at`. Seed exactly one local user; no credentials or login in PoC.
+**users**: `id PK`, `username UNIQUE`, `created_at`. Accounts are provisioned privately; credentials and sessions are
+handled by the M5 authentication layer, with no public registration.
 
 **breweries**: `id PK`, `source_system`, `external_id NULL`, `name`, `country NULL`, `city NULL`, `state NULL`, `UNIQUE(source_system, external_id)` for non-null IDs. Prefer Untappd brewery ID over name.
 

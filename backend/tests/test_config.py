@@ -27,3 +27,13 @@ def test_samesite_none_requires_secure_cookie():
 def test_secure_cookie_configuration_is_valid():
     settings = Settings(cookie_samesite="none", cookie_secure=True)
     assert settings.cookie_samesite == "none"
+
+
+def test_location_config_owner_identifiers_are_mutually_exclusive():
+    with pytest.raises(ValidationError, match="only one"):
+        Settings(location_config_user_id=1, location_config_username="owner")
+
+
+def test_location_config_username_cannot_be_blank():
+    with pytest.raises(ValidationError, match="cannot be blank"):
+        Settings(location_config_username="  ")
