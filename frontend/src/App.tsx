@@ -3,10 +3,13 @@ import { NavLink, Route, Routes } from "react-router-dom";
 import { checkBackend } from "./api/health";
 import Imports from "./pages/Imports";
 import Dashboard from "./pages/Dashboard";
+import Inventory from "./pages/Inventory";
+import Locations from "./pages/Locations";
 
 const links = [
   ["/", "Dashboard"],
   ["/inventory", "Inventory"],
+  ["/locations", "Locations"],
   ["/imports", "Imports"],
 ];
 
@@ -51,10 +54,8 @@ export default function App() {
         </div>
         <Routes>
           <Route path="/" element={<Dashboard />} />
-          <Route
-            path="/inventory"
-            element={<Placeholder title="Inventory" />}
-          />
+          <Route path="/inventory" element={<Inventory />} />
+          <Route path="/locations" element={<Locations />} />
           <Route path="/imports" element={<Imports />} />
           <Route path="*" element={<Placeholder title="Page not found" />} />
         </Routes>
