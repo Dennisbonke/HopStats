@@ -42,6 +42,11 @@ afterEach(() => cleanup());
 test("loads and formats dashboard metrics and freshness", async () => {
   const fetchMock = vi.fn().mockImplementation((url: string) => {
     if (url === "/api/v1/health") return Promise.resolve({ ok: true });
+    if (url === "/api/v1/auth/me")
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ username: "local" }),
+      });
     return Promise.resolve({ ok: true, json: async () => dashboard });
   });
 
@@ -81,6 +86,11 @@ test("shows the empty state without implying imported data", async () => {
   };
   const fetchMock = vi.fn().mockImplementation((url: string) => {
     if (url === "/api/v1/health") return Promise.resolve({ ok: true });
+    if (url === "/api/v1/auth/me")
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ username: "local" }),
+      });
     return Promise.resolve({ ok: true, json: async () => empty });
   });
 
@@ -96,6 +106,11 @@ test("shows the empty state without implying imported data", async () => {
 test("shows a useful error state when dashboard loading fails", async () => {
   const fetchMock = vi.fn().mockImplementation((url: string) => {
     if (url === "/api/v1/health") return Promise.resolve({ ok: true });
+    if (url === "/api/v1/auth/me")
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ username: "local" }),
+      });
     return Promise.resolve({ ok: false, status: 503 });
   });
 

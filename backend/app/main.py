@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from .api.auth import router as auth_router
 from .api.dashboard import router as dashboard_router
 from .api.imports import router as imports_router
 from .api.inventory import router as inventory_router
@@ -38,6 +39,7 @@ def initialize_database() -> None:
 
 
 app = FastAPI(title="HopStats API", version="0.1.0")
+app.include_router(auth_router)
 app.include_router(imports_router)
 app.include_router(dashboard_router)
 app.include_router(inventory_router)
@@ -66,7 +68,11 @@ if frontend.is_dir():
     async def spa(path: str):
         if path.startswith("api/"):
             return JSONResponse({"detail": "Not found"}, status_code=404)
-        candidate = frontend / path
+        candidate = (frontend / path).resolve()
+        try:
+            candidate.relative_to(frontend.resolve())
+        except ValueError:
+            candidate = frontend / "index.html"
         if candidate.is_file():
             return FileResponse(candidate)
         return FileResponse(frontend / "index.html")

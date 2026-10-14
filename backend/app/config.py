@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     frontend_dist: str = "frontend/dist"
     max_upload_bytes: int = 10 * 1024 * 1024
     location_config: str | None = None
+    cookie_secure: bool = False
+    cookie_samesite: str = "lax"
+    session_max_age_seconds: int = 60 * 60 * 24 * 30
+    login_rate_limit_attempts: int = 5
+    login_rate_limit_window_seconds: int = 300
+    allowed_origins: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="HOPSTATS_", extra="ignore")
 

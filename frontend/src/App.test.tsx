@@ -13,12 +13,22 @@ test("renders shell and navigation", async () => {
       <App />
     </MemoryRouter>,
   );
-  expect(screen.getByText(/HopStats/)).toBeInTheDocument();
+  expect(await screen.findByText(/HopStats/)).toBeInTheDocument();
   expect(screen.getByText("Inventory")).toBeInTheDocument();
   expect(await screen.findByText("Backend: connected")).toBeInTheDocument();
 });
 test("shows connection failure", async () => {
-  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockImplementation((url: string) =>
+      url === "/api/v1/auth/me"
+        ? Promise.resolve({
+            ok: true,
+            json: async () => ({ username: "local" }),
+          })
+        : Promise.reject(new Error("offline")),
+    ),
+  );
   render(
     <MemoryRouter>
       <App />

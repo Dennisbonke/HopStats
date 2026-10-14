@@ -144,9 +144,9 @@ are available.
 
 ## Limitations
 
-There is no authentication in this PoC. Keep the service bound to loopback or
-a trusted LAN. Do not upload personal exports to issue trackers or commit
-them to the repository. There is no fuzzy matching, manual matching UI,
+Imports require an authenticated HopStats session and CSRF header. Provision the existing `local` account with the
+interactive account CLI described in [authentication.md](authentication.md). Do not upload personal exports to issue
+trackers or commit them to the repository. There is no fuzzy matching, manual matching UI,
 background worker, or JSON support.
 
 Import serialization uses process-local locks. The supported deployment is one

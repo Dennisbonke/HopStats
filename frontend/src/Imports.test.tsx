@@ -59,6 +59,7 @@ test("selects and uploads a check-in file", async () => {
     });
   const user = userEvent.setup();
   renderImports(fetchMock);
+  await screen.findByText("Untappd check-in CSV");
   const file = new File(["beer_name,brewery_name"], "checkins.csv", {
     type: "text/csv",
   });
@@ -95,6 +96,7 @@ test("requires stash replacement confirmation and displays validation errors", a
     });
   const user = userEvent.setup();
   renderImports(fetchMock);
+  await screen.findByText("Untappd check-in CSV");
   const file = new File(["item_id,quantity"], "stash.csv", {
     type: "text/csv",
   });
@@ -139,6 +141,7 @@ test("requires a second acknowledgement for an undated replacement", async () =>
     });
   const user = userEvent.setup();
   renderImports(fetchMock);
+  await screen.findByText("Untappd check-in CSV");
   const file = new File(["item_id,quantity"], "stash.csv", {
     type: "text/csv",
   });
@@ -169,6 +172,7 @@ test("displays a network error", async () => {
     });
   const user = userEvent.setup();
   renderImports(fetchMock);
+  await screen.findByText("Untappd check-in CSV");
   const file = new File(["data"], "checkins.csv", { type: "text/csv" });
   await user.upload(screen.getAllByLabelText("Choose CSV file")[0], file);
   await user.click(screen.getAllByRole("button", { name: "Upload CSV" })[0]);

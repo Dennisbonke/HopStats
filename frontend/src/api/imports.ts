@@ -66,7 +66,7 @@ export async function uploadImport(
     form.append("allow_older", String(allowOlder));
     form.append("allow_undated", String(allowUndated));
   }
-  const response = await fetch(`/api/v1/imports/${kind}`, {
+  const response = await apiFetch(`/api/v1/imports/${kind}`, {
     method: "POST",
     body: form,
   });
@@ -74,9 +74,10 @@ export async function uploadImport(
 }
 
 export async function fetchImportHistory(): Promise<ImportSummary[]> {
-  const response = await fetch("/api/v1/imports");
+  const response = await apiFetch("/api/v1/imports");
   if (!response.ok) {
     throw new Error(`Unable to load import history (${response.status})`);
   }
   return (await response.json()) as ImportSummary[];
 }
+import { apiFetch } from "./client";
