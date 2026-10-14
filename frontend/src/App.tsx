@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
 import { checkBackend } from "./api/health";
 import Imports from "./pages/Imports";
+import Dashboard from "./pages/Dashboard";
 
 const links = [
   ["/", "Dashboard"],
@@ -49,7 +50,7 @@ export default function App() {
               : "unavailable"}
         </div>
         <Routes>
-          <Route path="/" element={<Placeholder title="Dashboard" />} />
+          <Route path="/" element={<Dashboard />} />
           <Route
             path="/inventory"
             element={<Placeholder title="Inventory" />}
