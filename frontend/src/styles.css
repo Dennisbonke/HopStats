@@ -55,98 +55,6 @@ section {
 .page-heading {
   margin-bottom: 1rem;
 }
-.metric-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1rem;
-}
-.metric-card {
-  min-height: 8.5rem;
-  padding: 1.25rem;
-  background: white;
-  border-radius: 0.7rem;
-  box-shadow: 0 1px 3px #0001;
-}
-.metric-card h3 {
-  margin: 0 0 1rem;
-  color: #526176;
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-.metric-card strong {
-  display: block;
-  color: #172033;
-  font-size: 1.8rem;
-  line-height: 1.1;
-}
-.metric-card p,
-.panel-explanation {
-  margin: 0.55rem 0 0;
-  color: #526176;
-  font-size: 0.82rem;
-}
-.empty-dashboard,
-.dashboard-state {
-  margin-bottom: 1rem;
-  padding: 1.25rem;
-  background: white;
-  border-radius: 0.7rem;
-  box-shadow: 0 1px 3px #0001;
-}
-.empty-dashboard p,
-.dashboard-state p {
-  margin: 0.4rem 0 0.9rem;
-}
-.button-link {
-  display: inline-block;
-  padding: 0.6rem 0.85rem;
-  border-radius: 0.4rem;
-  background: #176b4d;
-  color: white;
-  font-weight: 600;
-  text-decoration: none;
-}
-.error-state {
-  color: #a32920;
-}
-.dashboard-lower-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-  margin-top: 1rem;
-}
-.dashboard-panel {
-  padding: 1.5rem;
-  background: white;
-  border-radius: 0.7rem;
-  box-shadow: 0 1px 3px #0001;
-}
-.dashboard-panel h3 {
-  margin: 0;
-}
-.coverage-list,
-.freshness-list {
-  display: grid;
-  gap: 0.7rem;
-  margin: 1rem 0 0;
-}
-.coverage-list div,
-.freshness-list div {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  border-bottom: 1px solid #e5eaf1;
-  padding-bottom: 0.55rem;
-  font-size: 0.9rem;
-}
-.freshness-list dt,
-.freshness-list dd {
-  margin: 0;
-}
-.freshness-list dd {
-  color: #526176;
-  text-align: right;
-}
 .page-heading h2,
 .page-heading p {
   margin-bottom: 0.35rem;
@@ -326,10 +234,6 @@ h2 {
     text-align: center;
   }
   .import-grid {
-    grid-template-columns: 1fr;
-  }
-  .metric-grid,
-  .dashboard-lower-grid {
     grid-template-columns: 1fr;
   }
   .import-card,
