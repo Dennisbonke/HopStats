@@ -49,10 +49,20 @@ class BeerStyle(Base):
 
 class Beer(Base):
     __tablename__ = "beers"
-    __table_args__ = (UniqueConstraint("source_system", "external_id"),)
+    __table_args__ = (
+        UniqueConstraint("source_system", "external_id"),
+        Index(
+            "uq_beers_source_provisional",
+            "source_system",
+            "provisional_key",
+            unique=True,
+            sqlite_where=text("provisional_key IS NOT NULL"),
+        ),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     source_system: Mapped[str | None] = mapped_column(String(50))
     external_id: Mapped[str | None] = mapped_column(String(100))
+    provisional_key: Mapped[str | None] = mapped_column(String(500))
     brewery_id: Mapped[int | None] = mapped_column(ForeignKey("breweries.id"))
     style_id: Mapped[int | None] = mapped_column(ForeignKey("beer_styles.id"))
     name: Mapped[str] = mapped_column(String(255))
@@ -190,6 +200,8 @@ class InventoryItem(Base):
     purchase_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     created_at_source: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     source_payload_json: Mapped[str | None] = mapped_column(Text)
+    photo_url: Mapped[str | None] = mapped_column(Text)
+    best_before_suspicious: Mapped[bool] = mapped_column(Boolean, default=False)
     imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     match_status: Mapped[str] = mapped_column(String(20), default="unmatched")
     matched_checkin_beer_id: Mapped[int | None] = mapped_column(ForeignKey("beers.id"))
@@ -209,8 +221,10 @@ class ImportRun(Base):
     inserted_count: Mapped[int] = mapped_column(Integer, default=0)
     updated_count: Mapped[int] = mapped_column(Integer, default=0)
     unchanged_count: Mapped[int] = mapped_column(Integer, default=0)
+    removed_count: Mapped[int] = mapped_column(Integer, default=0)
     rejected_count: Mapped[int] = mapped_column(Integer, default=0)
     error_summary: Mapped[str | None] = mapped_column(Text)
+    error_code: Mapped[str | None] = mapped_column(String(40))
 
 
 class ImportError(Base):

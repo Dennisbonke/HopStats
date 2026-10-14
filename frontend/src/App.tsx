@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
 import { checkBackend } from "./api/health";
+import Imports from "./pages/Imports";
 
 const links = [
   ["/", "Dashboard"],
@@ -53,7 +54,7 @@ export default function App() {
             path="/inventory"
             element={<Placeholder title="Inventory" />}
           />
-          <Route path="/imports" element={<Placeholder title="Imports" />} />
+          <Route path="/imports" element={<Imports />} />
           <Route path="*" element={<Placeholder title="Page not found" />} />
         </Routes>
       </main>
