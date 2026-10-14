@@ -107,6 +107,26 @@ def test_empty_dashboard(client):
     assert data["freshness"]["inventory_last_imported_at"] is None
 
 
+def test_dashboard_freshness_timestamps_include_utc_offset(client):
+    service = ImportService()
+    user_id = local_user_id()
+    service.import_checkins(
+        user_id,
+        "checkins.csv",
+        checkin_csv(checkin_row("c1", "b1", "Beer One", "Brewery A", "Lager")),
+    )
+    service.import_inventory(
+        user_id,
+        "stash.csv",
+        stash_csv(stash_row("i1", "Beer One", "Brewery A")),
+        True,
+    )
+
+    freshness = client.get("/api/v1/dashboard").json()["freshness"]
+    assert freshness["checkins_last_imported_at"].endswith("+00:00")
+    assert freshness["inventory_last_imported_at"].endswith("+00:00")
+
+
 def test_dashboard_aggregates_checkins_and_inventory_identities(client):
     service = ImportService()
     user_id = local_user_id()

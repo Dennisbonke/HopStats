@@ -20,8 +20,8 @@ const dashboard = {
     unmatched: 20,
   },
   freshness: {
-    checkins_last_imported_at: "2026-10-14T10:00:00Z",
-    inventory_last_imported_at: "2026-10-13T10:00:00Z",
+    checkins_last_imported_at: "2026-10-14T10:00:00+00:00",
+    inventory_last_imported_at: "2026-10-13T10:00:00+00:00",
     checkins_source_exported_at: null,
     inventory_source_exported_at: null,
   },
@@ -52,7 +52,11 @@ test("loads and formats dashboard metrics and freshness", async () => {
   expect(screen.getByText("4.50")).toBeInTheDocument();
   expect(screen.getByText("1,200 rated check-ins")).toBeInTheDocument();
   expect(screen.getByText("Confirmed by external ID")).toBeInTheDocument();
-  expect(screen.getByText(/10\/14\/2026/)).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      new Date(dashboard.freshness.checkins_last_imported_at).toLocaleString(),
+    ),
+  ).toBeInTheDocument();
 });
 
 test("shows the empty state without implying imported data", async () => {
