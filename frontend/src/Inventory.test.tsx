@@ -60,6 +60,16 @@ beforeEach(() => {
     "fetch",
     vi.fn().mockImplementation((url: string) => {
       if (url === "/api/v1/health") return Promise.resolve({ ok: true });
+      if (url === "/api/v1/auth/me")
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 1,
+            username: "local",
+            created_at: "2026-10-14T00:00:00Z",
+          }),
+        });
       if (url.startsWith("/api/v1/inventory/1"))
         return Promise.resolve({ ok: true, json: async () => item });
       if (url.startsWith("/api/v1/inventory/styles"))
@@ -115,6 +125,16 @@ test("shows a useful empty inventory state", async () => {
     "fetch",
     vi.fn().mockImplementation((url: string) => {
       if (url === "/api/v1/health") return Promise.resolve({ ok: true });
+      if (url === "/api/v1/auth/me")
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 1,
+            username: "local",
+            created_at: "2026-10-14T00:00:00Z",
+          }),
+        });
       if (url.startsWith("/api/v1/inventory/styles"))
         return Promise.resolve({ ok: true, json: async () => [] });
       if (url.startsWith("/api/v1/inventory"))
@@ -159,6 +179,16 @@ test("ignores out-of-order inventory responses and stale errors", async () => {
     "fetch",
     vi.fn().mockImplementation((url: string) => {
       if (url === "/api/v1/health") return Promise.resolve({ ok: true });
+      if (url === "/api/v1/auth/me")
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 1,
+            username: "local",
+            created_at: "2026-10-14T00:00:00Z",
+          }),
+        });
       if (url.startsWith("/api/v1/inventory/styles")) {
         return Promise.resolve({ ok: true, json: async () => [] });
       }

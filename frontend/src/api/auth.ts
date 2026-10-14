@@ -15,18 +15,45 @@ async function responseMessage(response: Response): Promise<string> {
   }
 }
 
+function parseCurrentUser(body: unknown): CurrentUser {
+  if (
+    typeof body !== "object" ||
+    body === null ||
+    !Number.isInteger((body as { id?: unknown }).id) ||
+    (body as { id: number }).id <= 0 ||
+    typeof (body as { username?: unknown }).username !== "string" ||
+    !(body as { username: string }).username.trim() ||
+    typeof (body as { created_at?: unknown }).created_at !== "string" ||
+    !Number.isFinite(Date.parse((body as { created_at: string }).created_at))
+  ) {
+    throw new ApiError(
+      502,
+      "The server returned an invalid current-user response.",
+    );
+  }
+  return body as CurrentUser;
+}
+
 export async function fetchCurrentUser(): Promise<CurrentUser | null> {
   const response = await apiFetch("/api/v1/auth/me");
   if (response.status === 401) return null;
   if (!response.ok)
     throw new ApiError(response.status, await responseMessage(response));
-  // A real Response always exposes json. Keeping this tolerant helps lightweight
-  // fetch doubles used by the pre-authentication component tests.
   if (typeof response.json !== "function")
-    return { id: 0, username: "local", created_at: "" };
-  const user = (await response.json()) as CurrentUser;
-  if (!user.username) return { id: 0, username: "local", created_at: "" };
-  return user;
+    throw new ApiError(
+      502,
+      "The server returned an invalid current-user response.",
+    );
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new ApiError(
+      502,
+      "The server returned an invalid current-user response.",
+    );
+  }
+  return parseCurrentUser(body);
 }
 
 export async function login(

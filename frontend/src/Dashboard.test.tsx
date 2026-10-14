@@ -45,7 +45,12 @@ test("loads and formats dashboard metrics and freshness", async () => {
     if (url === "/api/v1/auth/me")
       return Promise.resolve({
         ok: true,
-        json: async () => ({ username: "local" }),
+        status: 200,
+        json: async () => ({
+          id: 1,
+          username: "local",
+          created_at: "2026-10-14T00:00:00Z",
+        }),
       });
     return Promise.resolve({ ok: true, json: async () => dashboard });
   });
@@ -89,7 +94,12 @@ test("shows the empty state without implying imported data", async () => {
     if (url === "/api/v1/auth/me")
       return Promise.resolve({
         ok: true,
-        json: async () => ({ username: "local" }),
+        status: 200,
+        json: async () => ({
+          id: 1,
+          username: "local",
+          created_at: "2026-10-14T00:00:00Z",
+        }),
       });
     return Promise.resolve({ ok: true, json: async () => empty });
   });
@@ -109,7 +119,12 @@ test("shows a useful error state when dashboard loading fails", async () => {
     if (url === "/api/v1/auth/me")
       return Promise.resolve({
         ok: true,
-        json: async () => ({ username: "local" }),
+        status: 200,
+        json: async () => ({
+          id: 1,
+          username: "local",
+          created_at: "2026-10-14T00:00:00Z",
+        }),
       });
     return Promise.resolve({ ok: false, status: 503 });
   });

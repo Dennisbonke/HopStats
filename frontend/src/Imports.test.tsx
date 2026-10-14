@@ -39,6 +39,16 @@ afterEach(() => cleanup());
 test("renders import sections and empty history", async () => {
   const fetchMock = vi.fn().mockImplementation((url: string) => {
     if (url === "/api/v1/health") return Promise.resolve({ ok: true });
+    if (url === "/api/v1/auth/me")
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: 1,
+          username: "local",
+          created_at: "2026-10-14T00:00:00Z",
+        }),
+      });
     return Promise.resolve({ ok: true, json: async () => [] });
   });
   renderImports(fetchMock);
@@ -52,6 +62,16 @@ test("selects and uploads a check-in file", async () => {
     .fn()
     .mockImplementation((url: string, options?: RequestInit) => {
       if (url === "/api/v1/health") return Promise.resolve({ ok: true });
+      if (url === "/api/v1/auth/me")
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 1,
+            username: "local",
+            created_at: "2026-10-14T00:00:00Z",
+          }),
+        });
       if (options?.method === "POST") {
         return Promise.resolve({ ok: true, json: async () => completed });
       }
@@ -85,6 +105,16 @@ test("requires stash replacement confirmation and displays validation errors", a
     .fn()
     .mockImplementation((url: string, options?: RequestInit) => {
       if (url === "/api/v1/health") return Promise.resolve({ ok: true });
+      if (url === "/api/v1/auth/me")
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 1,
+            username: "local",
+            created_at: "2026-10-14T00:00:00Z",
+          }),
+        });
       if (options?.method === "POST") {
         return Promise.resolve({
           ok: false,
@@ -124,6 +154,16 @@ test("requires a second acknowledgement for an undated replacement", async () =>
     .fn()
     .mockImplementation((url: string, options?: RequestInit) => {
       if (url === "/api/v1/health") return Promise.resolve({ ok: true });
+      if (url === "/api/v1/auth/me")
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 1,
+            username: "local",
+            created_at: "2026-10-14T00:00:00Z",
+          }),
+        });
       if (options?.method === "POST") {
         uploads += 1;
         return uploads === 1
@@ -166,6 +206,16 @@ test("displays a network error", async () => {
     .fn()
     .mockImplementation((url: string, options?: RequestInit) => {
       if (url === "/api/v1/health") return Promise.resolve({ ok: true });
+      if (url === "/api/v1/auth/me")
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 1,
+            username: "local",
+            created_at: "2026-10-14T00:00:00Z",
+          }),
+        });
       if (options?.method === "POST")
         return Promise.reject(new Error("offline"));
       return Promise.resolve({ ok: true, json: async () => [] });

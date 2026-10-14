@@ -33,6 +33,8 @@ export default function App() {
   const [status, setStatus] = useState<"loading" | "connected" | "offline">(
     "loading",
   );
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+  const [logoutLoading, setLogoutLoading] = useState(false);
   useEffect(() => {
     let mounted = true;
     fetchCurrentUser()
@@ -89,12 +91,17 @@ export default function App() {
   }
 
   async function signOut() {
+    setLogoutLoading(true);
+    setLogoutError(null);
     try {
       await logout();
-    } finally {
       setUser(null);
       setAuthState("anonymous");
       navigate("/");
+    } catch {
+      setLogoutError("Unable to sign out. Please try again.");
+    } finally {
+      setLogoutLoading(false);
     }
   }
 
@@ -112,12 +119,20 @@ export default function App() {
             type="button"
             className="logout-button"
             onClick={() => void signOut()}
+            disabled={logoutLoading}
           >
-            Sign out{user ? ` (${user.username})` : ""}
+            {logoutLoading
+              ? "Signing out…"
+              : `Sign out${user ? ` (${user.username})` : ""}`}
           </button>
         </nav>
       </header>
       <main>
+        {logoutError && (
+          <p className="logout-error" role="alert">
+            {logoutError}
+          </p>
+        )}
         <div className={`status ${status}`}>
           Backend:{" "}
           {status === "loading"

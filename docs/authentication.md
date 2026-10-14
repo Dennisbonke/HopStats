@@ -53,6 +53,9 @@ origin in `HOPSTATS_ALLOWED_ORIGINS`. For trusted local HTTP development set `HO
 use that setting for an internet-facing deployment. Sessions remain valid across process/container restarts until
 expiry, logout, revocation, or password change.
 
+Security-sensitive settings are validated at startup: SameSite must be `lax`, `strict`, or `none`; `none` requires
+secure cookies; session lifetime and rate-limit attempts/window must be positive and bounded.
+
 ## Limitations
 
 M5 intentionally has one provisioned owner, no registration, no roles, no recovery email, and no external identity
