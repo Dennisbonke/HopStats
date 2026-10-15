@@ -271,6 +271,39 @@ section {
   min-width: 0;
   color: #526176;
 }
+.analytics-window-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.55rem;
+  background: white;
+  box-shadow: 0 1px 3px #0001;
+  color: #526176;
+  font-size: 0.9rem;
+}
+.analytics-window-nav button {
+  min-height: 2.5rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.35rem;
+  background: white;
+  color: #172033;
+}
+.analytics-window-nav button:disabled {
+  opacity: 0.55;
+}
+.analytics-window-nav button:not(:disabled) {
+  cursor: pointer;
+}
+.analytics-window-nav button:focus-visible,
+.analytics-window-nav button:not(:disabled):hover {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+  background: #eff6ff;
+}
 .analytics-breadcrumb button,
 .bucket-actions button {
   border: 1px solid #cbd5e1;

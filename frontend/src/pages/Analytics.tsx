@@ -26,6 +26,8 @@ type Period =
 type Granularity = "auto" | "day" | "week" | "month";
 type ApiGranularity = Granularity | "year";
 type Zoom = { kind: "year" | "month"; value: string } | null;
+type DateRange = { start: string; end: string };
+const MAX_VISIBLE_BUCKETS = 45;
 
 function todayInAmsterdam() {
   return new Intl.DateTimeFormat("en-CA", {
@@ -40,6 +42,45 @@ function shiftDate(value: string, offset: number) {
   const day = new Date(`${value}T12:00:00Z`);
   day.setUTCDate(day.getUTCDate() + offset);
   return day.toISOString().slice(0, 10);
+}
+
+function mondayOf(value: string) {
+  const day = new Date(`${value}T12:00:00Z`);
+  return shiftDate(value, -((day.getUTCDay() + 6) % 7));
+}
+
+function boundedWindow(
+  start: string,
+  end: string,
+  granularity: "day" | "week",
+  page: number,
+) {
+  const week = granularity === "week";
+  const anchor = week ? mondayOf(start) : start;
+  const lastAnchor = week ? mondayOf(end) : end;
+  const bucketCount =
+    Math.floor(
+      (Date.parse(`${lastAnchor}T00:00:00Z`) -
+        Date.parse(`${anchor}T00:00:00Z`)) /
+        (week ? 7 : 1) /
+        86400000,
+    ) + 1;
+  const pageCount = Math.ceil(bucketCount / MAX_VISIBLE_BUCKETS);
+  const pageIndex = Math.min(page, Math.max(0, pageCount - 1));
+  const pageAnchor = shiftDate(
+    anchor,
+    pageIndex * MAX_VISIBLE_BUCKETS * (week ? 7 : 1),
+  );
+  const pageEnd = shiftDate(
+    pageAnchor,
+    MAX_VISIBLE_BUCKETS * (week ? 7 : 1) - 1,
+  );
+  return {
+    start: start > pageAnchor ? start : pageAnchor,
+    end: end < pageEnd ? end : pageEnd,
+    pageCount,
+    pageIndex,
+  };
 }
 
 function currentYearPeriod(now = todayInAmsterdam()) {
@@ -112,6 +153,12 @@ function parseZoom(value: string | null): Zoom {
   return null;
 }
 
+function parseWindowPage(value: string | null) {
+  if (!value || !/^(0|[1-9]\d*)$/.test(value)) return 0;
+  const page = Number(value);
+  return Number.isSafeInteger(page) ? page : 0;
+}
+
 function makeApiParams(
   period: Period,
   start: string,
@@ -177,6 +224,7 @@ export default function Analytics() {
   const [start, setStart] = useState(initial.start);
   const [end, setEnd] = useState(initial.end);
   const [urlWarning, setUrlWarning] = useState(initial.invalid);
+  const [allRange, setAllRange] = useState<DateRange | null>(null);
   const [data, setData] = useState<CheckinAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -186,6 +234,13 @@ export default function Analytics() {
   const [zoom, setZoom] = useState<Zoom>(() =>
     parseZoom(searchParams.get("zoom")),
   );
+  const [pageIndex, setPageIndex] = useState(() =>
+    parseWindowPage(searchParams.get("window")),
+  );
+  const reportStart =
+    period === "all" ? (allRange?.start ?? data?.start ?? null) : start;
+  const reportEnd =
+    period === "all" ? (allRange?.end ?? data?.end ?? null) : end;
   const automaticGranularity = zoom
     ? zoom.kind === "year"
       ? "month"
@@ -203,43 +258,72 @@ export default function Analytics() {
           end: `${zoom.value}-${String(new Date(Date.UTC(Number(zoom.value.slice(0, 4)), Number(zoom.value.slice(5, 7)), 0)).getUTCDate()).padStart(2, "0")}`,
         }
     : null;
+  const pageRange =
+    !zoom &&
+    (granularity === "day" || granularity === "week") &&
+    reportStart &&
+    reportEnd
+      ? boundedWindow(reportStart, reportEnd, granularity, pageIndex)
+      : null;
   const visibleStart = zoomRange
     ? period === "all"
       ? zoomRange.start
       : start > zoomRange.start
         ? start
         : zoomRange.start
-    : start;
+    : (pageRange?.start ?? reportStart ?? start);
   const visibleEnd = zoomRange
     ? period === "all"
       ? zoomRange.end
       : end < zoomRange.end
         ? end
         : zoomRange.end
-    : end;
+    : (pageRange?.end ?? reportEnd ?? end);
   const invalidZoom = !!zoom && visibleStart > visibleEnd;
   const invalidRange =
     (period !== "all" && (!start || !end || start > end)) || invalidZoom;
-  const requestGranularity =
-    period === "all" && !zoom && granularity === "auto"
+  const needsAllRangeBootstrap =
+    period === "all" &&
+    !zoom &&
+    (granularity === "day" || granularity === "week") &&
+    !allRange;
+  const requestGranularity = needsAllRangeBootstrap
+    ? "auto"
+    : period === "all" && !zoom && granularity === "auto"
       ? "auto"
       : actualGranularity;
+  const requestRange = zoomRange
+    ? { start: visibleStart, end: visibleEnd }
+    : pageRange
+      ? { start: pageRange.start, end: pageRange.end }
+      : null;
   const requestParams = useMemo(
     () =>
       makeApiParams(
-        zoom ? "custom" : period,
-        zoom ? visibleStart : start,
-        zoom ? visibleEnd : end,
+        requestRange ? "custom" : period,
+        requestRange?.start ?? start,
+        requestRange?.end ?? end,
         requestGranularity,
       ),
-    [period, start, end, requestGranularity, zoom, visibleStart, visibleEnd],
+    [
+      period,
+      start,
+      end,
+      requestGranularity,
+      requestRange?.start,
+      requestRange?.end,
+    ],
   );
 
   useEffect(() => {
     const urlParams = makeApiParams(period, start, end, granularity);
     urlParams.set("period", period);
     const currentZoom = searchParams.get("zoom");
-    if (currentZoom) urlParams.set("zoom", currentZoom);
+    if (currentZoom && parseZoom(currentZoom)) {
+      urlParams.set("zoom", currentZoom);
+    }
+    const currentWindow = parseWindowPage(searchParams.get("window"));
+    if (currentWindow > 0) urlParams.set("window", String(currentWindow));
     if (urlParams.toString() !== searchParams.toString()) {
       setSearchParams(urlParams, { replace: true });
     }
@@ -248,9 +332,33 @@ export default function Analytics() {
   useEffect(() => {
     const next = parseZoom(new URLSearchParams(location.search).get("zoom"));
     if (JSON.stringify(next) !== JSON.stringify(zoom)) setZoom(next);
+    setPageIndex(
+      parseWindowPage(new URLSearchParams(location.search).get("window")),
+    );
     // URL navigation, including browser Back/Forward, is authoritative here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
+
+  useEffect(() => {
+    const rawZoom = searchParams.get("zoom");
+    if (!rawZoom || parseZoom(rawZoom)) return;
+    setUrlWarning(true);
+    const params = new URLSearchParams(searchParams);
+    params.delete("zoom");
+    setSearchParams(params, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!pageRange || pageRange.pageIndex === pageIndex) return;
+    setPageIndex(pageRange.pageIndex);
+    const params = new URLSearchParams(searchParams);
+    if (pageRange.pageIndex > 0) {
+      params.set("window", String(pageRange.pageIndex));
+    } else {
+      params.delete("window");
+    }
+    setSearchParams(params, { replace: true });
+  }, [pageIndex, pageRange, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!invalidZoom) return;
@@ -277,7 +385,18 @@ export default function Analytics() {
     setData(null);
     fetchCheckinAnalytics(requestParams, controller.signal)
       .then((result) => {
-        if (requestSequence.current === requestId) setData(result);
+        if (requestSequence.current === requestId) {
+          setData(result);
+          if (
+            period === "all" &&
+            !zoom &&
+            requestGranularity === "auto" &&
+            result.start &&
+            result.end
+          ) {
+            setAllRange({ start: result.start, end: result.end });
+          }
+        }
       })
       .catch((requestError: unknown) => {
         if (requestSequence.current === requestId) {
@@ -311,8 +430,10 @@ export default function Analytics() {
     }
     setPeriod(next);
     setZoom(null);
+    setPageIndex(0);
     const params = new URLSearchParams(searchParams);
     params.delete("zoom");
+    params.delete("window");
     setSearchParams(params, { replace: true });
     if (next !== "all") {
       setStart(range.start);
@@ -330,9 +451,19 @@ export default function Analytics() {
 
   function updateZoom(next: Zoom) {
     setZoom(next);
+    setPageIndex(0);
     const params = new URLSearchParams(searchParams);
     if (next) params.set("zoom", `${next.kind}:${next.value}`);
     else params.delete("zoom");
+    params.delete("window");
+    setSearchParams(params);
+  }
+
+  function updatePage(next: number) {
+    setPageIndex(next);
+    const params = new URLSearchParams(searchParams);
+    if (next > 0) params.set("window", String(next));
+    else params.delete("window");
     setSearchParams(params);
   }
 
@@ -402,8 +533,10 @@ export default function Analytics() {
                   setStart(event.target.value);
                   setPeriod("custom");
                   setZoom(null);
+                  setPageIndex(0);
                   const params = new URLSearchParams(searchParams);
                   params.delete("zoom");
+                  params.delete("window");
                   setSearchParams(params, { replace: true });
                 }}
               />
@@ -419,8 +552,10 @@ export default function Analytics() {
                   setEnd(event.target.value);
                   setPeriod("custom");
                   setZoom(null);
+                  setPageIndex(0);
                   const params = new URLSearchParams(searchParams);
                   params.delete("zoom");
+                  params.delete("window");
                   setSearchParams(params, { replace: true });
                 }}
               />
@@ -431,9 +566,13 @@ export default function Analytics() {
           Granularity
           <select
             value={granularity}
-            onChange={(event) =>
-              setGranularity(event.target.value as Granularity)
-            }
+            onChange={(event) => {
+              setGranularity(event.target.value as Granularity);
+              setPageIndex(0);
+              const params = new URLSearchParams(searchParams);
+              params.delete("window");
+              setSearchParams(params, { replace: true });
+            }}
           >
             <option value="auto">Automatic</option>
             <option value="day">Daily</option>
@@ -484,6 +623,31 @@ export default function Analytics() {
           <span className="deepest-zoom">Monthly view</span>
         )}
       </nav>
+      {pageRange && pageRange.pageCount > 1 && !zoom && (
+        <nav
+          className="analytics-window-nav"
+          aria-label="Visible bucket window"
+        >
+          <button
+            type="button"
+            disabled={pageRange.pageIndex === 0}
+            onClick={() => updatePage(pageRange.pageIndex - 1)}
+          >
+            Previous {granularity === "day" ? "45 days" : "45 weeks"}
+          </button>
+          <span>
+            Showing {visibleStart}–{visibleEnd} · page {pageRange.pageIndex + 1}{" "}
+            of {pageRange.pageCount}
+          </span>
+          <button
+            type="button"
+            disabled={pageRange.pageIndex + 1 >= pageRange.pageCount}
+            onClick={() => updatePage(pageRange.pageIndex + 1)}
+          >
+            Next {granularity === "day" ? "45 days" : "45 weeks"}
+          </button>
+        </nav>
+      )}
       {invalidRange && (
         <p className="analytics-warning" role="alert">
           {invalidZoom
@@ -521,7 +685,9 @@ export default function Analytics() {
               ? `${new Date(`${zoom.value}-01T00:00:00Z`).toLocaleString("en", { month: "long", timeZone: "UTC" })} ${zoom.value.slice(0, 4)} · ${visibleStart}–${visibleEnd}`
               : zoom?.kind === "year"
                 ? `${zoom.value} · ${visibleStart}–${visibleEnd}`
-                : `Reporting period · ${data.start ?? start}–${data.end ?? end}`}
+                : pageRange && pageRange.pageCount > 1
+                  ? `${granularity === "day" ? "Daily" : "Weekly"} buckets · ${visibleStart}–${visibleEnd} of ${reportStart}–${reportEnd}`
+                  : `Reporting period · ${data.start ?? start}–${data.end ?? end}`}
           </p>
           <div className="analytics-summary" aria-label="Check-in summary">
             <Metric

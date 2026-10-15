@@ -268,6 +268,119 @@ test("keeps partial reporting boundaries through drilldown and restores URL hist
   );
 });
 
+test("pages full-year Daily windows without changing the reporting range", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "http://localhost");
+      const total = url.searchParams.get("start") === "2025-01-01" ? 3 : 7;
+      return {
+        ok: true,
+        json: async () => ({
+          ...sample,
+          start: url.searchParams.get("start"),
+          end: url.searchParams.get("end"),
+          granularity: "day",
+          summary: { ...sample.summary, total_checkins: total },
+        }),
+      };
+    }),
+  );
+  renderAnalytics(
+    "/analytics?period=custom&start=2025-01-01&end=2025-12-31&granularity=day&timezone=Europe%2FAmsterdam",
+  );
+  expect(
+    await screen.findByLabelText("Visible bucket window"),
+  ).toHaveTextContent("page 1 of 9");
+  const first = new URL(
+    String(vi.mocked(globalThis.fetch).mock.calls[0][0]),
+    "http://localhost",
+  );
+  expect(first.searchParams.get("start")).toBe("2025-01-01");
+  expect(first.searchParams.get("end")).toBe("2025-02-14");
+
+  fireEvent.click(screen.getByRole("button", { name: "Next 45 days" }));
+  expect(await screen.findByText("7")).toBeInTheDocument();
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "start=2025-01-01",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "end=2025-12-31",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent("window=1");
+  await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
+  const next = new URL(
+    String(vi.mocked(globalThis.fetch).mock.calls[1][0]),
+    "http://localhost",
+  );
+  expect(next.searchParams.get("granularity")).toBe("day");
+  expect(next.searchParams.get("start")).toBe("2025-02-15");
+  expect(next.searchParams.get("end")).toBe("2025-03-31");
+  expect(
+    screen.getByText(/Daily buckets · 2025-02-15–2025-03-31/),
+  ).toBeInTheDocument();
+});
+
+test("bounds multi-year Weekly selections to navigable windows", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "http://localhost");
+      return {
+        ok: true,
+        json: async () => ({
+          ...sample,
+          start: url.searchParams.get("start"),
+          end: url.searchParams.get("end"),
+          granularity: "week",
+        }),
+      };
+    }),
+  );
+  renderAnalytics(
+    "/analytics?period=custom&start=2023-01-01&end=2025-12-31&granularity=week&timezone=Europe%2FAmsterdam",
+  );
+  expect(
+    await screen.findByLabelText("Visible bucket window"),
+  ).toHaveTextContent("page 1 of 4");
+  const first = new URL(
+    String(vi.mocked(globalThis.fetch).mock.calls[0][0]),
+    "http://localhost",
+  );
+  expect(first.searchParams.get("granularity")).toBe("week");
+  expect(first.searchParams.get("start")).toBe("2023-01-01");
+  expect(first.searchParams.get("end")).toBe("2023-11-05");
+  fireEvent.click(screen.getByRole("button", { name: "Next 45 weeks" }));
+  await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
+  const next = new URL(
+    String(vi.mocked(globalThis.fetch).mock.calls[1][0]),
+    "http://localhost",
+  );
+  expect(next.searchParams.get("granularity")).toBe("week");
+  expect(next.searchParams.get("start")).toBe("2023-11-06");
+  expect(next.searchParams.get("end")).toBe("2024-09-15");
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "start=2023-01-01",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "end=2025-12-31",
+  );
+});
+
+test("normalizes malformed zoom URL parameters", async () => {
+  renderAnalytics(
+    "/analytics?period=custom&start=2025-01-01&end=2025-12-31&granularity=auto&zoom=month%3A2025-99&timezone=Europe%2FAmsterdam",
+  );
+  expect(
+    await screen.findByText(/Invalid analytics URL filters or drilldown/),
+  ).toHaveTextContent("Invalid analytics URL filters or drilldown");
+  await waitFor(() =>
+    expect(screen.getByLabelText("Current query")).not.toHaveTextContent(
+      "zoom=",
+    ),
+  );
+});
+
 test("ignores out-of-order responses and stale loading/error handlers", async () => {
   type FakeResponse = { ok: boolean; json: () => Promise<unknown> };
   function deferred<T>() {
