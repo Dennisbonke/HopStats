@@ -26,7 +26,9 @@ def _bucket_start(day: date, granularity: str) -> date:
         return day
     if granularity == "week":
         return day - timedelta(days=day.weekday())
-    return day.replace(day=1)
+    if granularity == "month":
+        return day.replace(day=1)
+    return day.replace(month=1, day=1)
 
 
 def _next_bucket(day: date, granularity: str) -> date:
@@ -34,7 +36,9 @@ def _next_bucket(day: date, granularity: str) -> date:
         return day + timedelta(days=1)
     if granularity == "week":
         return day + timedelta(days=7)
-    return (day.replace(day=28) + timedelta(days=4)).replace(day=1)
+    if granularity == "month":
+        return (day.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return day.replace(year=day.year + 1, month=1, day=1)
 
 
 def _make_buckets(
@@ -53,6 +57,9 @@ def _make_buckets(
         elif granularity == "month":
             key = current.strftime("%Y-%m")
             label = current.strftime("%b %Y")
+        elif granularity == "year":
+            key = str(current.year)
+            label = str(current.year)
         else:
             key = current.isoformat()
             label = current.strftime("%d %b %Y")
@@ -89,8 +96,8 @@ class AnalyticsService:
         granularity: str,
         timezone_name: str,
     ) -> CheckinAnalyticsResponse:
-        if granularity not in {"auto", "day", "week", "month"}:
-            raise AnalyticsValidationError("granularity must be auto, day, week, or month")
+        if granularity not in {"auto", "day", "week", "month", "year"}:
+            raise AnalyticsValidationError("granularity must be auto, day, week, month, or year")
         if (start is None) != (end is None):
             raise AnalyticsValidationError("start and end must be provided together")
         if start and end and start > end:
@@ -126,7 +133,16 @@ class AnalyticsService:
         assert end is not None
         if granularity == "auto":
             duration = (end - start).days + 1
-            granularity = "day" if duration <= 45 else "week" if duration <= 180 else "month"
+            spans_years = start.year < end.year
+            granularity = (
+                "year"
+                if spans_years
+                else "day"
+                if duration <= 45
+                else "week"
+                if duration <= 180
+                else "month"
+            )
         buckets = _make_buckets(start, end, granularity, tz, self.max_buckets)
         start_utc = _utc_boundary(start, tz)
         end_utc = _utc_boundary(end + timedelta(days=1), tz)

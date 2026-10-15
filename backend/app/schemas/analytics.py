@@ -27,7 +27,7 @@ class CheckinAnalyticsResponse(BaseModel):
     start: date | None
     end: date | None
     timezone: str
-    granularity: Literal["day", "week", "month"]
+    granularity: Literal["day", "week", "month", "year"]
     summary: AnalyticsSummary
     cumulative_baseline_checkins: int
     cumulative_baseline_discoveries: int

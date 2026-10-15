@@ -80,7 +80,7 @@ header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem max(1rem, calc((100% - 70rem) / 2));
+  padding: 1rem max(1rem, calc((100% - 80rem) / 2));
   background: #172033;
   color: white;
   gap: 1rem;
@@ -92,7 +92,9 @@ header {
 }
 nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.4rem;
+  min-width: 0;
 }
 nav a {
   color: #cbd5e1;
@@ -106,7 +108,8 @@ nav a:hover {
   color: white;
 }
 main {
-  max-width: 70rem;
+  width: min(100%, 80rem);
+  min-width: 0;
   margin: 0 auto;
   padding: 2rem 1rem;
 }
@@ -223,6 +226,7 @@ section {
 .analytics-page {
   display: grid;
   gap: 1rem;
+  min-width: 0;
 }
 .analytics-filters,
 .analytics-chart-panel,
@@ -252,13 +256,93 @@ section {
   margin: 0;
 }
 .chart-scroll {
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
+  min-width: 0;
   margin-top: 1rem;
 }
 .chart-canvas {
   width: 100%;
-  min-width: 28rem;
+  min-width: 0;
+}
+.analytics-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  min-width: 0;
+  color: #526176;
+}
+.analytics-window-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.55rem;
+  background: white;
+  box-shadow: 0 1px 3px #0001;
+  color: #526176;
+  font-size: 0.9rem;
+}
+.analytics-window-nav button {
+  min-height: 2.5rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.35rem;
+  background: white;
+  color: #172033;
+}
+.analytics-window-nav button:disabled {
+  opacity: 0.55;
+}
+.analytics-window-nav button:not(:disabled) {
+  cursor: pointer;
+}
+.analytics-window-nav button:focus-visible,
+.analytics-window-nav button:not(:disabled):hover {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+  background: #eff6ff;
+}
+.analytics-breadcrumb button,
+.bucket-actions button {
+  border: 1px solid #cbd5e1;
+  border-radius: 0.35rem;
+  padding: 0.4rem 0.6rem;
+  background: white;
+  color: #172033;
+}
+.analytics-breadcrumb button:disabled {
+  opacity: 0.7;
+}
+.deepest-zoom {
+  margin-left: auto;
+  font-size: 0.82rem;
+}
+.analytics-scope {
+  margin: 0;
+  color: #526176;
+  font-weight: 600;
+}
+.bucket-actions {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding: 0.35rem 0 0.1rem;
+  scrollbar-width: thin;
+}
+.bucket-actions button {
+  flex: 0 0 auto;
+  min-height: 2.5rem;
+  cursor: pointer;
+}
+.bucket-actions button:hover,
+.bucket-actions button:focus-visible,
+.analytics-breadcrumb button:hover,
+.analytics-breadcrumb button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+  background: #eff6ff;
 }
 .analytics-tooltip {
   display: grid;
@@ -318,6 +402,10 @@ section {
   .analytics-filters,
   .analytics-chart-panel {
     padding: 1rem;
+  }
+  .deepest-zoom {
+    margin-left: 0;
+    flex-basis: 100%;
   }
 }
 .inventory-results,

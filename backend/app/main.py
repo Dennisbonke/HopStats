@@ -1,3 +1,5 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
@@ -76,18 +78,19 @@ def initialize_database() -> None:
             session.commit()
 
 
-app = FastAPI(title="HopStats API", version="0.1.0")
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    initialize_database()
+    yield
+
+
+app = FastAPI(title="HopStats API", version="0.1.0", lifespan=lifespan)
 app.include_router(auth_router)
 app.include_router(analytics_router)
 app.include_router(imports_router)
 app.include_router(dashboard_router)
 app.include_router(inventory_router)
 app.include_router(locations_router)
-
-
-@app.on_event("startup")
-def startup() -> None:
-    initialize_database()
 
 
 @app.get("/api/v1/health")

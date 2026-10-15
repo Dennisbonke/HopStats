@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import {
   Bar,
   BarChart,
@@ -24,6 +24,10 @@ const TIMEZONE = "Europe/Amsterdam";
 type Period =
   "all" | "this_year" | "last_year" | "last_30" | "last_90" | "custom";
 type Granularity = "auto" | "day" | "week" | "month";
+type ApiGranularity = Granularity | "year";
+type Zoom = { kind: "year" | "month"; value: string } | null;
+type DateRange = { start: string; end: string };
+const MAX_VISIBLE_BUCKETS = 45;
 
 function todayInAmsterdam() {
   return new Intl.DateTimeFormat("en-CA", {
@@ -38,6 +42,45 @@ function shiftDate(value: string, offset: number) {
   const day = new Date(`${value}T12:00:00Z`);
   day.setUTCDate(day.getUTCDate() + offset);
   return day.toISOString().slice(0, 10);
+}
+
+function mondayOf(value: string) {
+  const day = new Date(`${value}T12:00:00Z`);
+  return shiftDate(value, -((day.getUTCDay() + 6) % 7));
+}
+
+function boundedWindow(
+  start: string,
+  end: string,
+  granularity: "day" | "week",
+  page: number,
+) {
+  const week = granularity === "week";
+  const anchor = week ? mondayOf(start) : start;
+  const lastAnchor = week ? mondayOf(end) : end;
+  const bucketCount =
+    Math.floor(
+      (Date.parse(`${lastAnchor}T00:00:00Z`) -
+        Date.parse(`${anchor}T00:00:00Z`)) /
+        (week ? 7 : 1) /
+        86400000,
+    ) + 1;
+  const pageCount = Math.ceil(bucketCount / MAX_VISIBLE_BUCKETS);
+  const pageIndex = Math.min(page, Math.max(0, pageCount - 1));
+  const pageAnchor = shiftDate(
+    anchor,
+    pageIndex * MAX_VISIBLE_BUCKETS * (week ? 7 : 1),
+  );
+  const pageEnd = shiftDate(
+    pageAnchor,
+    MAX_VISIBLE_BUCKETS * (week ? 7 : 1) - 1,
+  );
+  return {
+    start: start > pageAnchor ? start : pageAnchor,
+    end: end < pageEnd ? end : pageEnd,
+    pageCount,
+    pageIndex,
+  };
 }
 
 function currentYearPeriod(now = todayInAmsterdam()) {
@@ -92,22 +135,39 @@ function initialParams(search: URLSearchParams) {
 function suggestedGranularity(
   start: string,
   end: string,
-): Exclude<Granularity, "auto"> {
+): Exclude<ApiGranularity, "auto"> {
   const days =
     (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) /
       86400000 +
     1;
-  return days <= 45 ? "day" : days <= 180 ? "week" : "month";
+  const years = Number(end.slice(0, 4)) - Number(start.slice(0, 4));
+  return days <= 45 ? "day" : years > 0 ? "year" : "month";
+}
+
+function parseZoom(value: string | null): Zoom {
+  if (!value) return null;
+  const year = value.match(/^year:(\d{4})$/);
+  if (year) return { kind: "year", value: year[1] };
+  const month = value.match(/^month:(\d{4}-(0[1-9]|1[0-2]))$/);
+  if (month) return { kind: "month", value: month[1] };
+  return null;
+}
+
+function parseWindowPage(value: string | null) {
+  if (!value || !/^(0|[1-9]\d*)$/.test(value)) return 0;
+  const page = Number(value);
+  return Number.isSafeInteger(page) ? page : 0;
 }
 
 function makeApiParams(
   period: Period,
   start: string,
   end: string,
-  granularity: Granularity,
+  granularity: ApiGranularity,
+  includeDateRange = false,
 ) {
   const params = new URLSearchParams({ granularity, timezone: TIMEZONE });
-  if (period !== "all") {
+  if (period !== "all" || includeDateRange) {
     params.set("start", start);
     params.set("end", end);
   }
@@ -156,6 +216,7 @@ function ExactTooltip({
 
 export default function Analytics() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
   const initial = useMemo(() => initialParams(searchParams), []);
   const [period, setPeriod] = useState<Period>(initial.period);
   const [granularity, setGranularity] = useState<Granularity>(
@@ -164,34 +225,152 @@ export default function Analytics() {
   const [start, setStart] = useState(initial.start);
   const [end, setEnd] = useState(initial.end);
   const [urlWarning, setUrlWarning] = useState(initial.invalid);
+  const [allRange, setAllRange] = useState<DateRange | null>(null);
   const [data, setData] = useState<CheckinAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const requestSequence = useRef(0);
   const [mode, setMode] = useState<"activity" | "cumulative">("activity");
   const [visible, setVisible] = useState({ total: true, discoveries: true });
+  const [zoom, setZoom] = useState<Zoom>(() =>
+    parseZoom(searchParams.get("zoom")),
+  );
+  const [pageIndex, setPageIndex] = useState(() =>
+    parseWindowPage(searchParams.get("window")),
+  );
+  const reportStart =
+    period === "all" ? (allRange?.start ?? data?.start ?? null) : start;
+  const reportEnd =
+    period === "all" ? (allRange?.end ?? data?.end ?? null) : end;
+  const automaticGranularity = zoom
+    ? zoom.kind === "year"
+      ? "month"
+      : "day"
+    : period === "all" && data
+      ? data.granularity
+      : suggestedGranularity(start, end);
   const actualGranularity =
-    granularity === "auto" ? suggestedGranularity(start, end) : granularity;
-  const invalidRange = period !== "all" && (!start || !end || start > end);
+    granularity === "auto" ? automaticGranularity : granularity;
+  const zoomRange = zoom
+    ? zoom.kind === "year"
+      ? { start: `${zoom.value}-01-01`, end: `${zoom.value}-12-31` }
+      : {
+          start: `${zoom.value}-01`,
+          end: `${zoom.value}-${String(new Date(Date.UTC(Number(zoom.value.slice(0, 4)), Number(zoom.value.slice(5, 7)), 0)).getUTCDate()).padStart(2, "0")}`,
+        }
+    : null;
+  const pageRange =
+    !zoom &&
+    (granularity === "day" || granularity === "week") &&
+    reportStart &&
+    reportEnd
+      ? boundedWindow(reportStart, reportEnd, granularity, pageIndex)
+      : null;
+  const visibleStart = zoomRange
+    ? period === "all"
+      ? zoomRange.start
+      : start > zoomRange.start
+        ? start
+        : zoomRange.start
+    : (pageRange?.start ?? reportStart ?? start);
+  const visibleEnd = zoomRange
+    ? period === "all"
+      ? zoomRange.end
+      : end < zoomRange.end
+        ? end
+        : zoomRange.end
+    : (pageRange?.end ?? reportEnd ?? end);
+  const invalidZoom = !!zoom && visibleStart > visibleEnd;
+  const invalidRange =
+    (period !== "all" && (!start || !end || start > end)) || invalidZoom;
+  const needsAllRangeBootstrap =
+    period === "all" &&
+    !zoom &&
+    (granularity === "day" || granularity === "week") &&
+    !allRange;
+  const requestGranularity = needsAllRangeBootstrap
+    ? "auto"
+    : period === "all" && !zoom && granularity === "auto"
+      ? "auto"
+      : actualGranularity;
+  const requestRange =
+    !needsAllRangeBootstrap && zoomRange
+      ? { start: visibleStart, end: visibleEnd }
+      : !needsAllRangeBootstrap && pageRange
+        ? { start: pageRange.start, end: pageRange.end }
+        : null;
   const requestParams = useMemo(
     () =>
       makeApiParams(
         period,
-        start,
-        end,
-        period === "all" && granularity === "auto" ? "auto" : actualGranularity,
+        requestRange?.start ?? start,
+        requestRange?.end ?? end,
+        requestGranularity,
+        requestRange !== null,
       ),
-    [period, start, end, granularity, actualGranularity],
+    [
+      period,
+      start,
+      end,
+      requestGranularity,
+      requestRange?.start,
+      requestRange?.end,
+    ],
   );
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(requestParams);
+    const urlParams = makeApiParams(period, start, end, granularity);
     urlParams.set("period", period);
-    if (granularity === "auto") urlParams.set("granularity", "auto");
+    const currentZoom = searchParams.get("zoom");
+    if (currentZoom && parseZoom(currentZoom)) {
+      urlParams.set("zoom", currentZoom);
+    }
+    const currentWindow = parseWindowPage(searchParams.get("window"));
+    if (currentWindow > 0) urlParams.set("window", String(currentWindow));
     if (urlParams.toString() !== searchParams.toString()) {
       setSearchParams(urlParams, { replace: true });
     }
-  }, [period, granularity, requestParams, searchParams, setSearchParams]);
+  }, [period, start, end, granularity, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    const next = parseZoom(new URLSearchParams(location.search).get("zoom"));
+    if (JSON.stringify(next) !== JSON.stringify(zoom)) setZoom(next);
+    setPageIndex(
+      parseWindowPage(new URLSearchParams(location.search).get("window")),
+    );
+    // URL navigation, including browser Back/Forward, is authoritative here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
+  useEffect(() => {
+    const rawZoom = searchParams.get("zoom");
+    if (!rawZoom || parseZoom(rawZoom)) return;
+    setUrlWarning(true);
+    const params = new URLSearchParams(searchParams);
+    params.delete("zoom");
+    setSearchParams(params, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!pageRange || pageRange.pageIndex === pageIndex) return;
+    setPageIndex(pageRange.pageIndex);
+    const params = new URLSearchParams(searchParams);
+    if (pageRange.pageIndex > 0) {
+      params.set("window", String(pageRange.pageIndex));
+    } else {
+      params.delete("window");
+    }
+    setSearchParams(params, { replace: true });
+  }, [pageIndex, pageRange, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!invalidZoom) return;
+    setZoom(null);
+    setUrlWarning(true);
+    const params = new URLSearchParams(searchParams);
+    params.delete("zoom");
+    setSearchParams(params, { replace: true });
+  }, [invalidZoom, searchParams, setSearchParams]);
 
   useEffect(() => {
     const requestId = ++requestSequence.current;
@@ -209,7 +388,18 @@ export default function Analytics() {
     setData(null);
     fetchCheckinAnalytics(requestParams, controller.signal)
       .then((result) => {
-        if (requestSequence.current === requestId) setData(result);
+        if (requestSequence.current === requestId) {
+          setData(result);
+          if (
+            period === "all" &&
+            !zoom &&
+            requestGranularity === "auto" &&
+            result.start &&
+            result.end
+          ) {
+            setAllRange({ start: result.start, end: result.end });
+          }
+        }
       })
       .catch((requestError: unknown) => {
         if (requestSequence.current === requestId) {
@@ -242,11 +432,54 @@ export default function Analytics() {
       range = { start: shiftDate(today, -(days - 1)), end: today };
     }
     setPeriod(next);
+    setZoom(null);
+    setPageIndex(0);
+    const params = new URLSearchParams(searchParams);
+    params.delete("zoom");
+    params.delete("window");
+    setSearchParams(params, { replace: true });
     if (next !== "all") {
       setStart(range.start);
       setEnd(range.end);
     }
   }
+
+  function drillTo(bucket: AnalyticsBucket) {
+    if (actualGranularity === "year") {
+      updateZoom({ kind: "year", value: bucket.key });
+    } else if (actualGranularity === "month") {
+      updateZoom({ kind: "month", value: bucket.key });
+    }
+  }
+
+  function updateZoom(next: Zoom) {
+    setZoom(next);
+    setPageIndex(0);
+    const params = new URLSearchParams(searchParams);
+    if (next) params.set("zoom", `${next.kind}:${next.value}`);
+    else params.delete("zoom");
+    params.delete("window");
+    setSearchParams(params);
+  }
+
+  function updatePage(next: number) {
+    setPageIndex(next);
+    const params = new URLSearchParams(searchParams);
+    if (next > 0) params.set("window", String(next));
+    else params.delete("window");
+    setSearchParams(params);
+  }
+
+  function drillFromChart(
+    state: { activeTooltipIndex?: number | string | null } | undefined,
+  ) {
+    const index = state?.activeTooltipIndex;
+    const bucket = typeof index === "number" ? chartData[index] : undefined;
+    if (bucket) drillTo(bucket);
+  }
+
+  const canDrill =
+    actualGranularity === "year" || actualGranularity === "month";
 
   const chartData = (data?.buckets ?? []).map((bucket) => ({ ...bucket }));
   const lineData = chartData.map((bucket) => ({
@@ -271,7 +504,8 @@ export default function Analytics() {
       </div>
       {urlWarning && (
         <p className="analytics-warning" role="status">
-          Invalid analytics URL filters. Showing the current year instead.
+          Invalid analytics URL filters or drilldown. Showing a valid overview
+          instead.
         </p>
       )}
       <section className="analytics-filters" aria-label="Reporting filters">
@@ -301,6 +535,12 @@ export default function Analytics() {
                 onChange={(event) => {
                   setStart(event.target.value);
                   setPeriod("custom");
+                  setZoom(null);
+                  setPageIndex(0);
+                  const params = new URLSearchParams(searchParams);
+                  params.delete("zoom");
+                  params.delete("window");
+                  setSearchParams(params, { replace: true });
                 }}
               />
             </label>
@@ -314,6 +554,12 @@ export default function Analytics() {
                 onChange={(event) => {
                   setEnd(event.target.value);
                   setPeriod("custom");
+                  setZoom(null);
+                  setPageIndex(0);
+                  const params = new URLSearchParams(searchParams);
+                  params.delete("zoom");
+                  params.delete("window");
+                  setSearchParams(params, { replace: true });
                 }}
               />
             </label>
@@ -323,9 +569,13 @@ export default function Analytics() {
           Granularity
           <select
             value={granularity}
-            onChange={(event) =>
-              setGranularity(event.target.value as Granularity)
-            }
+            onChange={(event) => {
+              setGranularity(event.target.value as Granularity);
+              setPageIndex(0);
+              const params = new URLSearchParams(searchParams);
+              params.delete("window");
+              setSearchParams(params, { replace: true });
+            }}
           >
             <option value="auto">Automatic</option>
             <option value="day">Daily</option>
@@ -335,11 +585,79 @@ export default function Analytics() {
         </label>
         <span className="analytics-timezone">Timezone: {TIMEZONE}</span>
       </section>
+      <nav className="analytics-breadcrumb" aria-label="Analytics drilldown">
+        <button type="button" disabled={!zoom} onClick={() => updateZoom(null)}>
+          Overview
+        </button>
+        {zoom && (
+          <>
+            <span aria-hidden="true">›</span>
+            {zoom.kind === "year" ? (
+              <strong>{zoom.value}</strong>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateZoom({ kind: "year", value: zoom.value.slice(0, 4) })
+                  }
+                >
+                  {zoom.value.slice(0, 4)}
+                </button>
+                <span aria-hidden="true">›</span>
+                <strong>
+                  {new Date(`${zoom.value}-01T00:00:00Z`).toLocaleString("en", {
+                    month: "long",
+                    timeZone: "UTC",
+                  })}
+                </strong>
+              </>
+            )}
+          </>
+        )}
+        {zoom?.kind === "month" && (
+          <span className="deepest-zoom">
+            {actualGranularity === "day"
+              ? "Daily detail · deepest level"
+              : `${actualGranularity[0].toUpperCase()}${actualGranularity.slice(1)} buckets · month selected`}
+          </span>
+        )}
+        {zoom?.kind === "year" && (
+          <span className="deepest-zoom">Monthly view</span>
+        )}
+      </nav>
+      {pageRange && pageRange.pageCount > 1 && !zoom && (
+        <nav
+          className="analytics-window-nav"
+          aria-label="Visible bucket window"
+        >
+          <button
+            type="button"
+            disabled={pageRange.pageIndex === 0}
+            onClick={() => updatePage(pageRange.pageIndex - 1)}
+          >
+            Previous {granularity === "day" ? "45 days" : "45 weeks"}
+          </button>
+          <span>
+            Showing {visibleStart}–{visibleEnd} · page {pageRange.pageIndex + 1}{" "}
+            of {pageRange.pageCount}
+          </span>
+          <button
+            type="button"
+            disabled={pageRange.pageIndex + 1 >= pageRange.pageCount}
+            onClick={() => updatePage(pageRange.pageIndex + 1)}
+          >
+            Next {granularity === "day" ? "45 days" : "45 weeks"}
+          </button>
+        </nav>
+      )}
       {invalidRange && (
         <p className="analytics-warning" role="alert">
-          {!start || !end
-            ? "Enter both a start date and an end date."
-            : "Start date must be on or before end date."}
+          {invalidZoom
+            ? "This drilldown period is outside the reporting range. Showing the overview instead."
+            : !start || !end
+              ? "Enter both a start date and an end date."
+              : "Start date must be on or before end date."}
         </p>
       )}
       {loading && (
@@ -348,9 +666,15 @@ export default function Analytics() {
         </p>
       )}
       {!loading && error && (
-        <p className="analytics-state error-state" role="alert">
-          {error}
-        </p>
+        <div className="analytics-state error-state" role="alert">
+          <p>{error}</p>
+          {(error.includes("coarser granularity") ||
+            error.includes("more than")) && (
+            <button type="button" onClick={() => setGranularity("auto")}>
+              Switch to automatic overview
+            </button>
+          )}
+        </div>
       )}
       {!loading && !error && data && data.summary.total_checkins === 0 && (
         <p className="analytics-state">
@@ -359,6 +683,15 @@ export default function Analytics() {
       )}
       {!loading && !error && data && data.summary.total_checkins > 0 && (
         <>
+          <p className="analytics-scope">
+            {zoom?.kind === "month"
+              ? `${new Date(`${zoom.value}-01T00:00:00Z`).toLocaleString("en", { month: "long", timeZone: "UTC" })} ${zoom.value.slice(0, 4)} · ${visibleStart}–${visibleEnd}`
+              : zoom?.kind === "year"
+                ? `${zoom.value} · ${visibleStart}–${visibleEnd}`
+                : pageRange && pageRange.pageCount > 1
+                  ? `${granularity === "day" ? "Daily" : "Weekly"} buckets · ${visibleStart}–${visibleEnd} of ${reportStart}–${reportEnd}`
+                  : `Reporting period · ${data.start ?? start}–${data.end ?? end}`}
+          </p>
           <div className="analytics-summary" aria-label="Check-in summary">
             <Metric
               label="Total check-ins"
@@ -388,15 +721,7 @@ export default function Analytics() {
                   role="group"
                   aria-label="Stacked bar chart of new discovery and repeat check-ins"
                 >
-                  <div
-                    className="chart-canvas"
-                    style={{
-                      minWidth:
-                        chartData.length > 80
-                          ? `${Math.min(chartData.length * 7, 1800)}px`
-                          : undefined,
-                    }}
-                  >
+                  <div className="chart-canvas">
                     <ResponsiveContainer width="100%" height={320}>
                       <BarChart data={chartData} accessibilityLayer>
                         <CartesianGrid strokeDasharray="3 3" />
@@ -409,17 +734,28 @@ export default function Analytics() {
                           name="New discoveries"
                           stackId="checkins"
                           fill="#15803d"
+                          cursor={canDrill ? "pointer" : "default"}
+                          onClick={(entry) =>
+                            drillTo(entry.payload as AnalyticsBucket)
+                          }
                         />
                         <Bar
                           dataKey="repeat_checkins"
                           name="Repeat check-ins"
                           stackId="checkins"
                           fill="#2563eb"
+                          cursor={canDrill ? "pointer" : "default"}
+                          onClick={(entry) =>
+                            drillTo(entry.payload as AnalyticsBucket)
+                          }
                         />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
+                {canDrill && (
+                  <BucketActions buckets={chartData} onSelect={drillTo} />
+                )}
               </ChartPanel>
               <ChartPanel
                 title="Check-in Trends"
@@ -477,17 +813,13 @@ export default function Analytics() {
                   role="group"
                   aria-label={`${mode} line chart of check-ins and discoveries`}
                 >
-                  <div
-                    className="chart-canvas"
-                    style={{
-                      minWidth:
-                        chartData.length > 80
-                          ? `${Math.min(chartData.length * 7, 1800)}px`
-                          : undefined,
-                    }}
-                  >
+                  <div className="chart-canvas">
                     <ResponsiveContainer width="100%" height={320}>
-                      <LineChart data={lineData} accessibilityLayer>
+                      <LineChart
+                        data={lineData}
+                        accessibilityLayer
+                        onClick={drillFromChart}
+                      >
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="key" minTickGap={24} />
                         <YAxis allowDecimals={false} />
@@ -525,6 +857,9 @@ export default function Analytics() {
                     </ResponsiveContainer>
                   </div>
                 </div>
+                {canDrill && (
+                  <BucketActions buckets={chartData} onSelect={drillTo} />
+                )}
               </ChartPanel>
             </>
           )}
@@ -545,6 +880,30 @@ function Metric({ label, value }: { label: string; value: number }) {
     <div className="metric-card">
       <h3>{label}</h3>
       <strong>{value.toLocaleString()}</strong>
+    </div>
+  );
+}
+
+function BucketActions({
+  buckets,
+  onSelect,
+}: {
+  buckets: AnalyticsBucket[];
+  onSelect: (bucket: AnalyticsBucket) => void;
+}) {
+  return (
+    <div className="bucket-actions" aria-label="Available drilldown periods">
+      {buckets.map((bucket) => (
+        <button
+          key={bucket.key}
+          type="button"
+          onClick={() => onSelect(bucket)}
+          aria-label={`Open ${bucket.label}`}
+          title={`Open ${bucket.label}`}
+        >
+          {bucket.label}
+        </button>
+      ))}
     </div>
   );
 }
