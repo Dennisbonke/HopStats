@@ -90,6 +90,21 @@ def test_analytics_zero_fills_months_and_handles_iso_week_year(client):
     assert [bucket["key"] for bucket in monthly["buckets"]] == ["2021-01", "2021-02", "2021-03"]
     assert [bucket["total_checkins"] for bucket in monthly["buckets"]] == [1, 0, 0]
 
+    annual_overview = client.get(
+        "/api/v1/analytics/checkins?start=2020-01-01&end=2022-12-31&granularity=auto"
+    ).json()
+    assert annual_overview["granularity"] == "year"
+    assert [bucket["key"] for bucket in annual_overview["buckets"]] == [
+        "2020",
+        "2021",
+        "2022",
+    ]
+    full_year = client.get(
+        "/api/v1/analytics/checkins?start=2021-01-01&end=2021-12-31&granularity=auto"
+    ).json()
+    assert full_year["granularity"] == "month"
+    assert len(full_year["buckets"]) == 12
+
 
 def test_analytics_timezone_dst_and_inclusive_dates(client):
     owner = user_id()
@@ -115,8 +130,13 @@ def test_analytics_user_scoped_discoveries_empty_range_and_auth(client):
     add_checkin(other_id, "shared-beer", shared_at, "other-first")
     add_checkin(owner, "shared-beer", utc("2025-02-01T12:00:00"), "mine-first")
     add_checkin(owner, "shared-beer", utc("2026-02-01T12:00:00"), "mine-repeat")
-    own = client.get("/api/v1/analytics/checkins?start=2025-01-01&end=2026-12-31&granularity=year")
-    assert own.status_code == 422
+    annual = client.get(
+        "/api/v1/analytics/checkins?start=2025-01-01&end=2026-12-31&granularity=year"
+    )
+    assert annual.status_code == 200
+    assert [bucket["key"] for bucket in annual.json()["buckets"]] == ["2025", "2026"]
+    assert annual.json()["summary"]["new_discoveries"] == 1
+    assert annual.json()["summary"]["repeat_checkins"] == 1
     own = client.get(
         "/api/v1/analytics/checkins?start=2025-01-01&end=2026-12-31&granularity=month"
     ).json()
@@ -154,7 +174,7 @@ def test_late_historical_import_and_identical_timestamps_use_event_time_then_id(
     assert newer["summary"]["repeat_checkins"] == 1
     assert all_time["summary"]["total_checkins"] == 4
     assert all_time["summary"]["new_discoveries"] == 2
-    assert all_time["granularity"] == "month"
+    assert all_time["granularity"] == "year"
 
 
 def test_analytics_rejects_invalid_range_and_timezone(client):

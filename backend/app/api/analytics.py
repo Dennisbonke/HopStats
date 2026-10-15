@@ -19,7 +19,7 @@ def checkin_analytics(
     user: Annotated[User, Depends(get_current_user)],
     start: date | None = None,
     end: date | None = None,
-    granularity: Literal["auto", "day", "week", "month"] = Query(default="auto"),
+    granularity: Literal["auto", "day", "week", "month", "year"] = Query(default="auto"),
     timezone_name: str = Query(default="Europe/Amsterdam", alias="timezone"),
 ) -> CheckinAnalyticsResponse:
     try:
