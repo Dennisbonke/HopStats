@@ -18,7 +18,7 @@ export type CheckinAnalytics = {
   start: string | null;
   end: string | null;
   timezone: string;
-  granularity: "day" | "week" | "month";
+  granularity: "day" | "week" | "month" | "year";
   summary: {
     total_checkins: number;
     new_discoveries: number;

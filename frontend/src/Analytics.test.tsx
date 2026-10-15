@@ -5,7 +5,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { MemoryRouter, useLocation } from "react-router-dom";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import Analytics from "./pages/Analytics";
 
@@ -51,6 +51,16 @@ const sample = {
 function QueryView() {
   const location = useLocation();
   return <output aria-label="Current query">{location.search}</output>;
+}
+
+function HistoryControls() {
+  const navigate = useNavigate();
+  return (
+    <>
+      <button onClick={() => navigate(-1)}>Browser back</button>
+      <button onClick={() => navigate(1)}>Browser forward</button>
+    </>
+  );
 }
 
 function renderAnalytics(
@@ -104,6 +114,157 @@ test("supports cumulative/activity controls and period changes", async () => {
   await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
   expect(screen.getByLabelText("Current query")).toHaveTextContent(
     "period=last_30",
+  );
+});
+
+test("drills from both charts through shared annual, monthly, and daily views", async () => {
+  const bucket = (key: string, label: string, start: string, end: string) => ({
+    ...sample.buckets[0],
+    key,
+    label,
+    start,
+    end,
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "http://localhost");
+      const granularity = url.searchParams.get("granularity");
+      const result =
+        granularity === "year"
+          ? {
+              ...sample,
+              start: "2024-01-01",
+              end: "2025-12-31",
+              granularity: "year",
+              summary: { ...sample.summary, total_checkins: 40 },
+              buckets: [
+                bucket("2024", "2024", "2024-01-01", "2024-12-31"),
+                bucket("2025", "2025", "2025-01-01", "2025-12-31"),
+              ],
+            }
+          : granularity === "month"
+            ? {
+                ...sample,
+                start: "2025-01-01",
+                end: "2025-12-31",
+                granularity: "month",
+                summary: { ...sample.summary, total_checkins: 20 },
+                buckets: [
+                  bucket("2025-03", "Mar 2025", "2025-03-01", "2025-03-31"),
+                ],
+              }
+            : {
+                ...sample,
+                start: "2025-03-01",
+                end: "2025-03-31",
+                summary: { ...sample.summary, total_checkins: 3 },
+              };
+      return { ok: true, json: async () => result };
+    }),
+  );
+  renderAnalytics(
+    "/analytics?period=custom&start=2024-01-01&end=2025-12-31&granularity=auto&timezone=Europe%2FAmsterdam",
+  );
+  expect(await screen.findByText("40")).toBeInTheDocument();
+  fireEvent.click(screen.getAllByRole("button", { name: "Open 2025" })[1]);
+  expect(await screen.findByText("20")).toBeInTheDocument();
+  expect(screen.getByLabelText("Analytics drilldown")).toHaveTextContent(
+    "2025",
+  );
+  fireEvent.click(screen.getAllByRole("button", { name: "Open Mar 2025" })[1]);
+  expect(await screen.findByText("3")).toBeInTheDocument();
+  expect(screen.getByLabelText("Analytics drilldown")).toHaveTextContent(
+    "March",
+  );
+  expect(screen.getByText("Daily detail · deepest level")).toBeInTheDocument();
+  const requests = vi
+    .mocked(globalThis.fetch)
+    .mock.calls.map(([input]) => new URL(String(input), "http://localhost"));
+  expect(requests).toHaveLength(3);
+  expect(requests[1].searchParams.get("granularity")).toBe("month");
+  expect(requests[1].searchParams.get("start")).toBe("2025-01-01");
+  expect(requests[2].searchParams.get("granularity")).toBe("day");
+  expect(requests[2].searchParams.get("start")).toBe("2025-03-01");
+  expect(requests[2].searchParams.get("end")).toBe("2025-03-31");
+});
+
+test("keeps partial reporting boundaries through drilldown and restores URL history", async () => {
+  const monthly = {
+    ...sample,
+    granularity: "month",
+    buckets: [
+      {
+        ...sample.buckets[0],
+        key: "2025-03",
+        label: "Mar 2025",
+        start: "2025-03-15",
+        end: "2025-03-31",
+      },
+      {
+        ...sample.buckets[0],
+        key: "2025-08",
+        label: "Aug 2025",
+        start: "2025-08-01",
+        end: "2025-08-20",
+      },
+    ],
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "http://localhost");
+      const result =
+        url.searchParams.get("granularity") === "month" ? monthly : sample;
+      return { ok: true, json: async () => result };
+    }),
+  );
+  render(
+    <MemoryRouter
+      initialEntries={[
+        "/analytics?period=custom&start=2025-03-15&end=2025-08-20&granularity=auto&timezone=Europe%2FAmsterdam",
+      ]}
+    >
+      <HistoryControls />
+      <QueryView />
+      <Analytics />
+    </MemoryRouter>,
+  );
+  expect(await screen.findAllByText("Mar 2025")).toHaveLength(2);
+  fireEvent.click(screen.getAllByRole("button", { name: "Open Mar 2025" })[0]);
+  await screen.findByText("Daily detail · deepest level");
+  await waitFor(() =>
+    expect(screen.getByLabelText("Current query")).toHaveTextContent(
+      "zoom=month%3A2025-03",
+    ),
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "start=2025-03-15",
+  );
+  const dailyUrl = new URL(
+    String(vi.mocked(globalThis.fetch).mock.calls.at(-1)?.[0]),
+    "http://localhost",
+  );
+  expect(dailyUrl.searchParams.get("start")).toBe("2025-03-15");
+  expect(dailyUrl.searchParams.get("end")).toBe("2025-03-31");
+
+  fireEvent.click(screen.getByRole("button", { name: "2025" }));
+  await waitFor(() =>
+    expect(screen.getByLabelText("Current query")).toHaveTextContent(
+      "zoom=year%3A2025",
+    ),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Browser back" }));
+  await waitFor(() =>
+    expect(screen.getByLabelText("Current query")).toHaveTextContent(
+      "zoom=month%3A2025-03",
+    ),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Browser forward" }));
+  await waitFor(() =>
+    expect(screen.getByLabelText("Current query")).toHaveTextContent(
+      "zoom=year%3A2025",
+    ),
   );
 });
 
