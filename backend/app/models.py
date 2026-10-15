@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -21,11 +21,15 @@ from sqlalchemy.orm import Mapped, mapped_column
 from .db import Base
 
 
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
 class User(Base):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(100), unique=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     password_hash: Mapped[str | None] = mapped_column(String(500))
     password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -35,9 +39,9 @@ class AuthSession(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
-    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
@@ -47,7 +51,7 @@ class AuthLoginAttempt(Base):
     username: Mapped[str] = mapped_column(String(100), index=True)
     client_ip: Mapped[str] = mapped_column(String(100), index=True)
     failed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, index=True
+        DateTime(timezone=True), default=_utc_now, index=True
     )
 
 
@@ -59,7 +63,7 @@ class AuthAuditEvent(Base):
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     client_ip: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, index=True
+        DateTime(timezone=True), default=_utc_now, index=True
     )
 
 
@@ -104,8 +108,8 @@ class Beer(Base):
     abv: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     ibu: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
     photo_url: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
 
 class Venue(Base):
@@ -139,8 +143,8 @@ class Checkin(Base):
     purchase_venue: Mapped[str | None] = mapped_column(String(255))
     photo_url: Mapped[str | None] = mapped_column(Text)
     source_payload_json: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
 
 class Location(Base):
@@ -204,7 +208,7 @@ class InventorySource(Base):
     source_system: Mapped[str] = mapped_column(String(50))
     name: Mapped[str] = mapped_column(String(100))
     is_authoritative: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
 
 class InventoryItem(Base):
@@ -261,7 +265,7 @@ class InventoryItem(Base):
     source_payload_json: Mapped[str | None] = mapped_column(Text)
     photo_url: Mapped[str | None] = mapped_column(Text)
     best_before_suspicious: Mapped[bool] = mapped_column(Boolean, default=False)
-    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     match_status: Mapped[str] = mapped_column(String(20), default="unmatched")
     matched_checkin_beer_id: Mapped[int | None] = mapped_column(ForeignKey("beers.id"))
 
@@ -274,7 +278,7 @@ class ImportRun(Base):
     filename: Mapped[str] = mapped_column(String(255))
     sha256: Mapped[str] = mapped_column(String(64))
     source_exported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(20))
     inserted_count: Mapped[int] = mapped_column(Integer, default=0)
