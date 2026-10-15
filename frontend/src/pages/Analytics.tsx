@@ -164,9 +164,10 @@ function makeApiParams(
   start: string,
   end: string,
   granularity: ApiGranularity,
+  includeDateRange = false,
 ) {
   const params = new URLSearchParams({ granularity, timezone: TIMEZONE });
-  if (period !== "all") {
+  if (period !== "all" || includeDateRange) {
     params.set("start", start);
     params.set("end", end);
   }
@@ -292,18 +293,20 @@ export default function Analytics() {
     : period === "all" && !zoom && granularity === "auto"
       ? "auto"
       : actualGranularity;
-  const requestRange = zoomRange
-    ? { start: visibleStart, end: visibleEnd }
-    : pageRange
-      ? { start: pageRange.start, end: pageRange.end }
-      : null;
+  const requestRange =
+    !needsAllRangeBootstrap && zoomRange
+      ? { start: visibleStart, end: visibleEnd }
+      : !needsAllRangeBootstrap && pageRange
+        ? { start: pageRange.start, end: pageRange.end }
+        : null;
   const requestParams = useMemo(
     () =>
       makeApiParams(
-        requestRange ? "custom" : period,
+        period,
         requestRange?.start ?? start,
         requestRange?.end ?? end,
         requestGranularity,
+        requestRange !== null,
       ),
     [
       period,

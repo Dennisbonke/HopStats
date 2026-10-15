@@ -381,6 +381,106 @@ test("normalizes malformed zoom URL parameters", async () => {
   );
 });
 
+async function verifyAllTimeManualPaging(
+  granularity: "day" | "week",
+  expectedFirstEnd: string,
+  expectedNextStart: string,
+) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "http://localhost");
+      const requestStart = url.searchParams.get("start");
+      const requestEnd = url.searchParams.get("end");
+      const bootstrap = !requestStart && !requestEnd;
+      const pageOne = requestStart === "2024-01-01";
+      return {
+        ok: true,
+        json: async () => ({
+          ...sample,
+          start: bootstrap ? "2024-01-01" : requestStart,
+          end: bootstrap ? "2025-12-31" : requestEnd,
+          granularity: bootstrap ? "year" : granularity,
+          summary: {
+            ...sample.summary,
+            total_checkins: bootstrap ? 500 : pageOne ? 31 : 47,
+          },
+          cumulative_baseline_checkins: bootstrap ? 0 : pageOne ? 12 : 43,
+          cumulative_baseline_discoveries: bootstrap ? 0 : pageOne ? 8 : 19,
+        }),
+      };
+    }),
+  );
+
+  renderAnalytics(
+    `/analytics?period=all&granularity=${granularity}&timezone=Europe%2FAmsterdam`,
+  );
+  expect(
+    await screen.findByLabelText("Visible bucket window"),
+  ).toHaveTextContent("page 1 of");
+  await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
+
+  const bootstrap = new URL(
+    String(vi.mocked(globalThis.fetch).mock.calls[0][0]),
+    "http://localhost",
+  );
+  expect(bootstrap.searchParams.get("granularity")).toBe("auto");
+  expect(bootstrap.searchParams.has("start")).toBe(false);
+  expect(bootstrap.searchParams.has("end")).toBe(false);
+  const firstPage = new URL(
+    String(vi.mocked(globalThis.fetch).mock.calls[1][0]),
+    "http://localhost",
+  );
+  expect(firstPage.searchParams.get("granularity")).toBe(granularity);
+  expect(firstPage.searchParams.get("start")).toBe("2024-01-01");
+  expect(firstPage.searchParams.get("end")).toBe(expectedFirstEnd);
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "period=all",
+  );
+  expect(screen.getByLabelText("Current query")).not.toHaveTextContent(
+    "start=",
+  );
+  expect(screen.getByLabelText("Current query")).not.toHaveTextContent("end=");
+  expect(screen.getByLabelText("Check-in summary")).toHaveTextContent("31");
+  expect(document.querySelector(".analytics-footnote")).toHaveTextContent(
+    "Cumulative baseline before range: 12 check-ins and 8 discoveries",
+  );
+
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: granularity === "day" ? "Next 45 days" : "Next 45 weeks",
+    }),
+  );
+  await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(3));
+  const nextPage = new URL(
+    String(vi.mocked(globalThis.fetch).mock.calls[2][0]),
+    "http://localhost",
+  );
+  expect(nextPage.searchParams.get("granularity")).toBe(granularity);
+  expect(nextPage.searchParams.get("start")).toBe(expectedNextStart);
+  expect(nextPage.searchParams.has("end")).toBe(true);
+  expect(screen.getByLabelText("Check-in summary")).toHaveTextContent("47");
+  expect(document.querySelector(".analytics-footnote")).toHaveTextContent(
+    "Cumulative baseline before range: 43 check-ins and 19 discoveries",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "period=all",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent("window=1");
+  expect(screen.getByLabelText("Current query")).not.toHaveTextContent(
+    "start=",
+  );
+  expect(screen.getByLabelText("Current query")).not.toHaveTextContent("end=");
+}
+
+test("all-time Daily pagination sends bounded dates and preserves cumulative totals", async () => {
+  await verifyAllTimeManualPaging("day", "2024-02-14", "2024-02-15");
+});
+
+test("all-time Weekly pagination sends bounded dates and preserves cumulative totals", async () => {
+  await verifyAllTimeManualPaging("week", "2024-11-10", "2024-11-11");
+});
+
 test("ignores out-of-order responses and stale loading/error handlers", async () => {
   type FakeResponse = { ok: boolean; json: () => Promise<unknown> };
   function deferred<T>() {
