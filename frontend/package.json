@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "format": "prettier --check .",
     "test": "vitest run",
+    "test:responsive": "playwright test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -24,6 +25,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "^1.64.1",
     "@testing-library/jest-dom": "6.6.3",
     "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.6.7",
