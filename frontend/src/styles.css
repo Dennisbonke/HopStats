@@ -6,6 +6,12 @@
 * {
   box-sizing: border-box;
 }
+html,
+body,
+#root {
+  min-width: 0;
+  width: 100%;
+}
 body {
   margin: 0;
 }
@@ -24,6 +30,7 @@ body {
 }
 .login-card {
   width: min(100%, 26rem);
+  min-width: 0;
   padding: 2rem;
   background: white;
   border-radius: 0.7rem;
@@ -47,6 +54,8 @@ body {
   font-weight: 600;
 }
 .login-card input {
+  width: 100%;
+  min-width: 0;
   min-height: 2.6rem;
   padding: 0.55rem;
   border: 1px solid #cbd5e1;
@@ -128,7 +137,8 @@ section {
   gap: 1rem;
 }
 .metric-card {
-  min-height: 8.5rem;
+  min-width: 0;
+  min-height: 0;
   padding: 1.25rem;
   background: white;
   border-radius: 0.7rem;
@@ -178,7 +188,7 @@ section {
 }
 .inventory-filters {
   display: grid;
-  grid-template-columns: minmax(14rem, 2fr) repeat(4, minmax(9rem, 1fr));
+  grid-template-columns: minmax(0, 2fr) repeat(4, minmax(0, 1fr));
   gap: 0.75rem;
   align-items: end;
   margin-bottom: 0.75rem;
@@ -238,9 +248,28 @@ section {
 }
 .analytics-filters {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
   gap: 0.8rem;
   align-items: end;
+}
+.analytics-page > *,
+.analytics-page .filter-control,
+.analytics-page .analytics-scope,
+.analytics-page .analytics-window-nav > span,
+.analytics-page .analytics-chart-panel,
+.analytics-page .chart-scroll,
+.analytics-page .chart-canvas {
+  min-width: 0;
+}
+.analytics-page .page-heading,
+.analytics-scope,
+.analytics-window-nav > span,
+.analytics-footnote {
+  overflow-wrap: anywhere;
+}
+.analytics-page .filter-control select,
+.analytics-page .filter-control input {
+  max-width: 100%;
 }
 .analytics-timezone,
 .analytics-footnote {
@@ -262,6 +291,21 @@ section {
 .chart-canvas {
   width: 100%;
   min-width: 0;
+}
+.chart-canvas .recharts-legend-wrapper {
+  max-width: 100%;
+}
+.chart-canvas .recharts-default-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.chart-canvas .recharts-legend-item {
+  min-width: 0;
+  white-space: normal !important;
+}
+.chart-canvas .recharts-legend-item-text {
+  overflow-wrap: anywhere;
 }
 .analytics-breadcrumb {
   display: flex;
@@ -507,7 +551,7 @@ section {
 }
 .location-workspace {
   display: grid;
-  grid-template-columns: minmax(18rem, 1fr) minmax(20rem, 1.25fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
   gap: 1rem;
   align-items: start;
 }
@@ -523,6 +567,7 @@ section {
 .location-form label,
 .inline-form label {
   display: grid;
+  min-width: 0;
   gap: 0.35rem;
   color: #526176;
   font-size: 0.82rem;
@@ -827,6 +872,7 @@ section {
   margin-top: 1rem;
 }
 .dashboard-panel {
+  min-width: 0;
   padding: 1.5rem;
   background: white;
   border-radius: 0.7rem;
@@ -869,6 +915,7 @@ section {
 }
 .import-card,
 .history-card {
+  min-width: 0;
   background: white;
   padding: 1.5rem;
   border-radius: 0.7rem;
@@ -895,6 +942,7 @@ section {
 }
 .file-picker input {
   display: block;
+  width: 100%;
   max-width: 100%;
   margin-top: 0.4rem;
 }
@@ -915,6 +963,7 @@ section {
   font-size: 0.9rem;
 }
 .date-input input {
+  width: 100%;
   max-width: 18rem;
   padding: 0.45rem;
   border: 1px solid #cbd5e1;
@@ -976,6 +1025,10 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+}
+.section-heading > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .history-table-wrap {
   overflow-x: auto;
@@ -1050,6 +1103,32 @@ h2 {
   main {
     padding: 1rem 0.65rem;
   }
+  .metric-card {
+    padding: 1rem;
+  }
+  .metric-card h3 {
+    margin-bottom: 0.55rem;
+  }
+  .metric-card strong {
+    font-size: clamp(1.45rem, 7vw, 1.8rem);
+    overflow-wrap: anywhere;
+  }
+  .dashboard-lower-grid {
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+  }
+  .dashboard-panel {
+    padding: 1rem;
+  }
+  .coverage-list,
+  .freshness-list {
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+  }
+  .coverage-list div,
+  .freshness-list div {
+    gap: 0.5rem;
+  }
   .inventory-filters,
   .inventory-results,
   .inventory-state,
@@ -1084,5 +1163,16 @@ h2 {
   .detail-list div {
     grid-template-columns: 1fr;
     gap: 0.15rem;
+  }
+}
+@media (min-width: 521px) and (max-width: 900px) {
+  .inventory-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .inventory-filters .search-control {
+    grid-column: 1 / -1;
+  }
+  .location-workspace {
+    grid-template-columns: 1fr;
   }
 }
