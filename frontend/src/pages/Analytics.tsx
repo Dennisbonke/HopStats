@@ -279,8 +279,10 @@ export default function Analytics() {
   const [mode, setMode] = useState<"activity" | "cumulative">("activity");
   const [visible, setVisible] = useState({ total: true, discoveries: true });
   // `false` suppresses stale tooltip state during resize; `undefined` leaves
-  // normal active-state management to Recharts.
-  const [tooltipsEnabled, setTooltipsEnabled] = useState(true);
+  // normal active-state management to Recharts for the chart under the pointer.
+  const [activeTooltipChart, setActiveTooltipChart] = useState<
+    "breakdown" | "trend" | null
+  >(null);
   const tooltipDismissedByResize = useRef(false);
   const tooltipDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -308,7 +310,7 @@ export default function Analytics() {
   useEffect(() => {
     const dismissTooltip = () => {
       tooltipDismissedByResize.current = true;
-      setTooltipsEnabled(false);
+      setActiveTooltipChart(null);
       if (tooltipDismissTimer.current) {
         clearTimeout(tooltipDismissTimer.current);
       }
@@ -684,6 +686,7 @@ export default function Analytics() {
     mode === "activity" ? "activity_discoveries" : "cumulative_discoveries";
 
   function enableTooltipOnPointerMove(
+    chart: "breakdown" | "trend",
     event: ReactPointerEvent<HTMLDivElement>,
   ) {
     const { clientX: x, clientY: y } = event;
@@ -696,16 +699,16 @@ export default function Analytics() {
     const previous = lastChartPointer.current;
     lastChartPointer.current = { x, y };
     if (previous && previous.x === x && previous.y === y) return;
-    setTooltipsEnabled(true);
+    setActiveTooltipChart(chart);
   }
 
-  function enableTooltipFromInteraction() {
+  function enableTooltipFromInteraction(chart: "breakdown" | "trend") {
     tooltipDismissedByResize.current = false;
     if (tooltipDismissTimer.current) {
       clearTimeout(tooltipDismissTimer.current);
       tooltipDismissTimer.current = null;
     }
-    setTooltipsEnabled(true);
+    setActiveTooltipChart(chart);
   }
 
   return (
@@ -1029,9 +1032,15 @@ export default function Analytics() {
                         className="chart-scroll"
                         role="group"
                         aria-label="Stacked bar chart of new discovery and repeat check-ins"
-                        onPointerMove={enableTooltipOnPointerMove}
-                        onPointerDown={enableTooltipFromInteraction}
-                        onTouchMove={enableTooltipFromInteraction}
+                        onPointerMove={(event) =>
+                          enableTooltipOnPointerMove("breakdown", event)
+                        }
+                        onPointerDown={() =>
+                          enableTooltipFromInteraction("breakdown")
+                        }
+                        onTouchMove={() =>
+                          enableTooltipFromInteraction("breakdown")
+                        }
                       >
                         <div className="chart-canvas">
                           <ResponsiveContainer width="100%" height={320}>
@@ -1040,7 +1049,11 @@ export default function Analytics() {
                               <XAxis dataKey="key" minTickGap={24} />
                               <YAxis allowDecimals={false} />
                               <Tooltip
-                                active={tooltipsEnabled ? undefined : false}
+                                active={
+                                  activeTooltipChart === "breakdown"
+                                    ? undefined
+                                    : false
+                                }
                                 content={<ExactTooltip showShare />}
                               />
                               <Legend />
@@ -1130,9 +1143,15 @@ export default function Analytics() {
                         className="chart-scroll"
                         role="group"
                         aria-label={`${mode} line chart of check-ins and discoveries`}
-                        onPointerMove={enableTooltipOnPointerMove}
-                        onPointerDown={enableTooltipFromInteraction}
-                        onTouchMove={enableTooltipFromInteraction}
+                        onPointerMove={(event) =>
+                          enableTooltipOnPointerMove("trend", event)
+                        }
+                        onPointerDown={() =>
+                          enableTooltipFromInteraction("trend")
+                        }
+                        onTouchMove={() =>
+                          enableTooltipFromInteraction("trend")
+                        }
                       >
                         <div className="chart-canvas">
                           <ResponsiveContainer width="100%" height={320}>
@@ -1145,7 +1164,11 @@ export default function Analytics() {
                               <XAxis dataKey="key" minTickGap={24} />
                               <YAxis allowDecimals={false} />
                               <Tooltip
-                                active={tooltipsEnabled ? undefined : false}
+                                active={
+                                  activeTooltipChart === "trend"
+                                    ? undefined
+                                    : false
+                                }
                                 content={<ExactTooltip />}
                               />
                               <Legend />
