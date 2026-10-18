@@ -1,7 +1,7 @@
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import Integer, and_, case, cast, func, select
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
@@ -266,12 +266,11 @@ class AnalyticsService:
         # local-day/hour groups for the selected period cross into Python.
         connection = self.session.connection().connection.driver_connection
 
-        def local_parts(value: str) -> tuple[str, int, int]:
+        def local_bucket(value: str) -> str:
             moment = datetime.fromisoformat(value).replace(tzinfo=UTC).astimezone(tz)
-            return moment.date().isoformat(), moment.weekday(), moment.hour
+            return f"{moment.date().isoformat()}T{moment.hour:02d}"
 
-        connection.create_function("trend_local_date", 1, lambda value: local_parts(value)[0])
-        connection.create_function("trend_local_hour", 1, lambda value: local_parts(value)[2])
+        connection.create_function("trend_local_bucket", 1, local_bucket)
 
         ranked = (
             select(
@@ -288,19 +287,39 @@ class AnalyticsService:
             .cte("ranked_trend_checkins")
         )
         start_utc, end_utc = _utc_boundary(start, tz), _utc_boundary(end + timedelta(days=1), tz)
-        local_date = func.trend_local_date(ranked.c.occurred_at_utc)
-        local_hour = func.trend_local_hour(ranked.c.occurred_at_utc)
-        grouped = self.session.execute(
+        in_period = (
             select(
-                local_date.label("local_date"),
-                local_hour.label("local_hour"),
-                func.count().label("total"),
-                func.sum(case((ranked.c.discovery_rank == 1, 1), else_=0)).label("discoveries"),
+                ranked.c.checkin_id,
+                ranked.c.occurred_at_utc,
+                ranked.c.discovery_rank,
             )
             .where(
                 ranked.c.occurred_at_utc >= start_utc,
                 ranked.c.occurred_at_utc < end_utc,
             )
+            .cte("period_trend_checkins")
+        )
+        # MATERIALIZED makes SQLite evaluate the timezone conversion once per
+        # in-period check-in rather than re-running the Python UDF for SELECT/GROUP BY.
+        localized = (
+            select(
+                in_period.c.checkin_id,
+                in_period.c.discovery_rank,
+                func.trend_local_bucket(in_period.c.occurred_at_utc).label("local_bucket"),
+            )
+            .cte("localized_trend_checkins")
+            .prefix_with("MATERIALIZED", dialect="sqlite")
+        )
+        local_date = func.substr(localized.c.local_bucket, 1, 10)
+        local_hour = cast(func.substr(localized.c.local_bucket, 12, 2), Integer)
+        grouped = self.session.execute(
+            select(
+                local_date.label("local_date"),
+                local_hour.label("local_hour"),
+                func.count().label("total"),
+                func.sum(case((localized.c.discovery_rank == 1, 1), else_=0)).label("discoveries"),
+            )
+            .select_from(localized)
             .group_by(local_date, local_hour)
         ).all()
 

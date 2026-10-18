@@ -92,11 +92,20 @@ are omitted, it defaults to January 1 through today in the selected timezone;
 provide both dates or neither. The daily result is subject to the same configured
 bucket cap (`HOPSTATS_ANALYTICS_MAX_BUCKETS`).
 
+This omitted-date default is intentionally **year-to-date**, unlike M7's
+undated full-history request. M8 frontend consumers should resolve their shared
+period control to inclusive `start` and `end` dates and always send both; do not
+use omission to represent “all history.” The existing M7 `period=all` request
+currently omits dates by design, so that request builder must not be reused
+unchanged for this endpoint. M8.1 makes no frontend changes.
+
 The response contains zero-filled daily rows and complete ISO weekday
 (Monday=0), local-hour (0–23), and weekday/hour arrays. `days_in_period` counts calendar
 occurrences of each weekday, including inactive dates. A SQL window ranks the
 complete user history; only compact local-date/hour aggregates for the requested
-period are expanded into response arrays. Local wall-time grouping naturally
+period are expanded into response arrays. SQLite materializes the filtered local
+date/hour key once per in-period check-in, preventing duplicate Python timezone
+conversions from the grouping expressions. Local wall-time grouping naturally
 combines both occurrences of an autumn DST hour and does not create observations
 for a missing spring hour.
 
@@ -105,3 +114,20 @@ complete UTC timestamp; the database column is non-null. Date-only check-ins are
 not currently supported, so all stored check-ins participate in hourly
 aggregates. Duplicate external check-in IDs are constrained per user/source and
 imports are idempotent. The endpoint does not return raw check-in history.
+
+### Reproducible performance measurement
+
+Run `python backend/scripts/benchmark_drinking_trends.py --checkins 100000
+--runs 5` from the repository root (preferably on the target Pi). It creates a
+temporary SQLite database with the M7 analytics indexes, seeds 100,000 synthetic
+events over roughly 17 years across 10,000 beer identities, warms the cache, and
+reports each service aggregation time plus the median for a one-year Amsterdam
+period. The benchmark has no timing assertion and does not alter application
+data. It measures aggregation/service work, excluding HTTP authentication and
+transport; report the device, storage, Python version, and output when comparing
+deployments.
+
+Reference run in the development container (Intel Core i7-8750H, x86_64,
+Python 3.14.8; not a Raspberry Pi): 100,000 lifetime check-ins, 5,840 in the
+requested year, five warmed service runs; median 0.138 s. This is a reproducible
+reference point, not a Pi performance claim or a CI threshold.
