@@ -886,6 +886,52 @@ test("tabs preserve shared filters and metric, use keyboard navigation, and rest
   );
 });
 
+test("Back and Forward restore reporting period, custom dates, and granularity from the URL", async () => {
+  render(
+    <MemoryRouter
+      initialEntries={[
+        "/analytics?period=last_30&start=2026-05-01&end=2026-05-30&granularity=month&timezone=Europe%2FAmsterdam",
+        "/analytics?period=custom&start=2026-03-10&end=2026-04-20&granularity=week&timezone=Europe%2FAmsterdam",
+      ]}
+      initialIndex={1}
+    >
+      <HistoryControls />
+      <QueryView />
+      <Analytics />
+    </MemoryRouter>,
+  );
+  expect(await screen.findByText("Check-in Breakdown")).toBeInTheDocument();
+  expect(screen.getByLabelText("Reporting period")).toHaveValue("custom");
+  expect(screen.getByLabelText("Start date")).toHaveValue("2026-03-10");
+  expect(screen.getByLabelText("Granularity")).toHaveValue("week");
+
+  fireEvent.click(screen.getByRole("button", { name: "Browser back" }));
+  await waitFor(() => {
+    expect(screen.getByLabelText("Reporting period")).toHaveValue("last_30");
+    expect(screen.getByLabelText("Start date")).toHaveValue("2026-05-01");
+    expect(screen.getByLabelText("End date")).toHaveValue("2026-05-30");
+    expect(screen.getByLabelText("Granularity")).toHaveValue("month");
+  });
+  let query = new URLSearchParams(
+    screen.getByLabelText("Current query").textContent ?? "",
+  );
+  expect(query.get("period")).toBe("last_30");
+  expect(query.get("start")).toBe("2026-05-01");
+
+  fireEvent.click(screen.getByRole("button", { name: "Browser forward" }));
+  await waitFor(() => {
+    expect(screen.getByLabelText("Reporting period")).toHaveValue("custom");
+    expect(screen.getByLabelText("Start date")).toHaveValue("2026-03-10");
+    expect(screen.getByLabelText("End date")).toHaveValue("2026-04-20");
+    expect(screen.getByLabelText("Granularity")).toHaveValue("week");
+  });
+  query = new URLSearchParams(
+    screen.getByLabelText("Current query").textContent ?? "",
+  );
+  expect(query.get("period")).toBe("custom");
+  expect(query.get("end")).toBe("2026-04-20");
+});
+
 test("trends fetch is scoped to its active view and custom date changes preserve view and metric", async () => {
   vi.stubGlobal(
     "fetch",
@@ -919,6 +965,7 @@ test("trends fetch is scoped to its active view and custom date changes preserve
 
 test("all time resolves M7 full-history bounds and reports M8 range-limit errors", async () => {
   let trendRequests = 0;
+  let historyBoundsRequests = 0;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
@@ -937,11 +984,12 @@ test("all time resolves M7 full-history bounds and reports M8 range-limit errors
           }),
         };
       }
+      historyBoundsRequests++;
       return {
         ok: true,
         json: async () => ({
           ...sample,
-          start: "2019-01-01",
+          start: historyBoundsRequests === 1 ? "2019-01-01" : "2020-06-01",
           end: "2026-12-31",
           granularity: "year",
         }),
@@ -978,6 +1026,23 @@ test("all time resolves M7 full-history bounds and reports M8 range-limit errors
   expect(yearRequest.pathname).toBe("/api/v1/analytics/drinking-trends");
   expect(yearRequest.searchParams.get("start")).toMatch(/^\d{4}-01-01$/);
   expect(yearRequest.searchParams.get("end")).toMatch(/^\d{4}-12-31$/);
+
+  fireEvent.change(screen.getByLabelText("Reporting period"), {
+    target: { value: "all" },
+  });
+  await waitFor(() => expect(historyBoundsRequests).toBe(2));
+  await waitFor(() =>
+    expect(
+      screen.getByLabelText("Drinking Trends reporting period"),
+    ).toHaveTextContent("2020-06-01–2026-12-31"),
+  );
+  const refreshedRequest = new URL(
+    String(vi.mocked(globalThis.fetch).mock.calls.at(-1)?.[0]),
+    "http://localhost",
+  );
+  expect(refreshedRequest.pathname).toBe("/api/v1/analytics/drinking-trends");
+  expect(refreshedRequest.searchParams.get("start")).toBe("2020-06-01");
+  expect(refreshedRequest.searchParams.get("end")).toBe("2026-12-31");
 });
 
 test("all time with empty M7 history does not call trends and explains unsupported history clearly", async () => {

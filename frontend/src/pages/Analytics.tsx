@@ -239,6 +239,10 @@ export default function Analytics() {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const navigationType = useNavigationType();
+  const locationSearch = new URLSearchParams(location.search);
+  const locationFilters = initialParams(locationSearch);
+  const locationZoom = parseZoom(locationSearch.get("zoom"));
+  const locationPage = parseWindowPage(locationSearch.get("window"));
   const view = selectedView(searchParams);
   const metric = selectedMetric(searchParams);
   const invalidView =
@@ -262,6 +266,12 @@ export default function Analytics() {
   );
   const [allRange, setAllRange] = useState<DateRange | null>(null);
   const [allRangeLoaded, setAllRangeLoaded] = useState(false);
+  // Bind the cached bounds to one continuous All-time selection. Leaving and
+  // returning forces a fresh M7 metadata request in case imported history changed.
+  const previousPeriod = useRef(period);
+  const allRangeLoadedForPeriod =
+    period === "all" && previousPeriod.current === "all" && allRangeLoaded;
+  const allRangeForPeriod = allRangeLoadedForPeriod ? allRange : null;
   const [data, setData] = useState<CheckinAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -280,6 +290,16 @@ export default function Analytics() {
   );
   const overviewTabRef = useRef<HTMLButtonElement>(null);
   const trendsTabRef = useRef<HTMLButtonElement>(null);
+  // React Router exposes the POP URL before the restoration effect updates the
+  // controlled filters. Do not canonicalize or fetch from stale values meanwhile.
+  const popFiltersPending =
+    navigationType === "POP" &&
+    (period !== locationFilters.period ||
+      granularity !== locationFilters.granularity ||
+      start !== locationFilters.start ||
+      end !== locationFilters.end ||
+      JSON.stringify(zoom) !== JSON.stringify(locationZoom) ||
+      pageIndex !== locationPage);
 
   useEffect(() => {
     const dismissTooltip = () => setTooltipsEnabled(false);
@@ -339,7 +359,7 @@ export default function Analytics() {
     (granularity === "day" || granularity === "week") &&
     !allRange;
   const needsTrendsAllRangeBootstrap =
-    view === "trends" && period === "all" && !allRangeLoaded;
+    view === "trends" && period === "all" && !allRangeLoadedForPeriod;
   const requestGranularity =
     needsAllRangeBootstrap || needsTrendsAllRangeBootstrap
       ? "auto"
@@ -374,6 +394,7 @@ export default function Analytics() {
   );
 
   useEffect(() => {
+    if (popFiltersPending) return;
     const urlParams = makeApiParams(period, start, end, granularity);
     urlParams.set("period", period);
     if (view === "trends") urlParams.set("view", "trends");
@@ -399,6 +420,7 @@ export default function Analytics() {
     metric,
     searchParams,
     setSearchParams,
+    popFiltersPending,
   ]);
 
   useEffect(() => {
@@ -410,6 +432,13 @@ export default function Analytics() {
     setEnd(parsed.end);
     setUrlWarning(parsed.invalid || invalidView || invalidMetric);
   }, [location.search, navigationType]);
+
+  useEffect(() => {
+    if (previousPeriod.current === period) return;
+    previousPeriod.current = period;
+    setAllRange(null);
+    setAllRangeLoaded(false);
+  }, [period]);
 
   useEffect(() => {
     const next = parseZoom(new URLSearchParams(location.search).get("zoom"));
@@ -431,6 +460,7 @@ export default function Analytics() {
   }, [searchParams, setSearchParams]);
 
   useEffect(() => {
+    if (popFiltersPending) return;
     if (!pageRange || pageRange.pageIndex === pageIndex) return;
     setPageIndex(pageRange.pageIndex);
     const params = new URLSearchParams(searchParams);
@@ -440,19 +470,25 @@ export default function Analytics() {
       params.delete("window");
     }
     setSearchParams(params, { replace: true });
-  }, [pageIndex, pageRange, searchParams, setSearchParams]);
+  }, [pageIndex, pageRange, searchParams, setSearchParams, popFiltersPending]);
 
   useEffect(() => {
+    if (popFiltersPending) return;
     if (!invalidZoom) return;
     setZoom(null);
     setUrlWarning(true);
     const params = new URLSearchParams(searchParams);
     params.delete("zoom");
     setSearchParams(params, { replace: true });
-  }, [invalidZoom, searchParams, setSearchParams]);
+  }, [invalidZoom, searchParams, setSearchParams, popFiltersPending]);
 
   useEffect(() => {
     const requestId = ++requestSequence.current;
+    if (popFiltersPending) {
+      return () => {
+        if (requestSequence.current === requestId) requestSequence.current++;
+      };
+    }
     if (view === "trends" && period !== "all") {
       setLoading(false);
       setError(null);
@@ -460,7 +496,7 @@ export default function Analytics() {
         if (requestSequence.current === requestId) requestSequence.current++;
       };
     }
-    if (view === "trends" && period === "all" && allRangeLoaded) {
+    if (view === "trends" && period === "all" && allRangeLoadedForPeriod) {
       setLoading(false);
       setError(null);
       return () => {
@@ -509,7 +545,16 @@ export default function Analytics() {
       controller.abort();
       if (requestSequence.current === requestId) requestSequence.current++;
     };
-  }, [period, start, end, invalidRange, requestParams, view, allRangeLoaded]);
+  }, [
+    period,
+    start,
+    end,
+    invalidRange,
+    requestParams,
+    view,
+    allRangeLoadedForPeriod,
+    popFiltersPending,
+  ]);
 
   function choosePeriod(next: Period) {
     const today = todayInAmsterdam();
@@ -524,6 +569,10 @@ export default function Analytics() {
       range = { start: shiftDate(today, -(days - 1)), end: today };
     }
     setPeriod(next);
+    if (next === "all") {
+      setAllRange(null);
+      setAllRangeLoaded(false);
+    }
     setZoom(null);
     setPageIndex(0);
     const params = new URLSearchParams(searchParams);
@@ -751,18 +800,25 @@ export default function Analytics() {
         <span className="analytics-timezone">Timezone: {TIMEZONE}</span>
       </section>
       <DrinkingTrendsView
-        active={view === "trends"}
+        active={view === "trends" && !popFiltersPending}
         metric={metric}
         range={
           period === "all"
-            ? allRange
+            ? allRangeForPeriod
             : invalidSelectedDates
               ? null
               : { start, end }
         }
-        resolvingAllTime={period === "all" && !allRangeLoaded}
-        allTimeEmpty={period === "all" && allRangeLoaded && !allRange && !error}
-        resolveError={period === "all" && !allRangeLoaded ? error : null}
+        resolvingAllTime={period === "all" && !allRangeLoadedForPeriod}
+        allTimeEmpty={
+          period === "all" &&
+          allRangeLoadedForPeriod &&
+          !allRangeForPeriod &&
+          !error
+        }
+        resolveError={
+          period === "all" && !allRangeLoadedForPeriod ? error : null
+        }
         periodValidationError={
           invalidSelectedDates
             ? !start || !end
@@ -778,7 +834,7 @@ export default function Analytics() {
         role="tabpanel"
         aria-labelledby="analytics-overview-tab"
         tabIndex={0}
-        hidden={view !== "overview"}
+        hidden={view !== "overview" || popFiltersPending}
       >
         {view === "overview" && (
           <>
