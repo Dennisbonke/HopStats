@@ -344,7 +344,9 @@ test("weekly chart tooltips stay within the document after orientation changes",
   await expect(lineTooltip).toBeHidden();
 
   await page.setViewportSize({ width: 844, height: 390 });
-  await page.waitForTimeout(100);
+  await expect
+    .poll(async () => (await measureLayout()).chartSvg!.width)
+    .toBeGreaterThan(before.chartSvg!.width);
   const landscape = await measureLayout();
   expect(await tooltip.isVisible()).toBe(false);
   expect(landscape.documentWidth - landscape.clientWidth).toBeLessThanOrEqual(
@@ -352,11 +354,11 @@ test("weekly chart tooltips stay within the document after orientation changes",
   );
   expect(landscape.bodyWidth - landscape.clientWidth).toBeLessThanOrEqual(1);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.waitForTimeout(100);
+  await expect
+    .poll(async () => (await measureLayout()).chartSvg!.width)
+    .toBeLessThan(landscape.chartSvg!.width);
   const after = await measureLayout();
   expect(await tooltip.isVisible()).toBe(false);
-  expect(landscape.chartSvg!.width).toBeGreaterThan(before.chartSvg!.width);
-  expect(after.chartSvg!.width).toBeLessThan(landscape.chartSvg!.width);
   expect(after.documentWidth - after.clientWidth).toBeLessThanOrEqual(1);
   expect(after.bodyWidth - after.clientWidth).toBeLessThanOrEqual(1);
   await page.evaluate(() =>
