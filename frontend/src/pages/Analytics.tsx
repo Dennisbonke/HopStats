@@ -281,6 +281,10 @@ export default function Analytics() {
   // `false` suppresses stale tooltip state during resize; `undefined` leaves
   // normal active-state management to Recharts.
   const [tooltipsEnabled, setTooltipsEnabled] = useState(true);
+  const tooltipDismissedByResize = useRef(false);
+  const tooltipDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const lastChartPointer = useRef<{ x: number; y: number } | null>(null);
   const [zoom, setZoom] = useState<Zoom>(() =>
     parseZoom(searchParams.get("zoom")),
@@ -302,9 +306,27 @@ export default function Analytics() {
       pageIndex !== locationPage);
 
   useEffect(() => {
-    const dismissTooltip = () => setTooltipsEnabled(false);
+    const dismissTooltip = () => {
+      tooltipDismissedByResize.current = true;
+      setTooltipsEnabled(false);
+      if (tooltipDismissTimer.current) {
+        clearTimeout(tooltipDismissTimer.current);
+      }
+      // Safari can emit hover updates for the stationary pointer while it
+      // relayouts the chart. Keep those from reopening the tooltip until the
+      // orientation/resize event burst has settled.
+      tooltipDismissTimer.current = setTimeout(() => {
+        tooltipDismissedByResize.current = false;
+        tooltipDismissTimer.current = null;
+      }, 250);
+    };
     window.addEventListener("resize", dismissTooltip);
-    return () => window.removeEventListener("resize", dismissTooltip);
+    return () => {
+      window.removeEventListener("resize", dismissTooltip);
+      if (tooltipDismissTimer.current) {
+        clearTimeout(tooltipDismissTimer.current);
+      }
+    };
   }, []);
   const reportStart =
     period === "all" ? (allRange?.start ?? data?.start ?? null) : start;
@@ -665,9 +687,24 @@ export default function Analytics() {
     event: ReactPointerEvent<HTMLDivElement>,
   ) {
     const { clientX: x, clientY: y } = event;
+    // WebKit can synthesize pointer moves while a viewport is being resized.
+    // Do not let those stale hover coordinates immediately reopen the tooltip.
+    if (tooltipDismissedByResize.current) {
+      lastChartPointer.current = { x, y };
+      return;
+    }
     const previous = lastChartPointer.current;
     lastChartPointer.current = { x, y };
     if (previous && previous.x === x && previous.y === y) return;
+    setTooltipsEnabled(true);
+  }
+
+  function enableTooltipFromInteraction() {
+    tooltipDismissedByResize.current = false;
+    if (tooltipDismissTimer.current) {
+      clearTimeout(tooltipDismissTimer.current);
+      tooltipDismissTimer.current = null;
+    }
     setTooltipsEnabled(true);
   }
 
@@ -993,8 +1030,8 @@ export default function Analytics() {
                         role="group"
                         aria-label="Stacked bar chart of new discovery and repeat check-ins"
                         onPointerMove={enableTooltipOnPointerMove}
-                        onPointerDown={() => setTooltipsEnabled(true)}
-                        onTouchMove={() => setTooltipsEnabled(true)}
+                        onPointerDown={enableTooltipFromInteraction}
+                        onTouchMove={enableTooltipFromInteraction}
                       >
                         <div className="chart-canvas">
                           <ResponsiveContainer width="100%" height={320}>
@@ -1094,8 +1131,8 @@ export default function Analytics() {
                         role="group"
                         aria-label={`${mode} line chart of check-ins and discoveries`}
                         onPointerMove={enableTooltipOnPointerMove}
-                        onPointerDown={() => setTooltipsEnabled(true)}
-                        onTouchMove={() => setTooltipsEnabled(true)}
+                        onPointerDown={enableTooltipFromInteraction}
+                        onTouchMove={enableTooltipFromInteraction}
                       >
                         <div className="chart-canvas">
                           <ResponsiveContainer width="100%" height={320}>
