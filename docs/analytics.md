@@ -82,3 +82,26 @@ The SQL bucket expression defaults to 366 branches and is configurable with
 generated SQL for Raspberry Pi deployments; higher requests are rejected, not
 truncated. Analytics still requires a complete per-user SQL window pass and
 does not promise constant-time aggregation.
+
+## Drinking trends (M8.1 backend)
+
+`GET /api/v1/analytics/drinking-trends` uses the same authentication, inclusive
+local-date boundaries, default timezone (`Europe/Amsterdam`), canonical beer
+identity, discovery ranking, and stable check-in ID tie-breaker as M7. If dates
+are omitted, it defaults to January 1 through today in the selected timezone;
+provide both dates or neither. The daily result is subject to the same configured
+bucket cap (`HOPSTATS_ANALYTICS_MAX_BUCKETS`).
+
+The response contains zero-filled daily rows and complete ISO weekday
+(Monday=0), local-hour (0–23), and weekday/hour arrays. `days_in_period` counts calendar
+occurrences of each weekday, including inactive dates. A SQL window ranks the
+complete user history; only compact local-date/hour aggregates for the requested
+period are expanded into response arrays. Local wall-time grouping naturally
+combines both occurrences of an autumn DST hour and does not create observations
+for a missing spring hour.
+
+Both supported check-in imports require `created_at` and normalize it to a
+complete UTC timestamp; the database column is non-null. Date-only check-ins are
+not currently supported, so all stored check-ins participate in hourly
+aggregates. Duplicate external check-in IDs are constrained per user/source and
+imports are idempotent. The endpoint does not return raw check-in history.

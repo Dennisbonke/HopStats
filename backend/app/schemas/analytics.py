@@ -32,3 +32,37 @@ class CheckinAnalyticsResponse(BaseModel):
     cumulative_baseline_checkins: int
     cumulative_baseline_discoveries: int
     buckets: list[AnalyticsBucket]
+
+
+class DrinkingTrendBucket(BaseModel):
+    total: int
+    discoveries: int
+    repeats: int
+
+
+class DrinkingTrendDay(DrinkingTrendBucket):
+    date: date
+
+
+class DrinkingTrendWeekday(DrinkingTrendBucket):
+    weekday: int
+    days_in_period: int
+
+
+class DrinkingTrendHour(DrinkingTrendBucket):
+    hour: int
+
+
+class DrinkingTrendWeekdayHour(DrinkingTrendBucket):
+    weekday: int
+    hour: int
+
+
+class DrinkingTrendsResponse(BaseModel):
+    start: date
+    end: date
+    timezone: str
+    daily: list[DrinkingTrendDay]
+    weekday: list[DrinkingTrendWeekday]
+    hourly: list[DrinkingTrendHour]
+    weekday_hour: list[DrinkingTrendWeekdayHour]

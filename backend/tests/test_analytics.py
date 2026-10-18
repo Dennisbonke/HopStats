@@ -211,3 +211,63 @@ def test_analytics_daily_bucket_cap_can_be_configured(client, monkeypatch):
     get_settings.cache_clear()
     assert response.status_code == 200
     assert len(response.json()["buckets"]) == 367
+
+
+def test_drinking_trends_dense_timezone_buckets_and_m7_consistency(client):
+    owner = user_id()
+    add_checkin(owner, "trends-a", utc("2025-12-31T23:30:00"), "trend-before")
+    add_checkin(owner, "trends-a", utc("2026-01-01T22:00:00"), "trend-repeat")
+    add_checkin(owner, "trends-b", utc("2026-01-04T01:15:00"), "trend-new")
+    add_checkin(owner, "trends-b", utc("2026-01-04T01:45:00"), "trend-repeat-two")
+    response = client.get(
+        "/api/v1/analytics/drinking-trends",
+        params={"start": "2026-01-01", "end": "2026-01-04", "timezone": "Europe/Amsterdam"},
+    )
+    assert response.status_code == 200
+    result = response.json()
+    assert len(result["daily"]) == 4
+    assert len(result["weekday"]) == 7
+    assert len(result["hourly"]) == 24
+    assert len(result["weekday_hour"]) == 168
+    assert [day["total"] for day in result["daily"]] == [2, 0, 0, 2]
+    assert [day["discoveries"] for day in result["daily"]] == [1, 0, 0, 1]
+    assert [bucket["days_in_period"] for bucket in result["weekday"]] == [0, 0, 0, 1, 1, 1, 1]
+    assert result["hourly"][2] == {"hour": 2, "total": 2, "discoveries": 1, "repeats": 1}
+    assert result["weekday_hour"][6 * 24 + 2] == {
+        "weekday": 6,
+        "hour": 2,
+        "total": 2,
+        "discoveries": 1,
+        "repeats": 1,
+    }
+    for field in ("total", "discoveries", "repeats"):
+        daily = sum(row[field] for row in result["daily"])
+        assert daily == sum(row[field] for row in result["weekday"])
+        assert daily == sum(row[field] for row in result["hourly"])
+        assert daily == sum(row[field] for row in result["weekday_hour"])
+    m7 = client.get(
+        "/api/v1/analytics/checkins?start=2026-01-01&end=2026-01-04&granularity=day"
+    ).json()
+    assert sum(row["total"] for row in result["daily"]) == m7["summary"]["total_checkins"]
+    assert sum(row["discoveries"] for row in result["daily"]) == m7["summary"]["new_discoveries"]
+
+
+def test_drinking_trends_dst_repeated_hour_invalid_range_and_auth(client):
+    owner = user_id()
+    add_checkin(owner, "autumn-beer", utc("2026-10-25T00:15:00"), "autumn-first")
+    add_checkin(owner, "autumn-beer", utc("2026-10-25T01:15:00"), "autumn-repeat")
+    data = client.get("/api/v1/analytics/drinking-trends?start=2026-10-25&end=2026-10-25").json()
+    assert data["hourly"][2]["total"] == 2
+    assert data["daily"][0]["total"] == 2
+    assert (
+        client.get("/api/v1/analytics/drinking-trends?start=2026-02-02&end=2026-02-01").status_code
+        == 422
+    )
+    assert (
+        client.get(
+            "/api/v1/analytics/drinking-trends?start=2026-01-01&end=2026-01-02&timezone=Not%2FAZone"
+        ).status_code
+        == 422
+    )
+    client.cookies.clear()
+    assert client.get("/api/v1/analytics/drinking-trends").status_code == 401
