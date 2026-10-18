@@ -144,6 +144,23 @@ test("application pages fit mobile portrait, landscape, tablet and desktop", asy
           },
         ],
       };
+    } else if (path.endsWith("/analytics/drinking-trends")) {
+      body = {
+        start: "2026-01-01",
+        end: "2026-12-31",
+        timezone: "Europe/Amsterdam",
+        daily: Array.from({ length: 365 }, (_, index) => ({
+          date: new Date(Date.UTC(2026, 0, index + 1))
+            .toISOString()
+            .slice(0, 10),
+          total: 0,
+          discoveries: 0,
+          repeats: 0,
+        })),
+        weekday: [],
+        hourly: [],
+        weekday_hour: [],
+      };
     } else if (path.endsWith("/inventory/styles")) {
       body = [];
     } else if (path.endsWith("/inventory")) {
@@ -190,6 +207,18 @@ test("application pages fit mobile portrait, landscape, tablet and desktop", asy
           page.getByRole("button", { name: "Cumulative" }),
         ).toHaveAttribute("aria-pressed", "true");
         await expectNoDocumentOverflow(page);
+        await page.getByRole("tab", { name: "Drinking Trends" }).click();
+        await expect(
+          page.getByRole("grid", { name: /2026 daily activity/ }),
+        ).toBeVisible();
+        await expectNoDocumentOverflow(page);
+        const calendarWidth = await page
+          .locator(".calendar-scroll")
+          .evaluate((element) => ({
+            client: element.clientWidth,
+            scroll: element.scrollWidth,
+          }));
+        expect(calendarWidth.scroll).toBeGreaterThan(calendarWidth.client);
       }
     }
   }

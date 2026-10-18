@@ -136,16 +136,41 @@ reference point, not a Pi performance claim or a CI threshold.
 
 `/analytics` remains the Overview by default. `view=trends` selects Drinking
 Trends; Overview is canonicalized without a `view` parameter. The `metric`
-parameter is reserved for the M8 charts (`total`, `discoveries`, `repeats`),
-defaults to `total`, and currently has no selector UI. Reporting controls remain
-shared above both views, and Overview granularity remains in the URL when
-switching views.
+parameter selects `total`, `discoveries`, or `repeats` and defaults to `total`.
+Reporting controls remain shared above both views, and Overview granularity
+remains in the URL when switching views.
 
 The frontend only requests M8.1 data while Drinking Trends is active and always
 sends explicit dates and timezone. For All time, it first reuses M7's undated
 response metadata to resolve the earliest and latest local reporting dates; an
-empty M7 result becomes an empty state without an M8 request. It then requests
-that full range from M8.1. If the dense daily range exceeds the backend limit,
-the selected All time period remains unchanged and the view offers an explicit
-action to switch to This year. Overview continues to support its existing
-full-history behavior.
+empty M7 result becomes an empty state without an M8 request. Drinking Trends
+requests only the selected calendar year's intersection with those full bounds;
+Overview continues to support its existing full-history behavior.
+
+## Calendar activity heatmap (M8.3)
+
+Drinking Trends displays one Monday-first calendar year at a time. The `year`
+query parameter selects the displayed year; it is omitted for the default year
+and retained for other selections. Eligible years are those intersecting the
+shared inclusive reporting period. Changing the displayed year does not change
+that period. The metric selector supports all check-ins, new discoveries, and
+repeat check-ins through the shared `metric` URL state.
+
+Each request to M8.1 is limited to the intersection of the selected calendar
+year and reporting period, including for All time. The year grid still shows
+the complete calendar year: dates outside the reporting period are unavailable
+(hatched), while included inactive dates have zero activity. Alignment cells
+before January 1 and after December 31 are not dates. Dates after today's local
+date in Europe/Amsterdam are marked as future; any imported future-dated
+check-ins returned by the API remain visible and contribute normally.
+The date-grid utility accepts Sunday-first alignment for future configuration,
+but M8.3 uses Monday-first only.
+
+Intensity uses a fixed, cross-year scale for the selected metric: 0, 1–2, 3–5,
+6–9, and 10 or more. Years are not independently normalized, so colors remain
+comparable when navigating between them. For the initial year, the UI uses the
+latest active year when a matching M7 response provides bucket activity; if not,
+it deterministically chooses the latest year overlapping the period. Empty
+years remain selectable. Daily counts are available by pointer, focus, or
+activation in the details panel. The calendar scrolls internally on narrow
+screens.
