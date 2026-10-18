@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import {
   Bar,
@@ -232,12 +232,22 @@ export default function Analytics() {
   const requestSequence = useRef(0);
   const [mode, setMode] = useState<"activity" | "cumulative">("activity");
   const [visible, setVisible] = useState({ total: true, discoveries: true });
+  // `false` suppresses stale tooltip state during resize; `undefined` leaves
+  // normal active-state management to Recharts.
+  const [tooltipsEnabled, setTooltipsEnabled] = useState(true);
+  const lastChartPointer = useRef<{ x: number; y: number } | null>(null);
   const [zoom, setZoom] = useState<Zoom>(() =>
     parseZoom(searchParams.get("zoom")),
   );
   const [pageIndex, setPageIndex] = useState(() =>
     parseWindowPage(searchParams.get("window")),
   );
+
+  useEffect(() => {
+    const dismissTooltip = () => setTooltipsEnabled(false);
+    window.addEventListener("resize", dismissTooltip);
+    return () => window.removeEventListener("resize", dismissTooltip);
+  }, []);
   const reportStart =
     period === "all" ? (allRange?.start ?? data?.start ?? null) : start;
   const reportEnd =
@@ -493,6 +503,16 @@ export default function Analytics() {
   const discoveryKey =
     mode === "activity" ? "activity_discoveries" : "cumulative_discoveries";
 
+  function enableTooltipOnPointerMove(
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) {
+    const { clientX: x, clientY: y } = event;
+    const previous = lastChartPointer.current;
+    lastChartPointer.current = { x, y };
+    if (previous && previous.x === x && previous.y === y) return;
+    setTooltipsEnabled(true);
+  }
+
   return (
     <div className="analytics-page">
       <div className="page-heading">
@@ -720,6 +740,9 @@ export default function Analytics() {
                   className="chart-scroll"
                   role="group"
                   aria-label="Stacked bar chart of new discovery and repeat check-ins"
+                  onPointerMove={enableTooltipOnPointerMove}
+                  onPointerDown={() => setTooltipsEnabled(true)}
+                  onTouchMove={() => setTooltipsEnabled(true)}
                 >
                   <div className="chart-canvas">
                     <ResponsiveContainer width="100%" height={320}>
@@ -727,7 +750,10 @@ export default function Analytics() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="key" minTickGap={24} />
                         <YAxis allowDecimals={false} />
-                        <Tooltip content={<ExactTooltip showShare />} />
+                        <Tooltip
+                          active={tooltipsEnabled ? undefined : false}
+                          content={<ExactTooltip showShare />}
+                        />
                         <Legend />
                         <Bar
                           dataKey="new_discoveries"
@@ -812,6 +838,9 @@ export default function Analytics() {
                   className="chart-scroll"
                   role="group"
                   aria-label={`${mode} line chart of check-ins and discoveries`}
+                  onPointerMove={enableTooltipOnPointerMove}
+                  onPointerDown={() => setTooltipsEnabled(true)}
+                  onTouchMove={() => setTooltipsEnabled(true)}
                 >
                   <div className="chart-canvas">
                     <ResponsiveContainer width="100%" height={320}>
@@ -823,7 +852,10 @@ export default function Analytics() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="key" minTickGap={24} />
                         <YAxis allowDecimals={false} />
-                        <Tooltip content={<ExactTooltip />} />
+                        <Tooltip
+                          active={tooltipsEnabled ? undefined : false}
+                          content={<ExactTooltip />}
+                        />
                         <Legend />
                         {visible.total && (
                           <Line
