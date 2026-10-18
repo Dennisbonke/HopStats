@@ -1,58 +1,81 @@
-import { useEffect, useState } from "react";
-import { DrinkingTrends, fetchDrinkingTrends } from "../api/analytics";
-
-type DateRange = { start: string; end: string };
-type Metric = "total" | "discoveries" | "repeats";
+import { useEffect, useMemo, useState } from "react";
+import ActivityMetricSelector from "../components/ActivityMetricSelector";
+import { fetchDrinkingTrends } from "../api/analytics";
+import CalendarHeatmap from "./CalendarHeatmap";
+import { yearIntersection } from "../utils/calendar";
+import type { ActivityMetric, ReportingRange } from "../utils/calendar";
+import type { DrinkingTrends } from "../api/analytics";
 
 type Props = {
   active: boolean;
-  metric: Metric;
-  range: DateRange | null;
+  metric: ActivityMetric;
+  onMetricChange: (metric: ActivityMetric) => void;
+  range: ReportingRange | null;
+  year: number | null;
+  availableYears: number[];
+  onYearChange: (year: number) => void;
   resolvingAllTime: boolean;
   allTimeEmpty: boolean;
   resolveError: string | null;
   periodValidationError: string | null;
-  onChooseThisYear: () => void;
 };
 
 const TIMEZONE = "Europe/Amsterdam";
+type TrendResult = { key: string; data: DrinkingTrends };
+type TrendFailure = { key: string; message: string };
 
 export default function DrinkingTrendsView({
   active,
   metric,
+  onMetricChange,
   range,
+  year,
+  availableYears,
+  onYearChange,
   resolvingAllTime,
   allTimeEmpty,
   resolveError,
   periodValidationError,
-  onChooseThisYear,
 }: Props) {
-  const [data, setData] = useState<DrinkingTrends | null>(null);
+  const [result, setResult] = useState<TrendResult | null>(null);
+  const [failure, setFailure] = useState<TrendFailure | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const requestedRange = useMemo(
+    () => (range && year !== null ? yearIntersection(range, year) : null),
+    [range?.start, range?.end, year],
+  );
+  const requestKey = requestedRange
+    ? `${requestedRange.start}/${requestedRange.end}`
+    : null;
+  const data = result?.key === requestKey ? result.data : null;
+  const error = failure?.key === requestKey ? failure.message : null;
 
   useEffect(() => {
-    if (!active || !range) {
-      setData(null);
-      setError(null);
+    if (!active || !requestKey) {
+      setResult(null);
+      setFailure(null);
       setLoading(false);
       return;
     }
+    const [requestStart, requestEnd] = requestKey.split("/");
 
     const controller = new AbortController();
     let current = true;
-    setData(null);
-    setError(null);
+    setFailure(null);
     setLoading(true);
-    fetchDrinkingTrends(range.start, range.end, TIMEZONE, controller.signal)
-      .then((result) => current && setData(result))
+    fetchDrinkingTrends(requestStart, requestEnd, TIMEZONE, controller.signal)
+      .then(
+        (response) => current && setResult({ key: requestKey, data: response }),
+      )
       .catch((requestError: unknown) => {
         if (!current || controller.signal.aborted) return;
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : "Analytics are temporarily unavailable. Please try again.",
-        );
+        setFailure({
+          key: requestKey ?? "",
+          message:
+            requestError instanceof Error
+              ? requestError.message
+              : "Analytics are temporarily unavailable. Please try again.",
+        });
       })
       .finally(() => current && setLoading(false));
 
@@ -60,12 +83,10 @@ export default function DrinkingTrendsView({
       current = false;
       controller.abort();
     };
-  }, [active, range?.start, range?.end]);
+  }, [active, requestKey]);
 
   const overLimit =
     !!error && /range creates more than .* buckets/i.test(error);
-  const isEmpty = !!data && data.daily.every((day) => day.total === 0);
-
   return (
     <section
       id="analytics-trends-panel"
@@ -80,17 +101,39 @@ export default function DrinkingTrendsView({
       <header className="page-heading">
         <h2>Drinking Trends</h2>
         <p>
-          Activity patterns by calendar date, weekday, and local check-in time.
-          The visualizations are coming in upcoming Analytics milestones.
+          Explore daily check-in activity for a calendar year within the
+          selected reporting period.
         </p>
       </header>
 
-      {range && (
+      <div className="trends-controls" aria-label="Drinking Trends controls">
+        <ActivityMetricSelector value={metric} onChange={onMetricChange} />
+        <label className="filter-control">
+          Calendar year
+          <select
+            aria-label="Calendar year"
+            value={year ?? ""}
+            disabled={!availableYears.length}
+            onChange={(event) => onYearChange(Number(event.target.value))}
+          >
+            {availableYears.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {range && year !== null && (
         <p
           className="analytics-scope"
           aria-label="Drinking Trends reporting period"
         >
           Reporting period · {range.start}–{range.end} · {TIMEZONE}
+          <span className="calendar-displayed-year">
+            Calendar year · {year}
+          </span>
         </p>
       )}
 
@@ -119,19 +162,13 @@ export default function DrinkingTrendsView({
       )}
       {loading && (
         <p className="analytics-state" role="status">
-          Loading drinking trends…
+          Loading calendar activity…
         </p>
       )}
       {!loading && overLimit && (
         <div className="analytics-state error-state" role="alert">
-          <p>
-            This reporting period is longer than the daily activity limit
-            supports. Your selected period is unchanged; choose a shorter period
-            to view Drinking Trends.
-          </p>
-          <button type="button" onClick={onChooseThisYear}>
-            Choose this year instead
-          </button>
+          This calendar-year intersection exceeds the configured daily activity
+          limit. Choose a shorter shared reporting period. {error}
         </div>
       )}
       {!loading && error && !overLimit && (
@@ -139,29 +176,14 @@ export default function DrinkingTrendsView({
           <p>{error}</p>
         </div>
       )}
-      {!loading && !error && range && data && isEmpty && (
-        <p className="analytics-state" role="status">
-          No check-ins to display for this reporting period.
-        </p>
+      {!loading && !error && data && year !== null && range && (
+        <CalendarHeatmap
+          year={year}
+          reportingRange={range}
+          daily={data.daily}
+          metric={metric}
+        />
       )}
-      {!loading && !error && range && data && !isEmpty && (
-        <p className="analytics-state" role="status">
-          Drinking Trends data is ready for this reporting period. The activity
-          visualizations will be added in upcoming milestones.
-        </p>
-      )}
-
-      <section
-        className="analytics-chart-panel trends-placeholder"
-        aria-label="Upcoming visualizations"
-      >
-        <h3>Coming next</h3>
-        <ul>
-          <li>Calendar activity heatmap</li>
-          <li>Weekday and hour-of-day distributions</li>
-          <li>Weekday-by-hour activity heatmap</li>
-        </ul>
-      </section>
     </section>
   );
 }

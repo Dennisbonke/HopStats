@@ -794,9 +794,7 @@ test("invalid trends metric falls back to total without changing the selected vi
   renderAnalytics(
     "/analytics?period=custom&start=2026-01-01&end=2026-01-02&view=trends&metric=unknown",
   );
-  expect(
-    await screen.findByText(/Drinking Trends data is ready/),
-  ).toBeInTheDocument();
+  expect(await screen.findByRole("grid")).toBeInTheDocument();
   expect(
     screen.getByRole("tabpanel", { name: "Drinking Trends" }),
   ).toHaveAttribute("data-metric", "total");
@@ -837,9 +835,7 @@ test("tabs preserve shared filters and metric, use keyboard navigation, and rest
 
   fireEvent.keyDown(overview, { key: "ArrowRight" });
   expect(trends).toHaveFocus();
-  expect(
-    await screen.findByText(/Drinking Trends data is ready/),
-  ).toBeInTheDocument();
+  expect(await screen.findByRole("grid")).toBeInTheDocument();
   expect(trends).toHaveAttribute("aria-selected", "true");
   expect(
     screen.getByRole("tabpanel", { name: "Drinking Trends" }),
@@ -944,9 +940,7 @@ test("trends fetch is scoped to its active view and custom date changes preserve
   renderAnalytics(
     "/analytics?period=custom&start=2026-01-01&end=2026-01-02&view=trends&metric=repeats",
   );
-  expect(
-    await screen.findByText(/Drinking Trends data is ready/),
-  ).toBeInTheDocument();
+  expect(await screen.findByRole("grid")).toBeInTheDocument();
   expect(vi.mocked(globalThis.fetch).mock.calls).toHaveLength(1);
   fireEvent.change(screen.getByLabelText("Start date"), {
     target: { value: "2026-01-02" },
@@ -963,7 +957,117 @@ test("trends fetch is scoped to its active view and custom date changes preserve
   );
 });
 
-test("all time resolves M7 full-history bounds and reports M8 range-limit errors", async () => {
+test("calendar year and metric URL state drive one-year requests without refetching on metric changes", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) =>
+      String(input).includes("drinking-trends")
+        ? { ok: true, json: async () => trendsSample }
+        : { ok: true, json: async () => sample },
+    ),
+  );
+  render(
+    <MemoryRouter
+      initialEntries={[
+        "/analytics?period=custom&start=2023-04-15&end=2025-09-30&granularity=week&timezone=Europe%2FAmsterdam&view=trends&year=2024&metric=discoveries&debugLayout=1",
+      ]}
+    >
+      <HistoryControls />
+      <QueryView />
+      <Analytics />
+    </MemoryRouter>,
+  );
+  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  expect(screen.getByLabelText("Calendar year")).toHaveValue("2024");
+  expect(screen.getByLabelText("Activity metric")).toHaveValue("discoveries");
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "granularity=week",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "debugLayout=1",
+  );
+  const initialRequest = new URL(
+    String(vi.mocked(globalThis.fetch).mock.calls[0][0]),
+    "http://localhost",
+  );
+  expect(initialRequest.pathname).toBe("/api/v1/analytics/drinking-trends");
+  expect(initialRequest.searchParams.get("start")).toBe("2024-01-01");
+  expect(initialRequest.searchParams.get("end")).toBe("2024-12-31");
+  expect(initialRequest.searchParams.get("timezone")).toBe("Europe/Amsterdam");
+
+  fireEvent.change(screen.getByLabelText("Activity metric"), {
+    target: { value: "repeats" },
+  });
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "metric=repeats",
+  );
+  expect(
+    screen.getByRole("tabpanel", { name: "Drinking Trends" }),
+  ).toHaveAttribute("data-metric", "repeats");
+  expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+  fireEvent.change(screen.getByLabelText("Calendar year"), {
+    target: { value: "2023" },
+  });
+  await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
+  const nextRequest = new URL(
+    String(vi.mocked(globalThis.fetch).mock.calls[1][0]),
+    "http://localhost",
+  );
+  expect(nextRequest.searchParams.get("start")).toBe("2023-04-15");
+  expect(nextRequest.searchParams.get("end")).toBe("2023-12-31");
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "metric=repeats",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent("year=2023");
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "debugLayout=1",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "granularity=week",
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Browser back" }));
+  await waitFor(() =>
+    expect(screen.getByLabelText("Calendar year")).toHaveValue("2024"),
+  );
+  expect(screen.getByLabelText("Activity metric")).toHaveValue("repeats");
+  fireEvent.click(screen.getByRole("button", { name: "Browser forward" }));
+  await waitFor(() =>
+    expect(screen.getByLabelText("Calendar year")).toHaveValue("2023"),
+  );
+  fireEvent.click(screen.getByRole("tab", { name: "Overview" }));
+  expect(await screen.findByText("Check-in Breakdown")).toBeInTheDocument();
+  expect(screen.getByLabelText("Current query")).toHaveTextContent("year=2023");
+  fireEvent.click(screen.getByRole("tab", { name: "Drinking Trends" }));
+  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  expect(screen.getByLabelText("Calendar year")).toHaveValue("2023");
+});
+
+test("invalid ineligible calendar year safely falls back and is canonicalized", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({ ok: true, json: async () => trendsSample })),
+  );
+  renderAnalytics(
+    "/analytics?period=custom&start=2023-01-01&end=2025-12-31&view=trends&year=1999",
+  );
+  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  expect(screen.getByLabelText("Calendar year")).toHaveValue("2025");
+  await waitFor(() =>
+    expect(screen.getByLabelText("Current query")).not.toHaveTextContent(
+      "year=",
+    ),
+  );
+  const request = new URL(
+    String(vi.mocked(globalThis.fetch).mock.calls[0][0]),
+    "http://localhost",
+  );
+  expect(request.searchParams.get("start")).toBe("2025-01-01");
+  expect(request.searchParams.get("end")).toBe("2025-12-31");
+});
+
+test("all time uses M7 bounds but requests only the selected calendar-year intersection", async () => {
   let trendRequests = 0;
   let historyBoundsRequests = 0;
   vi.stubGlobal(
@@ -972,17 +1076,7 @@ test("all time resolves M7 full-history bounds and reports M8 range-limit errors
       const url = new URL(String(input), "http://localhost");
       if (url.pathname.endsWith("drinking-trends")) {
         trendRequests++;
-        if (trendRequests > 1) {
-          return { ok: true, json: async () => trendsSample };
-        }
-        return {
-          ok: false,
-          status: 422,
-          json: async () => ({
-            detail:
-              "range creates more than 366 buckets; choose a shorter range",
-          }),
-        };
+        return { ok: true, json: async () => trendsSample };
       }
       historyBoundsRequests++;
       return {
@@ -992,14 +1086,22 @@ test("all time resolves M7 full-history bounds and reports M8 range-limit errors
           start: historyBoundsRequests === 1 ? "2019-01-01" : "2020-06-01",
           end: "2026-12-31",
           granularity: "year",
+          buckets: [
+            {
+              ...sample.buckets[0],
+              key: historyBoundsRequests === 1 ? "2024" : "2025",
+              label: historyBoundsRequests === 1 ? "2024" : "2025",
+              start: historyBoundsRequests === 1 ? "2024-01-01" : "2025-01-01",
+              end: historyBoundsRequests === 1 ? "2024-12-31" : "2025-12-31",
+              total_checkins: 10,
+            },
+          ],
         }),
       };
     }),
   );
   renderAnalytics("/analytics?period=all&view=trends&metric=total");
-  expect(await screen.findByRole("alert")).toHaveTextContent(
-    "longer than the daily activity limit",
-  );
+  expect(await screen.findByRole("grid")).toBeInTheDocument();
   const requests = vi
     .mocked(globalThis.fetch)
     .mock.calls.map(([input]) => new URL(String(input), "http://localhost"));
@@ -1007,26 +1109,34 @@ test("all time resolves M7 full-history bounds and reports M8 range-limit errors
   expect(requests[0].pathname).toBe("/api/v1/analytics/checkins");
   expect(requests[0].searchParams.has("start")).toBe(false);
   expect(requests[1].pathname).toBe("/api/v1/analytics/drinking-trends");
-  expect(requests[1].searchParams.get("start")).toBe("2019-01-01");
-  expect(requests[1].searchParams.get("end")).toBe("2026-12-31");
+  expect(screen.getByLabelText("Calendar year")).toHaveValue("2024");
+  expect(requests[1].searchParams.get("start")).toBe("2024-01-01");
+  expect(requests[1].searchParams.get("end")).toBe("2024-12-31");
   expect(
     screen.getByLabelText("Drinking Trends reporting period"),
   ).toHaveTextContent("2019-01-01–2026-12-31");
-  fireEvent.click(
-    screen.getByRole("button", { name: "Choose this year instead" }),
-  );
-  expect(
-    await screen.findByText(/Drinking Trends data is ready/),
-  ).toBeInTheDocument();
-  expect(screen.getByLabelText("Reporting period")).toHaveValue("this_year");
+  fireEvent.change(screen.getByLabelText("Calendar year"), {
+    target: { value: "2025" },
+  });
+  await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(3));
+  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  expect(screen.getByLabelText("Reporting period")).toHaveValue("all");
+  expect(screen.getByLabelText("Calendar year")).toHaveValue("2025");
   const yearRequest = new URL(
     String(vi.mocked(globalThis.fetch).mock.calls.at(-1)?.[0]),
     "http://localhost",
   );
   expect(yearRequest.pathname).toBe("/api/v1/analytics/drinking-trends");
-  expect(yearRequest.searchParams.get("start")).toMatch(/^\d{4}-01-01$/);
-  expect(yearRequest.searchParams.get("end")).toMatch(/^\d{4}-12-31$/);
+  expect(yearRequest.searchParams.get("start")).toBe("2025-01-01");
+  expect(yearRequest.searchParams.get("end")).toBe("2025-12-31");
+  expect(screen.getByLabelText("Current query")).toHaveTextContent("year=2025");
 
+  fireEvent.change(screen.getByLabelText("Reporting period"), {
+    target: { value: "this_year" },
+  });
+  await waitFor(() =>
+    expect(screen.getByLabelText("Calendar year")).toHaveValue("2026"),
+  );
   fireEvent.change(screen.getByLabelText("Reporting period"), {
     target: { value: "all" },
   });
@@ -1041,8 +1151,10 @@ test("all time resolves M7 full-history bounds and reports M8 range-limit errors
     "http://localhost",
   );
   expect(refreshedRequest.pathname).toBe("/api/v1/analytics/drinking-trends");
-  expect(refreshedRequest.searchParams.get("start")).toBe("2020-06-01");
-  expect(refreshedRequest.searchParams.get("end")).toBe("2026-12-31");
+  expect(screen.getByLabelText("Calendar year")).toHaveValue("2025");
+  expect(refreshedRequest.searchParams.get("start")).toBe("2025-01-01");
+  expect(refreshedRequest.searchParams.get("end")).toBe("2025-12-31");
+  expect(screen.getByLabelText("Current query")).not.toHaveTextContent("year=");
 });
 
 test("all time with empty M7 history does not call trends and explains unsupported history clearly", async () => {
@@ -1095,7 +1207,7 @@ test("trends handles empty aggregates and ignores stale period responses", async
   await waitFor(() => expect(pending).toHaveLength(2));
   expect(pending[0].signal?.aborted).toBe(true);
   pending[0].resolve({ ok: true, json: async () => trendsSample });
-  expect(screen.getByText("Loading drinking trends…")).toBeInTheDocument();
+  expect(screen.getByText("Loading calendar activity…")).toBeInTheDocument();
   pending[1].resolve({
     ok: true,
     json: async () => ({
@@ -1110,7 +1222,7 @@ test("trends handles empty aggregates and ignores stale period responses", async
   });
   expect(
     await screen.findByText(
-      "No check-ins to display for this reporting period.",
+      /No check-ins in 2026 for the selected reporting period/,
     ),
   ).toBeInTheDocument();
 });

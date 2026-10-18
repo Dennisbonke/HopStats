@@ -28,6 +28,7 @@ import {
   CheckinAnalytics,
   fetchCheckinAnalytics,
 } from "../api/analytics";
+import type { ActivityMetric } from "../utils/calendar";
 import DrinkingTrendsView from "./DrinkingTrends";
 
 const TIMEZONE = "Europe/Amsterdam";
@@ -36,7 +37,7 @@ type Period =
 type Granularity = "auto" | "day" | "week" | "month";
 type ApiGranularity = Granularity | "year";
 type AnalyticsView = "overview" | "trends";
-type Metric = "total" | "discoveries" | "repeats";
+type Metric = ActivityMetric;
 type Zoom = { kind: "year" | "month"; value: string } | null;
 type DateRange = { start: string; end: string };
 const MAX_VISIBLE_BUCKETS = 45;
@@ -178,6 +179,39 @@ function parseWindowPage(value: string | null) {
   if (!value || !/^(0|[1-9]\d*)$/.test(value)) return 0;
   const page = Number(value);
   return Number.isSafeInteger(page) ? page : 0;
+}
+
+function yearsOverlapping(range: DateRange | null): number[] {
+  if (!range) return [];
+  const first = Number(range.start.slice(0, 4));
+  const last = Number(range.end.slice(0, 4));
+  if (!Number.isInteger(first) || !Number.isInteger(last) || first > last)
+    return [];
+  return Array.from({ length: last - first + 1 }, (_, index) => first + index);
+}
+
+function latestActiveYear(
+  data: CheckinAnalytics | null,
+  range: DateRange | null,
+  years: number[],
+): number | null {
+  if (
+    !data ||
+    !range ||
+    data.start !== range.start ||
+    data.end !== range.end ||
+    data.summary.total_checkins === 0
+  ) {
+    return null;
+  }
+  for (const bucket of [...data.buckets].reverse()) {
+    if (bucket.total_checkins <= 0) continue;
+    const keyYear = /^\d{4}$/.test(bucket.key)
+      ? Number(bucket.key)
+      : Number(bucket.end.slice(0, 4));
+    if (years.includes(keyYear)) return keyYear;
+  }
+  return null;
 }
 
 function makeApiParams(
@@ -336,6 +370,43 @@ export default function Analytics() {
     period === "all" ? (allRange?.end ?? data?.end ?? null) : end;
   const invalidSelectedDates =
     period !== "all" && (!start || !end || start > end);
+  const trendsReportingRange = useMemo<DateRange | null>(
+    () =>
+      period === "all"
+        ? allRangeForPeriod
+        : invalidSelectedDates
+          ? null
+          : { start, end },
+    [period, allRangeForPeriod, invalidSelectedDates, start, end],
+  );
+  const availableCalendarYears = useMemo(
+    () => yearsOverlapping(trendsReportingRange),
+    [trendsReportingRange],
+  );
+  const defaultCalendarYear = useMemo(
+    () =>
+      latestActiveYear(data, trendsReportingRange, availableCalendarYears) ??
+      availableCalendarYears.at(-1) ??
+      null,
+    [data, trendsReportingRange, availableCalendarYears],
+  );
+  const rawCalendarYear = searchParams.get("year");
+  const requestedCalendarYear =
+    rawCalendarYear && /^\d{4}$/.test(rawCalendarYear)
+      ? Number(rawCalendarYear)
+      : null;
+  const calendarYear =
+    availableCalendarYears.length > 0 &&
+    requestedCalendarYear !== null &&
+    availableCalendarYears.includes(requestedCalendarYear)
+      ? requestedCalendarYear
+      : defaultCalendarYear;
+  const invalidCalendarYear =
+    !!rawCalendarYear &&
+    (!/^\d{4}$/.test(rawCalendarYear) ||
+      (availableCalendarYears.length > 0 &&
+        !availableCalendarYears.includes(Number(rawCalendarYear))) ||
+      (period === "all" && allRangeLoadedForPeriod && !trendsReportingRange));
   const automaticGranularity = zoom
     ? zoom.kind === "year"
       ? "month"
@@ -423,6 +494,18 @@ export default function Analytics() {
     urlParams.set("period", period);
     if (view === "trends") urlParams.set("view", "trends");
     if (metric !== "total") urlParams.set("metric", metric);
+    if (trendsReportingRange) {
+      if (calendarYear !== null && calendarYear !== defaultCalendarYear) {
+        urlParams.set("year", String(calendarYear));
+      }
+    } else if (
+      !(period === "all" && allRangeLoadedForPeriod) &&
+      rawCalendarYear &&
+      /^\d{4}$/.test(rawCalendarYear)
+    ) {
+      // Keep a direct All-time year link intact while M7 bounds are resolving.
+      urlParams.set("year", rawCalendarYear);
+    }
     if (searchParams.get("debugLayout") === "1") {
       urlParams.set("debugLayout", "1");
     }
@@ -442,6 +525,11 @@ export default function Analytics() {
     granularity,
     view,
     metric,
+    trendsReportingRange,
+    calendarYear,
+    defaultCalendarYear,
+    allRangeLoadedForPeriod,
+    rawCalendarYear,
     searchParams,
     setSearchParams,
     popFiltersPending,
@@ -454,8 +542,16 @@ export default function Analytics() {
     setGranularity(parsed.granularity);
     setStart(parsed.start);
     setEnd(parsed.end);
-    setUrlWarning(parsed.invalid || invalidView || invalidMetric);
-  }, [location.search, navigationType]);
+    setUrlWarning(
+      parsed.invalid || invalidView || invalidMetric || invalidCalendarYear,
+    );
+  }, [
+    location.search,
+    navigationType,
+    invalidView,
+    invalidMetric,
+    invalidCalendarYear,
+  ]);
 
   useEffect(() => {
     if (previousPeriod.current === period) return;
@@ -654,6 +750,20 @@ export default function Analytics() {
     setSearchParams(params);
   }
 
+  function changeMetric(next: Metric) {
+    const params = new URLSearchParams(searchParams);
+    if (next === "total") params.delete("metric");
+    else params.set("metric", next);
+    setSearchParams(params);
+  }
+
+  function changeCalendarYear(next: number) {
+    const params = new URLSearchParams(searchParams);
+    if (next === defaultCalendarYear) params.delete("year");
+    else params.set("year", String(next));
+    setSearchParams(params);
+  }
+
   function navigateViewWithKeyboard(
     event: ReactKeyboardEvent<HTMLButtonElement>,
   ) {
@@ -728,7 +838,7 @@ export default function Analytics() {
           </p>
         )}
       </div>
-      {(urlWarning || invalidView || invalidMetric) && (
+      {(urlWarning || invalidView || invalidMetric || invalidCalendarYear) && (
         <p className="analytics-warning" role="status">
           Invalid analytics URL filters or drilldown. Using safe defaults
           instead.
@@ -848,13 +958,11 @@ export default function Analytics() {
       <DrinkingTrendsView
         active={view === "trends" && !popFiltersPending}
         metric={metric}
-        range={
-          period === "all"
-            ? allRangeForPeriod
-            : invalidSelectedDates
-              ? null
-              : { start, end }
-        }
+        onMetricChange={changeMetric}
+        range={trendsReportingRange}
+        year={calendarYear}
+        availableYears={availableCalendarYears}
+        onYearChange={changeCalendarYear}
         resolvingAllTime={period === "all" && !allRangeLoadedForPeriod}
         allTimeEmpty={
           period === "all" &&
@@ -872,7 +980,6 @@ export default function Analytics() {
               : "Start date must be on or before end date."
             : null
         }
-        onChooseThisYear={() => choosePeriod("this_year")}
       />
       <section
         id="analytics-overview-panel"
