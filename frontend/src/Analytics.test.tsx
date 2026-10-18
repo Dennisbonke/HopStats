@@ -1067,6 +1067,127 @@ test("invalid ineligible calendar year safely falls back and is canonicalized", 
   expect(request.searchParams.get("end")).toBe("2025-12-31");
 });
 
+test("explicit calendar years survive overlapping period edits and fall back only when excluded", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) =>
+      String(input).includes("drinking-trends")
+        ? { ok: true, json: async () => trendsSample }
+        : { ok: true, json: async () => sample },
+    ),
+  );
+  renderAnalytics(
+    "/analytics?period=custom&start=2023-01-01&end=2025-12-31&view=trends&metric=discoveries&granularity=week&debugLayout=1",
+  );
+  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  expect(screen.getByLabelText("Calendar year")).toHaveValue("2025");
+
+  // Explicitly select the current default year; its presence now means user-selected.
+  fireEvent.change(screen.getByLabelText("Calendar year"), {
+    target: { value: "2025" },
+  });
+  await waitFor(() =>
+    expect(screen.getByLabelText("Current query")).toHaveTextContent(
+      "year=2025",
+    ),
+  );
+  fireEvent.change(screen.getByLabelText("Start date"), {
+    target: { value: "2024-06-01" },
+  });
+  await waitFor(() => {
+    expect(screen.getByLabelText("Calendar year")).toHaveValue("2025");
+    expect(screen.getByLabelText("Current query")).toHaveTextContent(
+      "year=2025",
+    );
+  });
+
+  // A historical selection remains explicit even when the period's default differs.
+  fireEvent.change(screen.getByLabelText("Calendar year"), {
+    target: { value: "2024" },
+  });
+  await waitFor(() =>
+    expect(screen.getByLabelText("Current query")).toHaveTextContent(
+      "year=2024",
+    ),
+  );
+  fireEvent.change(screen.getByLabelText("End date"), {
+    target: { value: "2025-02-01" },
+  });
+  await waitFor(() => {
+    expect(screen.getByLabelText("Calendar year")).toHaveValue("2024");
+    expect(screen.getByLabelText("Current query")).toHaveTextContent(
+      "year=2024",
+    );
+  });
+
+  fireEvent.change(screen.getByLabelText("Start date"), {
+    target: { value: "2025-01-01" },
+  });
+  await waitFor(() => {
+    expect(screen.getByLabelText("Calendar year")).toHaveValue("2025");
+    expect(screen.getByLabelText("Current query")).not.toHaveTextContent(
+      "year=",
+    );
+  });
+  const requests = vi
+    .mocked(globalThis.fetch)
+    .mock.calls.map(([input]) => new URL(String(input), "http://localhost"))
+    .filter((url) => url.pathname.endsWith("drinking-trends"));
+  expect(requests.at(-1)?.searchParams.get("start")).toBe("2025-01-01");
+  expect(requests.at(-1)?.searchParams.get("end")).toBe("2025-02-01");
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "metric=discoveries",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "granularity=week",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "debugLayout=1",
+  );
+});
+
+test("Back and Forward restore reporting periods and explicit calendar years together", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({ ok: true, json: async () => trendsSample })),
+  );
+  render(
+    <MemoryRouter
+      initialEntries={[
+        "/analytics?period=custom&start=2024-06-01&end=2025-02-01&view=trends&year=2024&metric=discoveries",
+        "/analytics?period=last_year&start=2025-01-01&end=2025-12-31&view=trends&metric=discoveries",
+      ]}
+      initialIndex={1}
+    >
+      <HistoryControls />
+      <QueryView />
+      <Analytics />
+    </MemoryRouter>,
+  );
+  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  expect(screen.getByLabelText("Reporting period")).toHaveValue("last_year");
+  expect(screen.getByLabelText("Calendar year")).toHaveValue("2025");
+  expect(screen.getByLabelText("Current query")).not.toHaveTextContent("year=");
+
+  fireEvent.click(screen.getByRole("button", { name: "Browser back" }));
+  await waitFor(() => {
+    expect(screen.getByLabelText("Reporting period")).toHaveValue("custom");
+    expect(screen.getByLabelText("Start date")).toHaveValue("2024-06-01");
+    expect(screen.getByLabelText("End date")).toHaveValue("2025-02-01");
+    expect(screen.getByLabelText("Calendar year")).toHaveValue("2024");
+  });
+  expect(screen.getByLabelText("Current query")).toHaveTextContent("year=2024");
+
+  fireEvent.click(screen.getByRole("button", { name: "Browser forward" }));
+  await waitFor(() => {
+    expect(screen.getByLabelText("Reporting period")).toHaveValue("last_year");
+    expect(screen.getByLabelText("Start date")).toHaveValue("2025-01-01");
+    expect(screen.getByLabelText("End date")).toHaveValue("2025-12-31");
+    expect(screen.getByLabelText("Calendar year")).toHaveValue("2025");
+  });
+  expect(screen.getByLabelText("Current query")).not.toHaveTextContent("year=");
+});
+
 test("all time uses M7 bounds but requests only the selected calendar-year intersection", async () => {
   let trendRequests = 0;
   let historyBoundsRequests = 0;
@@ -1100,7 +1221,7 @@ test("all time uses M7 bounds but requests only the selected calendar-year inter
       };
     }),
   );
-  renderAnalytics("/analytics?period=all&view=trends&metric=total");
+  renderAnalytics("/analytics?period=all&view=trends&metric=total&year=2024");
   expect(await screen.findByRole("grid")).toBeInTheDocument();
   const requests = vi
     .mocked(globalThis.fetch)
@@ -1110,6 +1231,7 @@ test("all time uses M7 bounds but requests only the selected calendar-year inter
   expect(requests[0].searchParams.has("start")).toBe(false);
   expect(requests[1].pathname).toBe("/api/v1/analytics/drinking-trends");
   expect(screen.getByLabelText("Calendar year")).toHaveValue("2024");
+  expect(screen.getByLabelText("Current query")).toHaveTextContent("year=2024");
   expect(requests[1].searchParams.get("start")).toBe("2024-01-01");
   expect(requests[1].searchParams.get("end")).toBe("2024-12-31");
   expect(
@@ -1155,6 +1277,59 @@ test("all time uses M7 bounds but requests only the selected calendar-year inter
   expect(refreshedRequest.searchParams.get("start")).toBe("2025-01-01");
   expect(refreshedRequest.searchParams.get("end")).toBe("2025-12-31");
   expect(screen.getByLabelText("Current query")).not.toHaveTextContent("year=");
+});
+
+test("explicit All-time year survives asynchronous M7 bounds resolution", async () => {
+  let resolveHistory!: (response: {
+    ok: boolean;
+    json: () => Promise<unknown>;
+  }) => void;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo | URL) => {
+      if (String(input).includes("drinking-trends")) {
+        return Promise.resolve({ ok: true, json: async () => trendsSample });
+      }
+      return new Promise((resolve) => {
+        resolveHistory = resolve;
+      });
+    }),
+  );
+  renderAnalytics("/analytics?period=all&view=trends&year=2024");
+  await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
+  expect(screen.getByLabelText("Current query")).toHaveTextContent("year=2024");
+  expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+  resolveHistory({
+    ok: true,
+    json: async () => ({
+      ...sample,
+      start: "2019-01-01",
+      end: "2026-12-31",
+      granularity: "year",
+      buckets: [
+        {
+          ...sample.buckets[0],
+          key: "2024",
+          label: "2024",
+          start: "2024-01-01",
+          end: "2024-12-31",
+          total_checkins: 3,
+        },
+      ],
+    }),
+  });
+
+  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  expect(screen.getByLabelText("Calendar year")).toHaveValue("2024");
+  expect(screen.getByLabelText("Current query")).toHaveTextContent("year=2024");
+  const trendRequest = new URL(
+    String(vi.mocked(globalThis.fetch).mock.calls.at(-1)?.[0]),
+    "http://localhost",
+  );
+  expect(trendRequest.pathname).toBe("/api/v1/analytics/drinking-trends");
+  expect(trendRequest.searchParams.get("start")).toBe("2024-01-01");
+  expect(trendRequest.searchParams.get("end")).toBe("2024-12-31");
 });
 
 test("all time with empty M7 history does not call trends and explains unsupported history clearly", async () => {

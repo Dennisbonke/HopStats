@@ -395,12 +395,13 @@ export default function Analytics() {
     rawCalendarYear && /^\d{4}$/.test(rawCalendarYear)
       ? Number(rawCalendarYear)
       : null;
-  const calendarYear =
-    availableCalendarYears.length > 0 &&
+  // A valid year parameter is explicit user intent, even when it matches the default.
+  const explicitlySelectedCalendarYear =
     requestedCalendarYear !== null &&
-    availableCalendarYears.includes(requestedCalendarYear)
-      ? requestedCalendarYear
-      : defaultCalendarYear;
+    availableCalendarYears.includes(requestedCalendarYear);
+  const calendarYear = explicitlySelectedCalendarYear
+    ? requestedCalendarYear
+    : defaultCalendarYear;
   const invalidCalendarYear =
     !!rawCalendarYear &&
     (!/^\d{4}$/.test(rawCalendarYear) ||
@@ -495,7 +496,10 @@ export default function Analytics() {
     if (view === "trends") urlParams.set("view", "trends");
     if (metric !== "total") urlParams.set("metric", metric);
     if (trendsReportingRange) {
-      if (calendarYear !== null && calendarYear !== defaultCalendarYear) {
+      if (
+        calendarYear !== null &&
+        (explicitlySelectedCalendarYear || calendarYear !== defaultCalendarYear)
+      ) {
         urlParams.set("year", String(calendarYear));
       }
     } else if (
@@ -528,6 +532,7 @@ export default function Analytics() {
     trendsReportingRange,
     calendarYear,
     defaultCalendarYear,
+    explicitlySelectedCalendarYear,
     allRangeLoadedForPeriod,
     rawCalendarYear,
     searchParams,
@@ -759,8 +764,8 @@ export default function Analytics() {
 
   function changeCalendarYear(next: number) {
     const params = new URLSearchParams(searchParams);
-    if (next === defaultCalendarYear) params.delete("year");
-    else params.set("year", String(next));
+    // Presence records an explicit user choice, even when it equals today's default.
+    params.set("year", String(next));
     setSearchParams(params);
   }
 
