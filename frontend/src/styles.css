@@ -306,6 +306,55 @@ section {
   gap: 0.8rem;
   align-items: end;
 }
+.analytics-view-tabs {
+  display: flex;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  border-bottom: 1px solid #cbd5e1;
+  scrollbar-width: thin;
+}
+.analytics-view-tabs button {
+  flex: 0 0 auto;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid transparent;
+  border-bottom: 3px solid transparent;
+  border-radius: 0.35rem 0.35rem 0 0;
+  background: transparent;
+  color: #334155;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.analytics-view-tabs button[aria-selected="true"] {
+  border-color: #cbd5e1;
+  border-bottom-color: #166534;
+  background: white;
+  color: #172033;
+}
+.analytics-view-tabs button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+.analytics-overview-panel,
+.drinking-trends-view {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.analytics-overview-panel[hidden],
+.drinking-trends-view[hidden] {
+  display: none;
+}
+.trends-placeholder {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.trends-placeholder ul {
+  margin-bottom: 0;
+}
 .analytics-page > *,
 .analytics-page .filter-control,
 .analytics-page .analytics-scope,
@@ -500,6 +549,10 @@ section {
   .analytics-filters,
   .analytics-chart-panel {
     padding: 1rem;
+  }
+  .analytics-tooltip {
+    max-width: 16rem;
+    overflow-wrap: anywhere;
   }
   .deepest-zoom {
     margin-left: 0;

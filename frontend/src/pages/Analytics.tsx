@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
+import type {
+  KeyboardEvent as ReactKeyboardEvent,
+  PointerEvent as ReactPointerEvent,
+  ReactNode,
+} from "react";
+import {
+  useLocation,
+  useNavigationType,
+  useSearchParams,
+} from "react-router-dom";
 import {
   Bar,
   BarChart,
@@ -20,12 +28,15 @@ import {
   CheckinAnalytics,
   fetchCheckinAnalytics,
 } from "../api/analytics";
+import DrinkingTrendsView from "./DrinkingTrends";
 
 const TIMEZONE = "Europe/Amsterdam";
 type Period =
   "all" | "this_year" | "last_year" | "last_30" | "last_90" | "custom";
 type Granularity = "auto" | "day" | "week" | "month";
 type ApiGranularity = Granularity | "year";
+type AnalyticsView = "overview" | "trends";
+type Metric = "total" | "discoveries" | "repeats";
 type Zoom = { kind: "year" | "month"; value: string } | null;
 type DateRange = { start: string; end: string };
 const MAX_VISIBLE_BUCKETS = 45;
@@ -133,6 +144,15 @@ function initialParams(search: URLSearchParams) {
   };
 }
 
+function selectedView(search: URLSearchParams): AnalyticsView {
+  return search.get("view") === "trends" ? "trends" : "overview";
+}
+
+function selectedMetric(search: URLSearchParams): Metric {
+  const metric = search.get("metric");
+  return metric === "discoveries" || metric === "repeats" ? metric : "total";
+}
+
 function suggestedGranularity(
   start: string,
   end: string,
@@ -218,6 +238,17 @@ function ExactTooltip({
 export default function Analytics() {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
+  const navigationType = useNavigationType();
+  const view = selectedView(searchParams);
+  const metric = selectedMetric(searchParams);
+  const invalidView =
+    !!searchParams.get("view") &&
+    !["overview", "trends"].includes(searchParams.get("view") ?? "");
+  const invalidMetric =
+    !!searchParams.get("metric") &&
+    !["total", "discoveries", "repeats"].includes(
+      searchParams.get("metric") ?? "",
+    );
   const layoutDebug = searchParams.get("debugLayout") === "1";
   const initial = useMemo(() => initialParams(searchParams), []);
   const [period, setPeriod] = useState<Period>(initial.period);
@@ -226,8 +257,11 @@ export default function Analytics() {
   );
   const [start, setStart] = useState(initial.start);
   const [end, setEnd] = useState(initial.end);
-  const [urlWarning, setUrlWarning] = useState(initial.invalid);
+  const [urlWarning, setUrlWarning] = useState(
+    initial.invalid || invalidView || invalidMetric,
+  );
   const [allRange, setAllRange] = useState<DateRange | null>(null);
+  const [allRangeLoaded, setAllRangeLoaded] = useState(false);
   const [data, setData] = useState<CheckinAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -244,6 +278,8 @@ export default function Analytics() {
   const [pageIndex, setPageIndex] = useState(() =>
     parseWindowPage(searchParams.get("window")),
   );
+  const overviewTabRef = useRef<HTMLButtonElement>(null);
+  const trendsTabRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const dismissTooltip = () => setTooltipsEnabled(false);
@@ -254,6 +290,8 @@ export default function Analytics() {
     period === "all" ? (allRange?.start ?? data?.start ?? null) : start;
   const reportEnd =
     period === "all" ? (allRange?.end ?? data?.end ?? null) : end;
+  const invalidSelectedDates =
+    period !== "all" && (!start || !end || start > end);
   const automaticGranularity = zoom
     ? zoom.kind === "year"
       ? "month"
@@ -300,15 +338,18 @@ export default function Analytics() {
     !zoom &&
     (granularity === "day" || granularity === "week") &&
     !allRange;
-  const requestGranularity = needsAllRangeBootstrap
-    ? "auto"
-    : period === "all" && !zoom && granularity === "auto"
+  const needsTrendsAllRangeBootstrap =
+    view === "trends" && period === "all" && !allRangeLoaded;
+  const requestGranularity =
+    needsAllRangeBootstrap || needsTrendsAllRangeBootstrap
       ? "auto"
-      : actualGranularity;
+      : period === "all" && !zoom && granularity === "auto"
+        ? "auto"
+        : actualGranularity;
   const requestRange =
-    !needsAllRangeBootstrap && zoomRange
+    !needsAllRangeBootstrap && !needsTrendsAllRangeBootstrap && zoomRange
       ? { start: visibleStart, end: visibleEnd }
-      : !needsAllRangeBootstrap && pageRange
+      : !needsAllRangeBootstrap && !needsTrendsAllRangeBootstrap && pageRange
         ? { start: pageRange.start, end: pageRange.end }
         : null;
   const requestParams = useMemo(
@@ -327,12 +368,16 @@ export default function Analytics() {
       requestGranularity,
       requestRange?.start,
       requestRange?.end,
+      view,
+      allRangeLoaded,
     ],
   );
 
   useEffect(() => {
     const urlParams = makeApiParams(period, start, end, granularity);
     urlParams.set("period", period);
+    if (view === "trends") urlParams.set("view", "trends");
+    if (metric !== "total") urlParams.set("metric", metric);
     if (searchParams.get("debugLayout") === "1") {
       urlParams.set("debugLayout", "1");
     }
@@ -345,7 +390,26 @@ export default function Analytics() {
     if (urlParams.toString() !== searchParams.toString()) {
       setSearchParams(urlParams, { replace: true });
     }
-  }, [period, start, end, granularity, searchParams, setSearchParams]);
+  }, [
+    period,
+    start,
+    end,
+    granularity,
+    view,
+    metric,
+    searchParams,
+    setSearchParams,
+  ]);
+
+  useEffect(() => {
+    if (navigationType !== "POP") return;
+    const parsed = initialParams(new URLSearchParams(location.search));
+    setPeriod(parsed.period);
+    setGranularity(parsed.granularity);
+    setStart(parsed.start);
+    setEnd(parsed.end);
+    setUrlWarning(parsed.invalid || invalidView || invalidMetric);
+  }, [location.search, navigationType]);
 
   useEffect(() => {
     const next = parseZoom(new URLSearchParams(location.search).get("zoom"));
@@ -389,6 +453,20 @@ export default function Analytics() {
 
   useEffect(() => {
     const requestId = ++requestSequence.current;
+    if (view === "trends" && period !== "all") {
+      setLoading(false);
+      setError(null);
+      return () => {
+        if (requestSequence.current === requestId) requestSequence.current++;
+      };
+    }
+    if (view === "trends" && period === "all" && allRangeLoaded) {
+      setLoading(false);
+      setError(null);
+      return () => {
+        if (requestSequence.current === requestId) requestSequence.current++;
+      };
+    }
     if (invalidRange) {
       setData(null);
       setLoading(false);
@@ -405,14 +483,13 @@ export default function Analytics() {
       .then((result) => {
         if (requestSequence.current === requestId) {
           setData(result);
-          if (
-            period === "all" &&
-            !zoom &&
-            requestGranularity === "auto" &&
-            result.start &&
-            result.end
-          ) {
-            setAllRange({ start: result.start, end: result.end });
+          if (period === "all" && requestRange === null) {
+            setAllRangeLoaded(true);
+            setAllRange(
+              result.start && result.end
+                ? { start: result.start, end: result.end }
+                : null,
+            );
           }
         }
       })
@@ -432,7 +509,7 @@ export default function Analytics() {
       controller.abort();
       if (requestSequence.current === requestId) requestSequence.current++;
     };
-  }, [period, start, end, invalidRange, requestParams]);
+  }, [period, start, end, invalidRange, requestParams, view, allRangeLoaded]);
 
   function choosePeriod(next: Period) {
     const today = todayInAmsterdam();
@@ -496,6 +573,33 @@ export default function Analytics() {
   const canDrill =
     actualGranularity === "year" || actualGranularity === "month";
 
+  function changeView(next: AnalyticsView) {
+    if (next === view) return;
+    const params = new URLSearchParams(searchParams);
+    if (next === "trends") params.set("view", "trends");
+    else params.delete("view");
+    setSearchParams(params);
+  }
+
+  function navigateViewWithKeyboard(
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+  ) {
+    const next =
+      event.key === "ArrowRight" || event.key === "ArrowLeft"
+        ? view === "overview"
+          ? "trends"
+          : "overview"
+        : event.key === "Home"
+          ? "overview"
+          : event.key === "End"
+            ? "trends"
+            : null;
+    if (!next) return;
+    event.preventDefault();
+    changeView(next);
+    (next === "overview" ? overviewTabRef : trendsTabRef).current?.focus();
+  }
+
   const chartData = (data?.buckets ?? []).map((bucket) => ({ ...bucket }));
   const lineData = chartData.map((bucket) => ({
     ...bucket,
@@ -521,18 +625,52 @@ export default function Analytics() {
   return (
     <div className="analytics-page">
       <div className="page-heading">
-        <h2>Check-in Analytics</h2>
-        <p>
-          Explore discoveries and check-in activity over time. Dates are grouped
-          in {TIMEZONE}.
-        </p>
+        <h2>{view === "overview" ? "Check-in Analytics" : "Analytics"}</h2>
+        {view === "overview" && (
+          <p>
+            Explore discoveries and check-in activity over time. Dates are
+            grouped in {TIMEZONE}.
+          </p>
+        )}
       </div>
-      {urlWarning && (
+      {(urlWarning || invalidView || invalidMetric) && (
         <p className="analytics-warning" role="status">
-          Invalid analytics URL filters or drilldown. Showing a valid overview
+          Invalid analytics URL filters or drilldown. Using safe defaults
           instead.
         </p>
       )}
+      <div
+        className="analytics-view-tabs"
+        role="tablist"
+        aria-label="Analytics views"
+      >
+        <button
+          ref={overviewTabRef}
+          id="analytics-overview-tab"
+          type="button"
+          role="tab"
+          aria-selected={view === "overview"}
+          aria-controls="analytics-overview-panel"
+          tabIndex={view === "overview" ? 0 : -1}
+          onClick={() => changeView("overview")}
+          onKeyDown={navigateViewWithKeyboard}
+        >
+          Overview
+        </button>
+        <button
+          ref={trendsTabRef}
+          id="analytics-trends-tab"
+          type="button"
+          role="tab"
+          aria-selected={view === "trends"}
+          aria-controls="analytics-trends-panel"
+          tabIndex={view === "trends" ? 0 : -1}
+          onClick={() => changeView("trends")}
+          onKeyDown={navigateViewWithKeyboard}
+        >
+          Drinking Trends
+        </button>
+      </div>
       <section className="analytics-filters" aria-label="Reporting filters">
         <label className="filter-control">
           Reporting period
@@ -590,324 +728,383 @@ export default function Analytics() {
             </label>
           </>
         )}
-        <label className="filter-control">
-          Granularity
-          <select
-            value={granularity}
-            onChange={(event) => {
-              setGranularity(event.target.value as Granularity);
-              setPageIndex(0);
-              const params = new URLSearchParams(searchParams);
-              params.delete("window");
-              setSearchParams(params, { replace: true });
-            }}
-          >
-            <option value="auto">Automatic</option>
-            <option value="day">Daily</option>
-            <option value="week">Weekly</option>
-            <option value="month">Monthly</option>
-          </select>
-        </label>
+        {view === "overview" && (
+          <label className="filter-control">
+            Granularity
+            <select
+              value={granularity}
+              onChange={(event) => {
+                setGranularity(event.target.value as Granularity);
+                setPageIndex(0);
+                const params = new URLSearchParams(searchParams);
+                params.delete("window");
+                setSearchParams(params, { replace: true });
+              }}
+            >
+              <option value="auto">Automatic</option>
+              <option value="day">Daily</option>
+              <option value="week">Weekly</option>
+              <option value="month">Monthly</option>
+            </select>
+          </label>
+        )}
         <span className="analytics-timezone">Timezone: {TIMEZONE}</span>
       </section>
-      <nav className="analytics-breadcrumb" aria-label="Analytics drilldown">
-        <button type="button" disabled={!zoom} onClick={() => updateZoom(null)}>
-          Overview
-        </button>
-        {zoom && (
+      <DrinkingTrendsView
+        active={view === "trends"}
+        metric={metric}
+        range={
+          period === "all"
+            ? allRange
+            : invalidSelectedDates
+              ? null
+              : { start, end }
+        }
+        resolvingAllTime={period === "all" && !allRangeLoaded}
+        allTimeEmpty={period === "all" && allRangeLoaded && !allRange && !error}
+        resolveError={period === "all" && !allRangeLoaded ? error : null}
+        periodValidationError={
+          invalidSelectedDates
+            ? !start || !end
+              ? "Enter both a start date and an end date."
+              : "Start date must be on or before end date."
+            : null
+        }
+        onChooseThisYear={() => choosePeriod("this_year")}
+      />
+      <section
+        id="analytics-overview-panel"
+        className="analytics-overview-panel"
+        role="tabpanel"
+        aria-labelledby="analytics-overview-tab"
+        tabIndex={0}
+        hidden={view !== "overview"}
+      >
+        {view === "overview" && (
           <>
-            <span aria-hidden="true">›</span>
-            {zoom.kind === "year" ? (
-              <strong>{zoom.value}</strong>
-            ) : (
-              <>
+            <nav
+              className="analytics-breadcrumb"
+              aria-label="Analytics drilldown"
+            >
+              <button
+                type="button"
+                disabled={!zoom}
+                onClick={() => updateZoom(null)}
+              >
+                Overview
+              </button>
+              {zoom && (
+                <>
+                  <span aria-hidden="true">›</span>
+                  {zoom.kind === "year" ? (
+                    <strong>{zoom.value}</strong>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateZoom({
+                            kind: "year",
+                            value: zoom.value.slice(0, 4),
+                          })
+                        }
+                      >
+                        {zoom.value.slice(0, 4)}
+                      </button>
+                      <span aria-hidden="true">›</span>
+                      <strong>
+                        {new Date(`${zoom.value}-01T00:00:00Z`).toLocaleString(
+                          "en",
+                          {
+                            month: "long",
+                            timeZone: "UTC",
+                          },
+                        )}
+                      </strong>
+                    </>
+                  )}
+                </>
+              )}
+              {zoom?.kind === "month" && (
+                <span className="deepest-zoom">
+                  {actualGranularity === "day"
+                    ? "Daily detail · deepest level"
+                    : `${actualGranularity[0].toUpperCase()}${actualGranularity.slice(1)} buckets · month selected`}
+                </span>
+              )}
+              {zoom?.kind === "year" && (
+                <span className="deepest-zoom">Monthly view</span>
+              )}
+            </nav>
+            {pageRange && pageRange.pageCount > 1 && !zoom && (
+              <nav
+                className="analytics-window-nav"
+                aria-label="Visible bucket window"
+              >
                 <button
                   type="button"
-                  onClick={() =>
-                    updateZoom({ kind: "year", value: zoom.value.slice(0, 4) })
-                  }
+                  disabled={pageRange.pageIndex === 0}
+                  onClick={() => updatePage(pageRange.pageIndex - 1)}
                 >
-                  {zoom.value.slice(0, 4)}
+                  Previous {granularity === "day" ? "45 days" : "45 weeks"}
                 </button>
-                <span aria-hidden="true">›</span>
-                <strong>
-                  {new Date(`${zoom.value}-01T00:00:00Z`).toLocaleString("en", {
-                    month: "long",
-                    timeZone: "UTC",
-                  })}
-                </strong>
+                <span>
+                  Showing {visibleStart}–{visibleEnd} · page{" "}
+                  {pageRange.pageIndex + 1} of {pageRange.pageCount}
+                </span>
+                <button
+                  type="button"
+                  disabled={pageRange.pageIndex + 1 >= pageRange.pageCount}
+                  onClick={() => updatePage(pageRange.pageIndex + 1)}
+                >
+                  Next {granularity === "day" ? "45 days" : "45 weeks"}
+                </button>
+              </nav>
+            )}
+            {invalidRange && (
+              <p className="analytics-warning" role="alert">
+                {invalidZoom
+                  ? "This drilldown period is outside the reporting range. Showing the overview instead."
+                  : !start || !end
+                    ? "Enter both a start date and an end date."
+                    : "Start date must be on or before end date."}
+              </p>
+            )}
+            {loading && (
+              <p className="analytics-state" role="status">
+                Loading analytics…
+              </p>
+            )}
+            {!loading && error && (
+              <div className="analytics-state error-state" role="alert">
+                <p>{error}</p>
+                {(error.includes("coarser granularity") ||
+                  error.includes("more than")) && (
+                  <button type="button" onClick={() => setGranularity("auto")}>
+                    Switch to automatic overview
+                  </button>
+                )}
+              </div>
+            )}
+            {!loading &&
+              !error &&
+              data &&
+              data.summary.total_checkins === 0 && (
+                <p className="analytics-state">
+                  No check-ins to display for this reporting period.
+                </p>
+              )}
+            {!loading && !error && data && data.summary.total_checkins > 0 && (
+              <>
+                <p className="analytics-scope">
+                  {zoom?.kind === "month"
+                    ? `${new Date(`${zoom.value}-01T00:00:00Z`).toLocaleString("en", { month: "long", timeZone: "UTC" })} ${zoom.value.slice(0, 4)} · ${visibleStart}–${visibleEnd}`
+                    : zoom?.kind === "year"
+                      ? `${zoom.value} · ${visibleStart}–${visibleEnd}`
+                      : pageRange && pageRange.pageCount > 1
+                        ? `${granularity === "day" ? "Daily" : "Weekly"} buckets · ${visibleStart}–${visibleEnd} of ${reportStart}–${reportEnd}`
+                        : `Reporting period · ${data.start ?? start}–${data.end ?? end}`}
+                </p>
+                <div
+                  className="analytics-summary"
+                  aria-label="Check-in summary"
+                >
+                  <Metric
+                    label="Total check-ins"
+                    value={data.summary.total_checkins}
+                  />
+                  <Metric
+                    label="New discoveries"
+                    value={data.summary.new_discoveries}
+                  />
+                  <Metric
+                    label="Repeat check-ins"
+                    value={data.summary.repeat_checkins}
+                  />
+                </div>
+                {data.buckets.length === 0 ? (
+                  <p className="analytics-state">
+                    No check-ins to display for this reporting period.
+                  </p>
+                ) : (
+                  <>
+                    <ChartPanel
+                      title="Check-in Breakdown"
+                      description="Each bar decomposes check-ins into first discoveries and repeats."
+                    >
+                      <div
+                        className="chart-scroll"
+                        role="group"
+                        aria-label="Stacked bar chart of new discovery and repeat check-ins"
+                        onPointerMove={enableTooltipOnPointerMove}
+                        onPointerDown={() => setTooltipsEnabled(true)}
+                        onTouchMove={() => setTooltipsEnabled(true)}
+                      >
+                        <div className="chart-canvas">
+                          <ResponsiveContainer width="100%" height={320}>
+                            <BarChart data={chartData} accessibilityLayer>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="key" minTickGap={24} />
+                              <YAxis allowDecimals={false} />
+                              <Tooltip
+                                active={tooltipsEnabled ? undefined : false}
+                                content={<ExactTooltip showShare />}
+                              />
+                              <Legend />
+                              <Bar
+                                dataKey="new_discoveries"
+                                name="New discoveries"
+                                stackId="checkins"
+                                fill="#15803d"
+                                cursor={canDrill ? "pointer" : "default"}
+                                onClick={(entry) =>
+                                  drillTo(entry.payload as AnalyticsBucket)
+                                }
+                              />
+                              <Bar
+                                dataKey="repeat_checkins"
+                                name="Repeat check-ins"
+                                stackId="checkins"
+                                fill="#2563eb"
+                                cursor={canDrill ? "pointer" : "default"}
+                                onClick={(entry) =>
+                                  drillTo(entry.payload as AnalyticsBucket)
+                                }
+                              />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                      {canDrill && (
+                        <BucketActions buckets={chartData} onSelect={drillTo} />
+                      )}
+                    </ChartPanel>
+                    <ChartPanel
+                      title="Check-in Trends"
+                      description="Activity is period-only; cumulative lines include your complete history before the selected range."
+                    >
+                      <div
+                        className="chart-controls"
+                        role="group"
+                        aria-label="Trend display mode"
+                      >
+                        <button
+                          type="button"
+                          aria-pressed={mode === "activity"}
+                          onClick={() => setMode("activity")}
+                        >
+                          Activity
+                        </button>
+                        <button
+                          type="button"
+                          aria-pressed={mode === "cumulative"}
+                          onClick={() => setMode("cumulative")}
+                        >
+                          Cumulative
+                        </button>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={visible.total}
+                            onChange={(event) =>
+                              setVisible({
+                                ...visible,
+                                total: event.target.checked,
+                              })
+                            }
+                          />
+                          {mode === "activity"
+                            ? "All check-ins"
+                            : "Cumulative check-ins"}
+                        </label>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={visible.discoveries}
+                            onChange={(event) =>
+                              setVisible({
+                                ...visible,
+                                discoveries: event.target.checked,
+                              })
+                            }
+                          />
+                          {mode === "activity"
+                            ? "New discoveries"
+                            : "Cumulative discoveries"}
+                        </label>
+                      </div>
+                      <div
+                        className="chart-scroll"
+                        role="group"
+                        aria-label={`${mode} line chart of check-ins and discoveries`}
+                        onPointerMove={enableTooltipOnPointerMove}
+                        onPointerDown={() => setTooltipsEnabled(true)}
+                        onTouchMove={() => setTooltipsEnabled(true)}
+                      >
+                        <div className="chart-canvas">
+                          <ResponsiveContainer width="100%" height={320}>
+                            <LineChart
+                              data={lineData}
+                              accessibilityLayer
+                              onClick={drillFromChart}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="key" minTickGap={24} />
+                              <YAxis allowDecimals={false} />
+                              <Tooltip
+                                active={tooltipsEnabled ? undefined : false}
+                                content={<ExactTooltip />}
+                              />
+                              <Legend />
+                              {visible.total && (
+                                <Line
+                                  type="linear"
+                                  dataKey={totalKey}
+                                  name={
+                                    mode === "activity"
+                                      ? "All check-ins"
+                                      : "Cumulative check-ins"
+                                  }
+                                  stroke="#2563eb"
+                                  dot={false}
+                                  activeDot={{ r: 5 }}
+                                />
+                              )}
+                              {visible.discoveries && (
+                                <Line
+                                  type="linear"
+                                  dataKey={discoveryKey}
+                                  name={
+                                    mode === "activity"
+                                      ? "New discoveries"
+                                      : "Cumulative discoveries"
+                                  }
+                                  stroke="#15803d"
+                                  dot={false}
+                                  activeDot={{ r: 5 }}
+                                />
+                              )}
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                      {canDrill && (
+                        <BucketActions buckets={chartData} onSelect={drillTo} />
+                      )}
+                    </ChartPanel>
+                  </>
+                )}
+                <p className="analytics-footnote">
+                  Distinct beers in this range: {data.summary.distinct_beers}.
+                  Cumulative baseline before range:{" "}
+                  {data.cumulative_baseline_checkins} check-ins and{" "}
+                  {data.cumulative_baseline_discoveries} discoveries.
+                </p>
               </>
             )}
           </>
         )}
-        {zoom?.kind === "month" && (
-          <span className="deepest-zoom">
-            {actualGranularity === "day"
-              ? "Daily detail · deepest level"
-              : `${actualGranularity[0].toUpperCase()}${actualGranularity.slice(1)} buckets · month selected`}
-          </span>
-        )}
-        {zoom?.kind === "year" && (
-          <span className="deepest-zoom">Monthly view</span>
-        )}
-      </nav>
-      {pageRange && pageRange.pageCount > 1 && !zoom && (
-        <nav
-          className="analytics-window-nav"
-          aria-label="Visible bucket window"
-        >
-          <button
-            type="button"
-            disabled={pageRange.pageIndex === 0}
-            onClick={() => updatePage(pageRange.pageIndex - 1)}
-          >
-            Previous {granularity === "day" ? "45 days" : "45 weeks"}
-          </button>
-          <span>
-            Showing {visibleStart}–{visibleEnd} · page {pageRange.pageIndex + 1}{" "}
-            of {pageRange.pageCount}
-          </span>
-          <button
-            type="button"
-            disabled={pageRange.pageIndex + 1 >= pageRange.pageCount}
-            onClick={() => updatePage(pageRange.pageIndex + 1)}
-          >
-            Next {granularity === "day" ? "45 days" : "45 weeks"}
-          </button>
-        </nav>
-      )}
-      {invalidRange && (
-        <p className="analytics-warning" role="alert">
-          {invalidZoom
-            ? "This drilldown period is outside the reporting range. Showing the overview instead."
-            : !start || !end
-              ? "Enter both a start date and an end date."
-              : "Start date must be on or before end date."}
-        </p>
-      )}
-      {loading && (
-        <p className="analytics-state" role="status">
-          Loading analytics…
-        </p>
-      )}
-      {!loading && error && (
-        <div className="analytics-state error-state" role="alert">
-          <p>{error}</p>
-          {(error.includes("coarser granularity") ||
-            error.includes("more than")) && (
-            <button type="button" onClick={() => setGranularity("auto")}>
-              Switch to automatic overview
-            </button>
-          )}
-        </div>
-      )}
-      {!loading && !error && data && data.summary.total_checkins === 0 && (
-        <p className="analytics-state">
-          No check-ins to display for this reporting period.
-        </p>
-      )}
-      {!loading && !error && data && data.summary.total_checkins > 0 && (
-        <>
-          <p className="analytics-scope">
-            {zoom?.kind === "month"
-              ? `${new Date(`${zoom.value}-01T00:00:00Z`).toLocaleString("en", { month: "long", timeZone: "UTC" })} ${zoom.value.slice(0, 4)} · ${visibleStart}–${visibleEnd}`
-              : zoom?.kind === "year"
-                ? `${zoom.value} · ${visibleStart}–${visibleEnd}`
-                : pageRange && pageRange.pageCount > 1
-                  ? `${granularity === "day" ? "Daily" : "Weekly"} buckets · ${visibleStart}–${visibleEnd} of ${reportStart}–${reportEnd}`
-                  : `Reporting period · ${data.start ?? start}–${data.end ?? end}`}
-          </p>
-          <div className="analytics-summary" aria-label="Check-in summary">
-            <Metric
-              label="Total check-ins"
-              value={data.summary.total_checkins}
-            />
-            <Metric
-              label="New discoveries"
-              value={data.summary.new_discoveries}
-            />
-            <Metric
-              label="Repeat check-ins"
-              value={data.summary.repeat_checkins}
-            />
-          </div>
-          {data.buckets.length === 0 ? (
-            <p className="analytics-state">
-              No check-ins to display for this reporting period.
-            </p>
-          ) : (
-            <>
-              <ChartPanel
-                title="Check-in Breakdown"
-                description="Each bar decomposes check-ins into first discoveries and repeats."
-              >
-                <div
-                  className="chart-scroll"
-                  role="group"
-                  aria-label="Stacked bar chart of new discovery and repeat check-ins"
-                  onPointerMove={enableTooltipOnPointerMove}
-                  onPointerDown={() => setTooltipsEnabled(true)}
-                  onTouchMove={() => setTooltipsEnabled(true)}
-                >
-                  <div className="chart-canvas">
-                    <ResponsiveContainer width="100%" height={320}>
-                      <BarChart data={chartData} accessibilityLayer>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="key" minTickGap={24} />
-                        <YAxis allowDecimals={false} />
-                        <Tooltip
-                          active={tooltipsEnabled ? undefined : false}
-                          content={<ExactTooltip showShare />}
-                        />
-                        <Legend />
-                        <Bar
-                          dataKey="new_discoveries"
-                          name="New discoveries"
-                          stackId="checkins"
-                          fill="#15803d"
-                          cursor={canDrill ? "pointer" : "default"}
-                          onClick={(entry) =>
-                            drillTo(entry.payload as AnalyticsBucket)
-                          }
-                        />
-                        <Bar
-                          dataKey="repeat_checkins"
-                          name="Repeat check-ins"
-                          stackId="checkins"
-                          fill="#2563eb"
-                          cursor={canDrill ? "pointer" : "default"}
-                          onClick={(entry) =>
-                            drillTo(entry.payload as AnalyticsBucket)
-                          }
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-                {canDrill && (
-                  <BucketActions buckets={chartData} onSelect={drillTo} />
-                )}
-              </ChartPanel>
-              <ChartPanel
-                title="Check-in Trends"
-                description="Activity is period-only; cumulative lines include your complete history before the selected range."
-              >
-                <div
-                  className="chart-controls"
-                  role="group"
-                  aria-label="Trend display mode"
-                >
-                  <button
-                    type="button"
-                    aria-pressed={mode === "activity"}
-                    onClick={() => setMode("activity")}
-                  >
-                    Activity
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={mode === "cumulative"}
-                    onClick={() => setMode("cumulative")}
-                  >
-                    Cumulative
-                  </button>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={visible.total}
-                      onChange={(event) =>
-                        setVisible({ ...visible, total: event.target.checked })
-                      }
-                    />
-                    {mode === "activity"
-                      ? "All check-ins"
-                      : "Cumulative check-ins"}
-                  </label>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={visible.discoveries}
-                      onChange={(event) =>
-                        setVisible({
-                          ...visible,
-                          discoveries: event.target.checked,
-                        })
-                      }
-                    />
-                    {mode === "activity"
-                      ? "New discoveries"
-                      : "Cumulative discoveries"}
-                  </label>
-                </div>
-                <div
-                  className="chart-scroll"
-                  role="group"
-                  aria-label={`${mode} line chart of check-ins and discoveries`}
-                  onPointerMove={enableTooltipOnPointerMove}
-                  onPointerDown={() => setTooltipsEnabled(true)}
-                  onTouchMove={() => setTooltipsEnabled(true)}
-                >
-                  <div className="chart-canvas">
-                    <ResponsiveContainer width="100%" height={320}>
-                      <LineChart
-                        data={lineData}
-                        accessibilityLayer
-                        onClick={drillFromChart}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="key" minTickGap={24} />
-                        <YAxis allowDecimals={false} />
-                        <Tooltip
-                          active={tooltipsEnabled ? undefined : false}
-                          content={<ExactTooltip />}
-                        />
-                        <Legend />
-                        {visible.total && (
-                          <Line
-                            type="linear"
-                            dataKey={totalKey}
-                            name={
-                              mode === "activity"
-                                ? "All check-ins"
-                                : "Cumulative check-ins"
-                            }
-                            stroke="#2563eb"
-                            dot={false}
-                            activeDot={{ r: 5 }}
-                          />
-                        )}
-                        {visible.discoveries && (
-                          <Line
-                            type="linear"
-                            dataKey={discoveryKey}
-                            name={
-                              mode === "activity"
-                                ? "New discoveries"
-                                : "Cumulative discoveries"
-                            }
-                            stroke="#15803d"
-                            dot={false}
-                            activeDot={{ r: 5 }}
-                          />
-                        )}
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-                {canDrill && (
-                  <BucketActions buckets={chartData} onSelect={drillTo} />
-                )}
-              </ChartPanel>
-            </>
-          )}
-          <p className="analytics-footnote">
-            Distinct beers in this range: {data.summary.distinct_beers}.
-            Cumulative baseline before range:{" "}
-            {data.cumulative_baseline_checkins} check-ins and{" "}
-            {data.cumulative_baseline_discoveries} discoveries.
-          </p>
-        </>
-      )}
+      </section>
       {layoutDebug && <LayoutDiagnostics />}
     </div>
   );

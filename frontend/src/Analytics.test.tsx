@@ -50,6 +50,36 @@ const sample = {
   ],
 };
 
+const trendsSample = {
+  start: "2026-01-01",
+  end: "2026-01-02",
+  timezone: "Europe/Amsterdam",
+  daily: [
+    { date: "2026-01-01", total: 2, discoveries: 1, repeats: 1 },
+    { date: "2026-01-02", total: 0, discoveries: 0, repeats: 0 },
+  ],
+  weekday: Array.from({ length: 7 }, (_, weekday) => ({
+    weekday,
+    total: 0,
+    discoveries: 0,
+    repeats: 0,
+    days_in_period: weekday < 2 ? 1 : 0,
+  })),
+  hourly: Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    total: 0,
+    discoveries: 0,
+    repeats: 0,
+  })),
+  weekday_hour: Array.from({ length: 168 }, (_, index) => ({
+    weekday: Math.floor(index / 24),
+    hour: index % 24,
+    total: 0,
+    discoveries: 0,
+    repeats: 0,
+  })),
+};
+
 function QueryView() {
   const location = useLocation();
   return <output aria-label="Current query">{location.search}</output>;
@@ -705,6 +735,314 @@ test("shows fetch errors and empty data feedback", async () => {
   );
   cleanup();
   renderAnalytics();
+  expect(
+    await screen.findByText(
+      "No check-ins to display for this reporting period.",
+    ),
+  ).toBeInTheDocument();
+});
+
+test("Overview remains the default and explicit overview is canonicalized", async () => {
+  renderAnalytics("/analytics");
+  expect(await screen.findByText("Check-in Breakdown")).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  expect(
+    screen.queryByRole("heading", { name: "Drinking Trends" }),
+  ).not.toBeInTheDocument();
+  await waitFor(() =>
+    expect(screen.getByLabelText("Current query")).not.toHaveTextContent(
+      "view=",
+    ),
+  );
+
+  cleanup();
+  renderAnalytics("/analytics?view=overview");
+  expect(await screen.findByText("Check-in Breakdown")).toBeInTheDocument();
+  await waitFor(() =>
+    expect(screen.getByLabelText("Current query")).not.toHaveTextContent(
+      "view=",
+    ),
+  );
+});
+
+test("invalid view and metric values fall back and are removed from the URL", async () => {
+  renderAnalytics(
+    "/analytics?period=custom&start=2026-01-01&end=2026-01-02&view=charts&metric=wat",
+  );
+  expect(await screen.findByText("Check-in Breakdown")).toBeInTheDocument();
+  expect(
+    await screen.findByText(/Invalid analytics URL filters or drilldown/),
+  ).toBeInTheDocument();
+  await waitFor(() => {
+    expect(screen.getByLabelText("Current query")).not.toHaveTextContent(
+      "view=",
+    );
+    expect(screen.getByLabelText("Current query")).not.toHaveTextContent(
+      "metric=",
+    );
+  });
+});
+
+test("invalid trends metric falls back to total without changing the selected view", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({ ok: true, json: async () => trendsSample })),
+  );
+  renderAnalytics(
+    "/analytics?period=custom&start=2026-01-01&end=2026-01-02&view=trends&metric=unknown",
+  );
+  expect(
+    await screen.findByText(/Drinking Trends data is ready/),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("tabpanel", { name: "Drinking Trends" }),
+  ).toHaveAttribute("data-metric", "total");
+  await waitFor(() => {
+    expect(screen.getByLabelText("Current query")).toHaveTextContent(
+      "view=trends",
+    );
+    expect(screen.getByLabelText("Current query")).not.toHaveTextContent(
+      "metric=",
+    );
+  });
+});
+
+test("tabs preserve shared filters and metric, use keyboard navigation, and restore history", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) =>
+      String(input).includes("drinking-trends")
+        ? { ok: true, json: async () => trendsSample }
+        : { ok: true, json: async () => sample },
+    ),
+  );
+  render(
+    <MemoryRouter
+      initialEntries={[
+        "/analytics?period=custom&start=2026-01-01&end=2026-01-02&granularity=week&timezone=Europe%2FAmsterdam&metric=discoveries&debugLayout=1",
+      ]}
+    >
+      <HistoryControls />
+      <QueryView />
+      <Analytics />
+    </MemoryRouter>,
+  );
+  await screen.findByText("Check-in Breakdown");
+  const overview = screen.getByRole("tab", { name: "Overview" });
+  const trends = screen.getByRole("tab", { name: "Drinking Trends" });
+  expect(vi.mocked(globalThis.fetch).mock.calls).toHaveLength(1);
+
+  fireEvent.keyDown(overview, { key: "ArrowRight" });
+  expect(trends).toHaveFocus();
+  expect(
+    await screen.findByText(/Drinking Trends data is ready/),
+  ).toBeInTheDocument();
+  expect(trends).toHaveAttribute("aria-selected", "true");
+  expect(
+    screen.getByRole("tabpanel", { name: "Drinking Trends" }),
+  ).toHaveAttribute("data-metric", "discoveries");
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "view=trends",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "metric=discoveries",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "granularity=week",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "debugLayout=1",
+  );
+  expect(
+    screen.getByRole("complementary", { name: "Layout diagnostics" }),
+  ).toBeInTheDocument();
+  const trendRequest = new URL(
+    String(vi.mocked(globalThis.fetch).mock.calls.at(-1)?.[0]),
+    "http://localhost",
+  );
+  expect(trendRequest.pathname).toBe("/api/v1/analytics/drinking-trends");
+  expect(trendRequest.searchParams.get("start")).toBe("2026-01-01");
+  expect(trendRequest.searchParams.get("end")).toBe("2026-01-02");
+  expect(trendRequest.searchParams.get("timezone")).toBe("Europe/Amsterdam");
+
+  fireEvent.click(screen.getByRole("button", { name: "Browser back" }));
+  await waitFor(() =>
+    expect(overview).toHaveAttribute("aria-selected", "true"),
+  );
+  expect(screen.getByLabelText("Current query")).not.toHaveTextContent(
+    "view=trends",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Browser forward" }));
+  await waitFor(() => expect(trends).toHaveAttribute("aria-selected", "true"));
+
+  fireEvent.click(overview);
+  expect(await screen.findByText("Check-in Breakdown")).toBeInTheDocument();
+  expect(screen.getByLabelText("Granularity")).toHaveValue("week");
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "metric=discoveries",
+  );
+});
+
+test("trends fetch is scoped to its active view and custom date changes preserve view and metric", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) =>
+      String(input).includes("drinking-trends")
+        ? { ok: true, json: async () => trendsSample }
+        : { ok: true, json: async () => sample },
+    ),
+  );
+  renderAnalytics(
+    "/analytics?period=custom&start=2026-01-01&end=2026-01-02&view=trends&metric=repeats",
+  );
+  expect(
+    await screen.findByText(/Drinking Trends data is ready/),
+  ).toBeInTheDocument();
+  expect(vi.mocked(globalThis.fetch).mock.calls).toHaveLength(1);
+  fireEvent.change(screen.getByLabelText("Start date"), {
+    target: { value: "2026-01-02" },
+  });
+  await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "view=trends",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "metric=repeats",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "start=2026-01-02",
+  );
+});
+
+test("all time resolves M7 full-history bounds and reports M8 range-limit errors", async () => {
+  let trendRequests = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "http://localhost");
+      if (url.pathname.endsWith("drinking-trends")) {
+        trendRequests++;
+        if (trendRequests > 1) {
+          return { ok: true, json: async () => trendsSample };
+        }
+        return {
+          ok: false,
+          status: 422,
+          json: async () => ({
+            detail:
+              "range creates more than 366 buckets; choose a shorter range",
+          }),
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          ...sample,
+          start: "2019-01-01",
+          end: "2026-12-31",
+          granularity: "year",
+        }),
+      };
+    }),
+  );
+  renderAnalytics("/analytics?period=all&view=trends&metric=total");
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "longer than the daily activity limit",
+  );
+  const requests = vi
+    .mocked(globalThis.fetch)
+    .mock.calls.map(([input]) => new URL(String(input), "http://localhost"));
+  expect(requests).toHaveLength(2);
+  expect(requests[0].pathname).toBe("/api/v1/analytics/checkins");
+  expect(requests[0].searchParams.has("start")).toBe(false);
+  expect(requests[1].pathname).toBe("/api/v1/analytics/drinking-trends");
+  expect(requests[1].searchParams.get("start")).toBe("2019-01-01");
+  expect(requests[1].searchParams.get("end")).toBe("2026-12-31");
+  expect(
+    screen.getByLabelText("Drinking Trends reporting period"),
+  ).toHaveTextContent("2019-01-01–2026-12-31");
+  fireEvent.click(
+    screen.getByRole("button", { name: "Choose this year instead" }),
+  );
+  expect(
+    await screen.findByText(/Drinking Trends data is ready/),
+  ).toBeInTheDocument();
+  expect(screen.getByLabelText("Reporting period")).toHaveValue("this_year");
+  const yearRequest = new URL(
+    String(vi.mocked(globalThis.fetch).mock.calls.at(-1)?.[0]),
+    "http://localhost",
+  );
+  expect(yearRequest.pathname).toBe("/api/v1/analytics/drinking-trends");
+  expect(yearRequest.searchParams.get("start")).toMatch(/^\d{4}-01-01$/);
+  expect(yearRequest.searchParams.get("end")).toMatch(/^\d{4}-12-31$/);
+});
+
+test("all time with empty M7 history does not call trends and explains unsupported history clearly", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        ...sample,
+        start: null,
+        end: null,
+        summary: { ...sample.summary, total_checkins: 0 },
+        buckets: [],
+      }),
+    })),
+  );
+  renderAnalytics("/analytics?period=all&view=trends");
+  expect(
+    await screen.findByText("No check-ins are available for All time."),
+  ).toBeInTheDocument();
+  expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+});
+
+test("trends handles empty aggregates and ignores stale period responses", async () => {
+  const pending: Array<{
+    resolve: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    signal?: AbortSignal;
+  }> = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (!String(input).includes("drinking-trends")) {
+        return Promise.resolve({ ok: true, json: async () => sample });
+      }
+      return new Promise((resolve) =>
+        pending.push({
+          resolve,
+          signal: init?.signal as AbortSignal | undefined,
+        }),
+      );
+    }),
+  );
+  renderAnalytics(
+    "/analytics?period=custom&start=2026-01-01&end=2026-01-02&view=trends",
+  );
+  await waitFor(() => expect(pending).toHaveLength(1));
+  fireEvent.change(screen.getByLabelText("Start date"), {
+    target: { value: "2026-01-02" },
+  });
+  await waitFor(() => expect(pending).toHaveLength(2));
+  expect(pending[0].signal?.aborted).toBe(true);
+  pending[0].resolve({ ok: true, json: async () => trendsSample });
+  expect(screen.getByText("Loading drinking trends…")).toBeInTheDocument();
+  pending[1].resolve({
+    ok: true,
+    json: async () => ({
+      ...trendsSample,
+      daily: trendsSample.daily.map((day) => ({
+        ...day,
+        total: 0,
+        discoveries: 0,
+        repeats: 0,
+      })),
+    }),
+  });
   expect(
     await screen.findByText(
       "No check-ins to display for this reporting period.",

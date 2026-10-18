@@ -30,6 +30,24 @@ export type CheckinAnalytics = {
   buckets: AnalyticsBucket[];
 };
 
+type DrinkingTrendCounts = {
+  total: number;
+  discoveries: number;
+  repeats: number;
+};
+
+export type DrinkingTrends = {
+  start: string;
+  end: string;
+  timezone: string;
+  daily: Array<DrinkingTrendCounts & { date: string }>;
+  weekday: Array<
+    DrinkingTrendCounts & { weekday: number; days_in_period: number }
+  >;
+  hourly: Array<DrinkingTrendCounts & { hour: number }>;
+  weekday_hour: Array<DrinkingTrendCounts & { weekday: number; hour: number }>;
+};
+
 export async function fetchCheckinAnalytics(
   params: URLSearchParams,
   signal?: AbortSignal,
@@ -47,4 +65,26 @@ export async function fetchCheckinAnalytics(
     );
   }
   return (await response.json()) as CheckinAnalytics;
+}
+
+export async function fetchDrinkingTrends(
+  start: string,
+  end: string,
+  timezone: string,
+  signal?: AbortSignal,
+): Promise<DrinkingTrends> {
+  const params = new URLSearchParams({ start, end, timezone });
+  const response = await apiFetch(
+    `/api/v1/analytics/drinking-trends?${params.toString()}`,
+    { signal },
+  );
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as {
+      detail?: string;
+    } | null;
+    throw new AnalyticsApiError(
+      body?.detail ?? `Analytics request failed (${response.status})`,
+    );
+  }
+  return (await response.json()) as DrinkingTrends;
 }
