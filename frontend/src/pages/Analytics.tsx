@@ -711,6 +711,12 @@ export default function Analytics() {
     setActiveTooltipChart(chart);
   }
 
+  function dismissTooltipOnPointerLeave(chart: "breakdown" | "trend") {
+    setActiveTooltipChart((activeChart) =>
+      activeChart === chart ? null : activeChart,
+    );
+  }
+
   return (
     <div className="analytics-page">
       <div className="page-heading">
@@ -1035,6 +1041,9 @@ export default function Analytics() {
                         onPointerMove={(event) =>
                           enableTooltipOnPointerMove("breakdown", event)
                         }
+                        onPointerLeave={() =>
+                          dismissTooltipOnPointerLeave("breakdown")
+                        }
                         onPointerDown={() =>
                           enableTooltipFromInteraction("breakdown")
                         }
@@ -1145,6 +1154,9 @@ export default function Analytics() {
                         aria-label={`${mode} line chart of check-ins and discoveries`}
                         onPointerMove={(event) =>
                           enableTooltipOnPointerMove("trend", event)
+                        }
+                        onPointerLeave={() =>
+                          dismissTooltipOnPointerLeave("trend")
                         }
                         onPointerDown={() =>
                           enableTooltipFromInteraction("trend")
