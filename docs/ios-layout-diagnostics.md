@@ -13,7 +13,8 @@ reachable LAN URL in iPhone Safari (for example,
 For a production-style deploy, append `?debugLayout=1` to the Analytics URL.
 
 The small **Layout debug** panel shows root document scroll width/client width,
-horizontal root position and sample count. Capture starts automatically upon
+horizontal root position, rolling sample count and retained incident count.
+Capture starts automatically upon
 opening the page. **Pause/Start capture** controls recording; **Clear** resets
 the ring buffer; **Copy / export JSON** copies the local measurements to the
 clipboard, or downloads a JSON file if clipboard access is unavailable. If
@@ -42,7 +43,11 @@ potential document anomaly. An element may still extend beyond the viewport
 without increasing root scroll width; the wider offender scan runs only when a
 root anomaly is observed. Each offender notes whether an overflow-scroll
 ancestor contains it. An intentional chart-local scroll is recorded separately
-from root document movement.
+from root document movement. The 600-entry rolling log is exported alongside
+up to 8 independent anomaly windows. Each window preserves up to 30 preceding
+and 60 following samples (capped at 150 samples per incident), so an anomaly
+remains exportable even after it ages out of the rolling log. The panel refreshes
+at most twice per second; touch-move samples are throttled to 20 per second.
 
 This first-stage instrumentation is evidence collection, not a fix. Desktop
 Playwright WebKit results cannot establish behavior on physical iOS Safari.

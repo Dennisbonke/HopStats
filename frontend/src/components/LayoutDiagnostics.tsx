@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { LayoutCapture, type CapturedSample } from "./layoutCapture";
 
-const CAPACITY = 600;
 const ORIENTATION_CAPTURE_MS = 2800;
+const ANOMALY_CAPTURE_MS = 1800;
+const PANEL_REFRESH_MS = 500;
+const TOUCH_MOVE_SAMPLE_MS = 50;
 const IMPORTANT_SELECTORS = [
   ".analytics-page",
   ".chart-scroll",
@@ -12,12 +15,7 @@ const IMPORTANT_SELECTORS = [
   ".recharts-tooltip-wrapper",
 ];
 
-type DiagnosticSample = Record<string, unknown> & {
-  t: number;
-  source: string;
-  anomaly?: boolean;
-  offenders?: unknown[];
-};
+type DiagnosticSample = CapturedSample & { offenders?: unknown[] };
 
 function rect(element: Element) {
   const bounds = element.getBoundingClientRect();
@@ -33,9 +31,8 @@ function rect(element: Element) {
   };
 }
 
-function elementDetails(element: Element) {
-  const style = getComputedStyle(element);
-  return {
+function elementDetails(element: Element, includeStyles: boolean) {
+  const details: Record<string, unknown> = {
     selector: element.matches(".analytics-page, .chart-scroll, .chart-canvas")
       ? `.${Array.from(element.classList).join(".")}`
       : `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ""}${element.classList.length ? `.${Array.from(element.classList).join(".")}` : ""}`,
@@ -43,7 +40,10 @@ function elementDetails(element: Element) {
     scrollWidth: (element as HTMLElement).scrollWidth,
     clientWidth: (element as HTMLElement).clientWidth,
     scrollLeft: (element as HTMLElement).scrollLeft,
-    styles: {
+  };
+  if (includeStyles) {
+    const style = getComputedStyle(element);
+    details.styles = {
       position: style.position,
       display: style.display,
       width: style.width,
@@ -52,11 +52,17 @@ function elementDetails(element: Element) {
       overflowX: style.overflowX,
       transform: style.transform,
       contain: style.contain,
-    },
-  };
+    };
+  }
+  return details;
 }
 
-function collect(source: string): DiagnosticSample {
+function collect(
+  source: string,
+  detailed: boolean,
+  scanOffenders: boolean,
+  touch?: unknown,
+): DiagnosticSample {
   const root = document.documentElement;
   const visual = window.visualViewport;
   const layoutWidth = root.clientWidth;
@@ -101,7 +107,7 @@ function collect(source: string): DiagnosticSample {
       portraitMediaQuery: matchMedia("(orientation: portrait)").matches,
       devicePixelRatio: window.devicePixelRatio,
     },
-    elements: elements.map(elementDetails),
+    elements: elements.map((element) => elementDetails(element, detailed)),
     chartScroll: chartScroll.map((element) => ({
       selector: `.${Array.from(element.classList).join(".")}`,
       scrollLeft: element.scrollLeft,
@@ -111,8 +117,9 @@ function collect(source: string): DiagnosticSample {
     })),
     anomaly,
   };
+  if (touch) sample.touch = touch;
 
-  if (anomaly) {
+  if (anomaly && scanOffenders) {
     sample.offenders = Array.from(document.querySelectorAll("body *"))
       .map((element) => {
         const bounds = element.getBoundingClientRect();
@@ -127,9 +134,10 @@ function collect(source: string): DiagnosticSample {
           scrollContainer = scrollContainer.parentElement;
         }
         return {
-          ...elementDetails(element),
+          ...elementDetails(element, true),
           containedByScrollableAncestor: scrollContainer
-            ? elementDetails(scrollContainer).selector
+            ? (elementDetails(scrollContainer, true) as { selector: string })
+                .selector
             : null,
         };
       })
@@ -140,16 +148,17 @@ function collect(source: string): DiagnosticSample {
 }
 
 export default function LayoutDiagnostics() {
-  const samples = useRef<DiagnosticSample[]>([]);
+  const capture = useRef(new LayoutCapture<DiagnosticSample>()).current;
   const raf = useRef<number | null>(null);
   const captureUntil = useRef(0);
   const lastTouch = useRef(new Map<number, { x: number; y: number }>());
+  const lastTouchSampleAt = useRef(0);
   const capturing = useRef(true);
   const [active, setActive] = useState(true);
-  const [revision, setRevision] = useState(0);
+  const [, setRevision] = useState(0);
   const [message, setMessage] = useState("");
-  const anomalous = samples.current.some((sample) => sample.anomaly);
-  const latest = samples.current[samples.current.length - 1];
+  const anomalous = capture.incidents.length > 0;
+  const latest = capture.samples[capture.samples.length - 1];
   const currentViewport = latest?.viewport as
     | {
         documentScrollWidth: number;
@@ -158,31 +167,66 @@ export default function LayoutDiagnostics() {
       }
     | undefined;
 
-  const record = useCallback((source: string) => {
-    if (!capturing.current) return;
-    const sample = collect(source);
-    samples.current.push(sample);
-    if (samples.current.length > CAPACITY) samples.current.shift();
-    setRevision((value) => value + 1);
-  }, []);
+  const record = useCallback(
+    (source: string, touch?: unknown) => {
+      if (!capturing.current) return;
+      const sample = collect(
+        source,
+        [
+          "capture-start",
+          "resize",
+          "orientationchange",
+          "visualViewport.resize",
+          "touchstart",
+          "touchend",
+        ].includes(source),
+        !capture.hasOpenIncident(),
+        touch,
+      );
+      capture.append(sample);
+      if (sample.anomaly) {
+        captureUntil.current = Math.max(
+          captureUntil.current,
+          performance.now() + ANOMALY_CAPTURE_MS,
+        );
+      }
+    },
+    [capture],
+  );
 
-  const scheduleFrames = useCallback(() => {
-    captureUntil.current = performance.now() + ORIENTATION_CAPTURE_MS;
-    if (raf.current !== null) return;
-    const frame = () => {
-      if (!capturing.current) {
-        raf.current = null;
-        return;
-      }
-      record("orientation-rAF");
-      if (performance.now() < captureUntil.current) {
-        raf.current = requestAnimationFrame(frame);
-      } else {
-        raf.current = null;
-      }
-    };
-    raf.current = requestAnimationFrame(frame);
-  }, [record]);
+  useEffect(() => {
+    if (!active) return;
+    const interval = window.setInterval(
+      () => setRevision((value) => value + 1),
+      PANEL_REFRESH_MS,
+    );
+    return () => window.clearInterval(interval);
+  }, [active]);
+
+  const scheduleFrames = useCallback(
+    (duration = ORIENTATION_CAPTURE_MS) => {
+      if (!capturing.current) return;
+      captureUntil.current = Math.max(
+        captureUntil.current,
+        performance.now() + duration,
+      );
+      if (raf.current !== null) return;
+      const frame = () => {
+        if (!capturing.current) {
+          raf.current = null;
+          return;
+        }
+        record("orientation-rAF");
+        if (performance.now() < captureUntil.current) {
+          raf.current = requestAnimationFrame(frame);
+        } else {
+          raf.current = null;
+        }
+      };
+      raf.current = requestAnimationFrame(frame);
+    },
+    [record],
+  );
 
   useEffect(() => {
     const onOrientation = () => {
@@ -207,6 +251,15 @@ export default function LayoutDiagnostics() {
       record(chart ? `chart-scroll:${chart.scrollLeft}` : "scroll");
     };
     const onTouch = (event: TouchEvent) => {
+      if (
+        event.type === "touchmove" &&
+        performance.now() - lastTouchSampleAt.current < TOUCH_MOVE_SAMPLE_MS
+      ) {
+        return;
+      }
+      if (event.type === "touchmove") {
+        lastTouchSampleAt.current = performance.now();
+      }
       const touches = Array.from(event.changedTouches).map((touch) => {
         const previous = lastTouch.current.get(touch.identifier);
         const dx = previous ? touch.clientX - previous.x : 0;
@@ -239,10 +292,10 @@ export default function LayoutDiagnostics() {
                   : "stationary",
         };
       });
-      record(`${event.type}:before`);
-      const prior = samples.current[samples.current.length - 1];
-      if (prior) prior.touch = touches;
-      record(`${event.type}:after`);
+      record(event.type, touches);
+      if (event.type === "touchstart" || event.type === "touchmove") {
+        scheduleFrames(600);
+      }
     };
     window.addEventListener("resize", onResize, { passive: true });
     window.addEventListener("orientationchange", onOrientation, {
@@ -289,9 +342,10 @@ export default function LayoutDiagnostics() {
   }
 
   function clear() {
-    samples.current = [];
+    capture.clear();
     setMessage("");
     record("capture-cleared");
+    setRevision((value) => value + 1);
   }
 
   async function exportJson() {
@@ -300,7 +354,8 @@ export default function LayoutDiagnostics() {
         format: "hopstats-layout-diagnostics-v1",
         exportedAt: new Date().toISOString(),
         userAgent: navigator.userAgent,
-        samples: samples.current,
+        samples: capture.samples,
+        incidents: capture.incidents,
       },
       null,
       2,
@@ -321,11 +376,7 @@ export default function LayoutDiagnostics() {
   }
 
   return (
-    <aside
-      className="layout-diagnostics"
-      aria-label="Layout diagnostics"
-      data-revision={revision}
-    >
+    <aside className="layout-diagnostics" aria-label="Layout diagnostics">
       <div className="layout-diagnostics-heading">
         <strong>Layout debug</strong>
         <span className={anomalous ? "has-anomaly" : ""}>
@@ -340,7 +391,7 @@ export default function LayoutDiagnostics() {
         {currentViewport?.documentClientWidth ??
           document.documentElement.clientWidth}{" "}
         · x {currentViewport?.scrollX ?? window.scrollX} ·{" "}
-        {samples.current.length} samples
+        {capture.samples.length} samples · {capture.incidents.length} incidents
       </output>
       <div className="layout-diagnostics-buttons">
         <button type="button" onClick={toggleCapture}>
@@ -359,10 +410,11 @@ export default function LayoutDiagnostics() {
           <summary>Suspected overflow elements</summary>
           <ul>
             {(
-              (samples.current
+              (capture.incidents[capture.incidents.length - 1]?.samples
                 .slice()
                 .reverse()
-                .find((sample) => sample.anomaly)?.offenders ?? []) as Array<{
+                .find((sample) => sample.anomaly && sample.offenders)
+                ?.offenders ?? []) as Array<{
                 selector?: string;
                 rect?: { left: number; right: number; width: number };
                 containedByScrollableAncestor?: string | null;
