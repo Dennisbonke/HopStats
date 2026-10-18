@@ -13,6 +13,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import LayoutDiagnostics from "../components/LayoutDiagnostics";
 import {
   AnalyticsApiError,
   AnalyticsBucket,
@@ -217,6 +218,7 @@ function ExactTooltip({
 export default function Analytics() {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
+  const layoutDebug = searchParams.get("debugLayout") === "1";
   const initial = useMemo(() => initialParams(searchParams), []);
   const [period, setPeriod] = useState<Period>(initial.period);
   const [granularity, setGranularity] = useState<Granularity>(
@@ -331,6 +333,9 @@ export default function Analytics() {
   useEffect(() => {
     const urlParams = makeApiParams(period, start, end, granularity);
     urlParams.set("period", period);
+    if (searchParams.get("debugLayout") === "1") {
+      urlParams.set("debugLayout", "1");
+    }
     const currentZoom = searchParams.get("zoom");
     if (currentZoom && parseZoom(currentZoom)) {
       urlParams.set("zoom", currentZoom);
@@ -903,6 +908,7 @@ export default function Analytics() {
           </p>
         </>
       )}
+      {layoutDebug && <LayoutDiagnostics />}
     </div>
   );
 }

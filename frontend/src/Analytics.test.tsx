@@ -9,6 +9,8 @@ import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import Analytics from "./pages/Analytics";
 
+let originalClipboardDescriptor: PropertyDescriptor | undefined;
+
 const sample = {
   start: "2026-01-01",
   end: "2026-01-02",
@@ -63,12 +65,40 @@ function HistoryControls() {
   );
 }
 
+function LayoutDebugControls() {
+  const navigate = useNavigate();
+  return (
+    <>
+      <button
+        onClick={() =>
+          navigate(
+            "/analytics?period=custom&start=2026-01-01&end=2026-01-02&granularity=week&debugLayout=1",
+          )
+        }
+      >
+        Enable layout diagnostics
+      </button>
+      <button
+        onClick={() =>
+          navigate(
+            "/analytics?period=custom&start=2026-01-01&end=2026-01-02&granularity=week",
+          )
+        }
+      >
+        Disable layout diagnostics
+      </button>
+    </>
+  );
+}
+
 function renderAnalytics(
   url = "/analytics?period=custom&start=2026-01-01&end=2026-01-02&granularity=day&timezone=Europe%2FAmsterdam",
+  includeLayoutDebugControls = false,
 ) {
   return render(
     <MemoryRouter initialEntries={[url]}>
       <QueryView />
+      {includeLayoutDebugControls && <LayoutDebugControls />}
       <Analytics />
     </MemoryRouter>,
   );
@@ -82,6 +112,12 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  if (originalClipboardDescriptor) {
+    Object.defineProperty(navigator, "clipboard", originalClipboardDescriptor);
+    originalClipboardDescriptor = undefined;
+  } else if (Object.prototype.hasOwnProperty.call(navigator, "clipboard")) {
+    Reflect.deleteProperty(navigator, "clipboard");
+  }
   vi.restoreAllMocks();
 });
 
@@ -97,6 +133,93 @@ test("loads one shared aggregate, renders summary, and preserves URL filters", a
   expect(String(vi.mocked(globalThis.fetch).mock.calls[0][0])).toContain(
     "granularity=day",
   );
+});
+
+test("layout diagnostics are opt-in and available with debugLayout=1", async () => {
+  const { unmount } = renderAnalytics();
+  expect(
+    screen.queryByRole("complementary", { name: "Layout diagnostics" }),
+  ).not.toBeInTheDocument();
+  unmount();
+
+  renderAnalytics(
+    "/analytics?period=custom&start=2026-01-01&end=2026-01-02&granularity=week&debugLayout=1",
+  );
+  expect(
+    await screen.findByRole("complementary", { name: "Layout diagnostics" }),
+  ).toBeInTheDocument();
+  expect(screen.getByText(/No overflow captured/)).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Pause capture" }),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Clear" })).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Copy \/ export JSON" }),
+  ).toBeInTheDocument();
+});
+
+test("layout diagnostics react to query changes and survive filter canonicalization", async () => {
+  renderAnalytics(undefined, true);
+  expect(
+    screen.queryByRole("complementary", { name: "Layout diagnostics" }),
+  ).not.toBeInTheDocument();
+
+  fireEvent.click(
+    screen.getByRole("button", { name: "Enable layout diagnostics" }),
+  );
+  expect(
+    await screen.findByRole("complementary", { name: "Layout diagnostics" }),
+  ).toBeInTheDocument();
+  await waitFor(() =>
+    expect(screen.getByLabelText("Current query")).toHaveTextContent(
+      "debugLayout=1",
+    ),
+  );
+
+  fireEvent.click(
+    screen.getByRole("button", { name: "Disable layout diagnostics" }),
+  );
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("complementary", { name: "Layout diagnostics" }),
+    ).not.toBeInTheDocument(),
+  );
+});
+
+test("capture controls pause and resume recording; JSON export includes incidents", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  originalClipboardDescriptor = Object.getOwnPropertyDescriptor(
+    navigator,
+    "clipboard",
+  );
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
+  vi.spyOn(window, "scrollX", "get").mockReturnValue(4);
+
+  renderAnalytics(
+    "/analytics?period=custom&start=2026-01-01&end=2026-01-02&granularity=week&debugLayout=1",
+  );
+  await screen.findByRole("complementary", { name: "Layout diagnostics" });
+  fireEvent.click(screen.getByRole("button", { name: "Pause capture" }));
+  const output = screen.getByText(/samples · .* incidents/);
+  const pausedOutput = output.textContent;
+  window.dispatchEvent(new Event("resize"));
+  expect(output).toHaveTextContent(pausedOutput ?? "");
+
+  fireEvent.click(screen.getByRole("button", { name: "Start capture" }));
+  expect(await screen.findByText("OVERFLOW CAPTURED")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Copy / export JSON" }));
+  await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+  const exported = JSON.parse(writeText.mock.calls[0][0] as string);
+  expect(exported.incidents).toHaveLength(1);
+  expect(
+    exported.incidents[0].samples.some(
+      (entry: { anomaly?: boolean }) => entry.anomaly,
+    ),
+  ).toBe(true);
 });
 
 test("supports cumulative/activity controls and period changes", async () => {
