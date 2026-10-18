@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LayoutCapture, type CapturedSample } from "./layoutCapture";
+import { TouchTracker } from "./touchTracking";
 
 const ORIENTATION_CAPTURE_MS = 2800;
 const ANOMALY_CAPTURE_MS = 1800;
@@ -151,7 +152,7 @@ export default function LayoutDiagnostics() {
   const capture = useRef(new LayoutCapture<DiagnosticSample>()).current;
   const raf = useRef<number | null>(null);
   const captureUntil = useRef(0);
-  const lastTouch = useRef(new Map<number, { x: number; y: number }>());
+  const touchTracker = useRef(new TouchTracker()).current;
   const lastTouchSampleAt = useRef(0);
   const capturing = useRef(true);
   const [active, setActive] = useState(true);
@@ -260,38 +261,9 @@ export default function LayoutDiagnostics() {
       if (event.type === "touchmove") {
         lastTouchSampleAt.current = performance.now();
       }
-      const touches = Array.from(event.changedTouches).map((touch) => {
-        const previous = lastTouch.current.get(touch.identifier);
-        const dx = previous ? touch.clientX - previous.x : 0;
-        const dy = previous ? touch.clientY - previous.y : 0;
-        lastTouch.current.set(touch.identifier, {
-          x: touch.clientX,
-          y: touch.clientY,
-        });
-        if (event.type === "touchend" || event.type === "touchcancel") {
-          lastTouch.current.delete(touch.identifier);
-        }
-        return {
-          x: touch.clientX,
-          y: touch.clientY,
-          pageX: touch.pageX,
-          pageY: touch.pageY,
-          dx,
-          dy,
-          direction:
-            Math.abs(dx) > Math.abs(dy)
-              ? dx > 0
-                ? "right"
-                : dx < 0
-                  ? "left"
-                  : "stationary"
-              : dy > 0
-                ? "down"
-                : dy < 0
-                  ? "up"
-                  : "stationary",
-        };
-      });
+      const touches = Array.from(event.changedTouches, (touch) =>
+        touchTracker.track(event.type, touch),
+      );
       record(event.type, touches);
       if (event.type === "touchstart" || event.type === "touchmove") {
         scheduleFrames(600);
