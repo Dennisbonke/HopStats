@@ -99,6 +99,29 @@ test("loads one shared aggregate, renders summary, and preserves URL filters", a
   );
 });
 
+test("layout diagnostics are opt-in and available with debugLayout=1", async () => {
+  const { unmount } = renderAnalytics();
+  expect(
+    screen.queryByRole("complementary", { name: "Layout diagnostics" }),
+  ).not.toBeInTheDocument();
+  unmount();
+
+  renderAnalytics(
+    "/analytics?period=custom&start=2026-01-01&end=2026-01-02&granularity=week&debugLayout=1",
+  );
+  expect(
+    await screen.findByRole("complementary", { name: "Layout diagnostics" }),
+  ).toBeInTheDocument();
+  expect(screen.getByText(/No overflow captured/)).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Pause capture" }),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Clear" })).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Copy \/ export JSON" }),
+  ).toBeInTheDocument();
+});
+
 test("supports cumulative/activity controls and period changes", async () => {
   renderAnalytics();
   await screen.findByText("Check-in Breakdown");
