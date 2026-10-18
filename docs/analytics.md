@@ -131,3 +131,21 @@ Reference run in the development container (Intel Core i7-8750H, x86_64,
 Python 3.14.8; not a Raspberry Pi): 100,000 lifetime check-ins, 5,840 in the
 requested year, five warmed service runs; median 0.138 s. This is a reproducible
 reference point, not a Pi performance claim or a CI threshold.
+
+## Analytics navigation (M8.2)
+
+`/analytics` remains the Overview by default. `view=trends` selects Drinking
+Trends; Overview is canonicalized without a `view` parameter. The `metric`
+parameter is reserved for the M8 charts (`total`, `discoveries`, `repeats`),
+defaults to `total`, and currently has no selector UI. Reporting controls remain
+shared above both views, and Overview granularity remains in the URL when
+switching views.
+
+The frontend only requests M8.1 data while Drinking Trends is active and always
+sends explicit dates and timezone. For All time, it first reuses M7's undated
+response metadata to resolve the earliest and latest local reporting dates; an
+empty M7 result becomes an empty state without an M8 request. It then requests
+that full range from M8.1. If the dense daily range exceeds the backend limit,
+the selected All time period remains unchanged and the view offers an explicit
+action to switch to This year. Overview continues to support its existing
+full-history behavior.
