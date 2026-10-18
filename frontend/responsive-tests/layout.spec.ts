@@ -211,6 +211,9 @@ test("application pages fit mobile portrait, landscape, tablet and desktop", asy
   await expectNoDocumentOverflow(page);
 });
 
+// Recharts positions its tooltip from chart interaction coordinates. This test
+// covers stale tooltip state on resize; Playwright does not reproduce the
+// reported physical iOS Safari document overflow.
 test("weekly chart tooltips stay within the document after orientation changes", async ({
   page,
 }) => {
@@ -287,6 +290,7 @@ test("weekly chart tooltips stay within the document after orientation changes",
   await expect(bars).toHaveCount(80);
   await bars.last().hover();
   const tooltip = page.locator(".recharts-tooltip-wrapper").first();
+  const lineTooltip = page.locator(".recharts-tooltip-wrapper").nth(1);
   await expect(tooltip).toBeVisible();
   const measureLayout = () =>
     page.evaluate(() => {
@@ -320,6 +324,25 @@ test("weekly chart tooltips stay within the document after orientation changes",
   expect(before.tooltip!.left).toBeGreaterThanOrEqual(-1);
   expect(before.tooltip!.right).toBeLessThanOrEqual(before.clientWidth + 1);
 
+  await page.mouse.move(5, 5);
+  await expect(tooltip).toBeHidden();
+  const lineChartLocator = page
+    .locator(".chart-canvas .recharts-wrapper")
+    .nth(1);
+  await lineChartLocator.scrollIntoViewIfNeeded();
+  const lineChart = await lineChartLocator.boundingBox();
+  await page.mouse.move(
+    lineChart!.x + lineChart!.width * 0.65,
+    lineChart!.y + 150,
+  );
+  await expect(lineTooltip).toBeVisible();
+  await expect(tooltip).toBeHidden();
+  await page.mouse.move(5, 5);
+  await expect(lineTooltip).toBeHidden();
+  await bars.last().hover();
+  await expect(tooltip).toBeVisible();
+  await expect(lineTooltip).toBeHidden();
+
   await page.setViewportSize({ width: 844, height: 390 });
   await page.waitForTimeout(100);
   const landscape = await measureLayout();
@@ -350,6 +373,7 @@ test("weekly chart tooltips stay within the document after orientation changes",
 
   await bars.nth(10).hover();
   await expect(tooltip).toBeVisible();
+  await expect(lineTooltip).toBeHidden();
   const nextTooltip = await tooltip.boundingBox();
   expect(nextTooltip!.x).toBeGreaterThanOrEqual(-1);
   expect(nextTooltip!.x + nextTooltip!.width).toBeLessThanOrEqual(

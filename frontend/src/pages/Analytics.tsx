@@ -232,6 +232,8 @@ export default function Analytics() {
   const requestSequence = useRef(0);
   const [mode, setMode] = useState<"activity" | "cumulative">("activity");
   const [visible, setVisible] = useState({ total: true, discoveries: true });
+  // `false` suppresses stale tooltip state during resize; `undefined` leaves
+  // normal active-state management to Recharts.
   const [tooltipsEnabled, setTooltipsEnabled] = useState(true);
   const lastChartPointer = useRef<{ x: number; y: number } | null>(null);
   const [zoom, setZoom] = useState<Zoom>(() =>
@@ -749,7 +751,7 @@ export default function Analytics() {
                         <XAxis dataKey="key" minTickGap={24} />
                         <YAxis allowDecimals={false} />
                         <Tooltip
-                          active={tooltipsEnabled}
+                          active={tooltipsEnabled ? undefined : false}
                           content={<ExactTooltip showShare />}
                         />
                         <Legend />
@@ -851,7 +853,7 @@ export default function Analytics() {
                         <XAxis dataKey="key" minTickGap={24} />
                         <YAxis allowDecimals={false} />
                         <Tooltip
-                          active={tooltipsEnabled}
+                          active={tooltipsEnabled ? undefined : false}
                           content={<ExactTooltip />}
                         />
                         <Legend />
