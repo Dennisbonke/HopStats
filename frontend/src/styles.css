@@ -344,6 +344,40 @@ section {
   gap: 1rem;
   min-width: 0;
 }
+
+.distribution-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+  gap: 1rem;
+  min-width: 0;
+  margin-top: 1.25rem;
+}
+.distribution-chart {
+  min-width: 0;
+  overflow: hidden;
+  padding: 1rem;
+  border: 1px solid var(--border, #d7ded9);
+  border-radius: 0.5rem;
+}
+.distribution-chart h3 {
+  margin-top: 0;
+}
+.distribution-canvas {
+  min-width: 0;
+  width: 100%;
+}
+.distribution-axis-label {
+  text-align: center;
+  font-size: 0.875rem;
+}
+@media (max-width: 850px) {
+  .distribution-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .distribution-control {
+    border-left: 0;
+  }
+}
 .drinking-trends-view {
   padding: 1.25rem;
 }

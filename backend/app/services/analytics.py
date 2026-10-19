@@ -248,7 +248,7 @@ class AnalyticsService:
         )
 
     def drinking_trends(
-        self, user_id: int, start: date, end: date, timezone_name: str
+        self, user_id: int, start: date, end: date, timezone_name: str, include_daily: bool = True
     ) -> DrinkingTrendsResponse:
         if start > end:
             raise AnalyticsValidationError("start date must not be after end date")
@@ -257,7 +257,7 @@ class AnalyticsService:
         except (ZoneInfoNotFoundError, ValueError):
             raise AnalyticsValidationError("timezone must be a valid IANA timezone") from None
         days = (end - start).days + 1
-        if days > self.max_buckets:
+        if include_daily and days > self.max_buckets:
             raise AnalyticsValidationError(
                 f"range creates more than {self.max_buckets} buckets; choose a shorter range"
             )
@@ -312,28 +312,52 @@ class AnalyticsService:
         )
         local_date = func.substr(localized.c.local_bucket, 1, 10)
         local_hour = cast(func.substr(localized.c.local_bucket, 12, 2), Integer)
-        grouped = self.session.execute(
-            select(
-                local_date.label("local_date"),
-                local_hour.label("local_hour"),
-                func.count().label("total"),
-                func.sum(case((localized.c.discovery_rank == 1, 1), else_=0)).label("discoveries"),
-            )
-            .select_from(localized)
-            .group_by(local_date, local_hour)
-        ).all()
+        if include_daily:
+            grouped = self.session.execute(
+                select(
+                    local_date.label("local_date"),
+                    local_hour.label("local_hour"),
+                    func.count().label("total"),
+                    func.sum(case((localized.c.discovery_rank == 1, 1), else_=0)).label(
+                        "discoveries"
+                    ),
+                )
+                .select_from(localized)
+                .group_by(local_date, local_hour)
+            ).all()
+        else:
+            # SQLite weekday numbers are Sunday=0; expose Monday-first directly
+            # and avoid returning per-date groups for multi-year periods.
+            local_weekday = (cast(func.strftime("%w", local_date), Integer) + 6) % 7
+            grouped = self.session.execute(
+                select(
+                    local_weekday.label("local_weekday"),
+                    local_hour.label("local_hour"),
+                    func.count().label("total"),
+                    func.sum(case((localized.c.discovery_rank == 1, 1), else_=0)).label(
+                        "discoveries"
+                    ),
+                )
+                .select_from(localized)
+                .group_by(local_weekday, local_hour)
+            ).all()
 
         daily_counts = {}
         weekday_counts = [[0, 0] for _ in range(7)]
         hourly_counts = [[0, 0] for _ in range(24)]
         matrix = [[[0, 0] for _ in range(24)] for _ in range(7)]
         for row in grouped:
-            day = date.fromisoformat(row.local_date)
-            weekday, hour = day.weekday(), int(row.local_hour)
+            if include_daily:
+                day = date.fromisoformat(row.local_date)
+                weekday = day.weekday()
+            else:
+                weekday = int(row.local_weekday)
+            hour = int(row.local_hour)
             total, discoveries = int(row.total), int(row.discoveries or 0)
-            daily_counts.setdefault(day, [0, 0])
-            daily_counts[day][0] += total
-            daily_counts[day][1] += discoveries
+            if include_daily:
+                daily_counts.setdefault(day, [0, 0])
+                daily_counts[day][0] += total
+                daily_counts[day][1] += discoveries
             for bucket in (weekday_counts[weekday], hourly_counts[hour], matrix[weekday][hour]):
                 bucket[0] += total
                 bucket[1] += discoveries
@@ -352,12 +376,13 @@ class AnalyticsService:
             }
 
         daily = []
-        current = start
-        while current <= end:
-            daily.append(
-                DrinkingTrendDay(date=current, **values(daily_counts.get(current, [0, 0])))
-            )
-            current += timedelta(days=1)
+        if include_daily:
+            current = start
+            while current <= end:
+                daily.append(
+                    DrinkingTrendDay(date=current, **values(daily_counts.get(current, [0, 0])))
+                )
+                current += timedelta(days=1)
         return DrinkingTrendsResponse(
             start=start,
             end=end,

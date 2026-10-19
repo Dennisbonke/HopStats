@@ -144,8 +144,10 @@ The frontend only requests M8.1 data while Drinking Trends is active and always
 sends explicit dates and timezone. For All time, it first reuses M7's undated
 response metadata to resolve the earliest and latest local reporting dates; an
 empty M7 result becomes an empty state without an M8 request. Drinking Trends
-requests only the selected calendar year's intersection with those full bounds;
-Overview continues to support its existing full-history behavior.
+requests the selected calendar year's intersection with those full bounds for
+the calendar. A separate `daily=false` drinking-trends request aggregates the
+complete reporting range for the distributions, independent of the selected
+calendar year. Changing `year` therefore only reloads calendar data.
 
 ## Calendar activity heatmap (M8.3)
 
@@ -165,6 +167,28 @@ date in Europe/Amsterdam are marked as future; any imported future-dated
 check-ins returned by the API remain visible and contribute normally.
 The date-grid utility accepts Sunday-first alignment for future configuration,
 but M8.3 uses Monday-first only.
+
+## Weekday and hourly distributions (M8.4)
+
+Below the calendar, Check-ins by Weekday shows Monday through Sunday and
+Check-ins by Hour of Day shows all local clock hours. Both use the full selected
+inclusive reporting period, not the displayed calendar year. The shared activity
+metric selects all check-ins, discoveries, or repeats. The separate distribution
+mode selects totals or averages: weekday average = weekday count divided by the
+number of occurrences of that weekday in the inclusive range; hourly average =
+hour count divided by the number of calendar dates in the range. Thus hourly
+normalization is explicitly per calendar day, not per occurrence of a local hour.
+Tooltips expose selected count, denominator, and calculated average.
+
+The API keeps the M8.1 response unchanged by default. `daily=false` opts into
+aggregate-only output: daily rows are omitted while weekday/hour and weekday
+denominators still span the complete range. This avoids materializing dense daily
+buckets and bypasses the 366-day cap for All time without changing discovery ranking. Timestamp
+groups use the requested timezone; repeated autumn DST local hours combine into
+one clock-hour bucket and missing spring hours have zero activity. Imports require
+a complete `created_at` timestamp; date-only or missing-time records are not
+supported, and these charts describe imported check-in time, not when the beer
+was actually consumed.
 
 Intensity uses a fixed, cross-year scale for the selected metric: 0, 1–2, 3–5,
 6–9, and 10 or more. Years are not independently normalized, so colors remain

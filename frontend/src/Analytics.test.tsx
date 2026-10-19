@@ -855,10 +855,14 @@ test("tabs preserve shared filters and metric, use keyboard navigation, and rest
   expect(
     screen.getByRole("complementary", { name: "Layout diagnostics" }),
   ).toBeInTheDocument();
-  const trendRequest = new URL(
-    String(vi.mocked(globalThis.fetch).mock.calls.at(-1)?.[0]),
-    "http://localhost",
-  );
+  const trendRequest = vi
+    .mocked(globalThis.fetch)
+    .mock.calls.map(([input]) => new URL(String(input), "http://localhost"))
+    .find(
+      (url) =>
+        url.pathname.endsWith("drinking-trends") &&
+        url.searchParams.get("daily") === "false",
+    )!;
   expect(trendRequest.pathname).toBe("/api/v1/analytics/drinking-trends");
   expect(trendRequest.searchParams.get("start")).toBe("2026-01-01");
   expect(trendRequest.searchParams.get("end")).toBe("2026-01-02");
@@ -941,11 +945,11 @@ test("trends fetch is scoped to its active view and custom date changes preserve
     "/analytics?period=custom&start=2026-01-01&end=2026-01-02&view=trends&metric=repeats",
   );
   expect(await screen.findByRole("grid")).toBeInTheDocument();
-  expect(vi.mocked(globalThis.fetch).mock.calls).toHaveLength(1);
+  expect(vi.mocked(globalThis.fetch).mock.calls).toHaveLength(2);
   fireEvent.change(screen.getByLabelText("Start date"), {
     target: { value: "2026-01-02" },
   });
-  await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(4));
   expect(screen.getByLabelText("Current query")).toHaveTextContent(
     "view=trends",
   );
@@ -1004,16 +1008,21 @@ test("calendar year and metric URL state drive one-year requests without refetch
   expect(
     screen.getByRole("tabpanel", { name: "Drinking Trends" }),
   ).toHaveAttribute("data-metric", "repeats");
-  expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  expect(globalThis.fetch).toHaveBeenCalledTimes(2);
 
   fireEvent.change(screen.getByLabelText("Calendar year"), {
     target: { value: "2023" },
   });
-  await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
-  const nextRequest = new URL(
-    String(vi.mocked(globalThis.fetch).mock.calls[1][0]),
-    "http://localhost",
-  );
+  await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(3));
+  const nextRequest = vi
+    .mocked(globalThis.fetch)
+    .mock.calls.map(([input]) => new URL(String(input), "http://localhost"))
+    .find(
+      (url) =>
+        url.pathname.endsWith("drinking-trends") &&
+        url.searchParams.get("daily") !== "false" &&
+        url.searchParams.get("start") === "2023-04-15",
+    )!;
   expect(nextRequest.searchParams.get("start")).toBe("2023-04-15");
   expect(nextRequest.searchParams.get("end")).toBe("2023-12-31");
   expect(screen.getByLabelText("Current query")).toHaveTextContent(
@@ -1226,7 +1235,7 @@ test("all time uses M7 bounds but requests only the selected calendar-year inter
   const requests = vi
     .mocked(globalThis.fetch)
     .mock.calls.map(([input]) => new URL(String(input), "http://localhost"));
-  expect(requests).toHaveLength(2);
+  expect(requests).toHaveLength(3);
   expect(requests[0].pathname).toBe("/api/v1/analytics/checkins");
   expect(requests[0].searchParams.has("start")).toBe(false);
   expect(requests[1].pathname).toBe("/api/v1/analytics/drinking-trends");
@@ -1234,20 +1243,28 @@ test("all time uses M7 bounds but requests only the selected calendar-year inter
   expect(screen.getByLabelText("Current query")).toHaveTextContent("year=2024");
   expect(requests[1].searchParams.get("start")).toBe("2024-01-01");
   expect(requests[1].searchParams.get("end")).toBe("2024-12-31");
+  expect(requests[2].searchParams.get("daily")).toBe("false");
+  expect(requests[2].searchParams.get("start")).toBe("2019-01-01");
+  expect(requests[2].searchParams.get("end")).toBe("2026-12-31");
   expect(
     screen.getByLabelText("Drinking Trends reporting period"),
   ).toHaveTextContent("2019-01-01–2026-12-31");
   fireEvent.change(screen.getByLabelText("Calendar year"), {
     target: { value: "2025" },
   });
-  await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(3));
+  await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(4));
   expect(await screen.findByRole("grid")).toBeInTheDocument();
   expect(screen.getByLabelText("Reporting period")).toHaveValue("all");
   expect(screen.getByLabelText("Calendar year")).toHaveValue("2025");
-  const yearRequest = new URL(
-    String(vi.mocked(globalThis.fetch).mock.calls.at(-1)?.[0]),
-    "http://localhost",
-  );
+  const yearRequest = vi
+    .mocked(globalThis.fetch)
+    .mock.calls.map(([input]) => new URL(String(input), "http://localhost"))
+    .find(
+      (url) =>
+        url.pathname.endsWith("drinking-trends") &&
+        url.searchParams.get("daily") !== "false" &&
+        url.searchParams.get("start") === "2025-01-01",
+    )!;
   expect(yearRequest.pathname).toBe("/api/v1/analytics/drinking-trends");
   expect(yearRequest.searchParams.get("start")).toBe("2025-01-01");
   expect(yearRequest.searchParams.get("end")).toBe("2025-12-31");
@@ -1268,14 +1285,19 @@ test("all time uses M7 bounds but requests only the selected calendar-year inter
       screen.getByLabelText("Drinking Trends reporting period"),
     ).toHaveTextContent("2020-06-01–2026-12-31"),
   );
-  const refreshedRequest = new URL(
-    String(vi.mocked(globalThis.fetch).mock.calls.at(-1)?.[0]),
-    "http://localhost",
-  );
+  const refreshedRequest = vi
+    .mocked(globalThis.fetch)
+    .mock.calls.map(([input]) => new URL(String(input), "http://localhost"))
+    .find(
+      (url) =>
+        url.pathname.endsWith("drinking-trends") &&
+        url.searchParams.get("daily") === "false" &&
+        url.searchParams.get("start") === "2020-06-01",
+    )!;
   expect(refreshedRequest.pathname).toBe("/api/v1/analytics/drinking-trends");
   expect(screen.getByLabelText("Calendar year")).toHaveValue("2025");
-  expect(refreshedRequest.searchParams.get("start")).toBe("2025-01-01");
-  expect(refreshedRequest.searchParams.get("end")).toBe("2025-12-31");
+  expect(refreshedRequest.searchParams.get("start")).toBe("2020-06-01");
+  expect(refreshedRequest.searchParams.get("end")).toBe("2026-12-31");
   expect(screen.getByLabelText("Current query")).not.toHaveTextContent("year=");
 });
 
@@ -1328,8 +1350,8 @@ test("explicit All-time year survives asynchronous M7 bounds resolution", async 
     "http://localhost",
   );
   expect(trendRequest.pathname).toBe("/api/v1/analytics/drinking-trends");
-  expect(trendRequest.searchParams.get("start")).toBe("2024-01-01");
-  expect(trendRequest.searchParams.get("end")).toBe("2024-12-31");
+  expect(trendRequest.searchParams.get("start")).toBe("2019-01-01");
+  expect(trendRequest.searchParams.get("end")).toBe("2026-12-31");
 });
 
 test("all time with empty M7 history does not call trends and explains unsupported history clearly", async () => {
@@ -1375,25 +1397,29 @@ test("trends handles empty aggregates and ignores stale period responses", async
   renderAnalytics(
     "/analytics?period=custom&start=2026-01-01&end=2026-01-02&view=trends",
   );
-  await waitFor(() => expect(pending).toHaveLength(1));
+  await waitFor(() => expect(pending).toHaveLength(2));
   fireEvent.change(screen.getByLabelText("Start date"), {
     target: { value: "2026-01-02" },
   });
-  await waitFor(() => expect(pending).toHaveLength(2));
+  await waitFor(() => expect(pending).toHaveLength(4));
   expect(pending[0].signal?.aborted).toBe(true);
+  expect(pending[1].signal?.aborted).toBe(true);
   pending[0].resolve({ ok: true, json: async () => trendsSample });
   expect(screen.getByText("Loading calendar activity…")).toBeInTheDocument();
-  pending[1].resolve({
+  const noActivity = {
+    ...trendsSample,
+    daily: trendsSample.daily.map((day) => ({
+      ...day,
+      total: 0,
+      discoveries: 0,
+      repeats: 0,
+    })),
+  };
+  pending[1].resolve({ ok: true, json: async () => trendsSample });
+  pending[2].resolve({ ok: true, json: async () => noActivity });
+  pending[3].resolve({
     ok: true,
-    json: async () => ({
-      ...trendsSample,
-      daily: trendsSample.daily.map((day) => ({
-        ...day,
-        total: 0,
-        discoveries: 0,
-        repeats: 0,
-      })),
-    }),
+    json: async () => noActivity,
   });
   expect(
     await screen.findByText(

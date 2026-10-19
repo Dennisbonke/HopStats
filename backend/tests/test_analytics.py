@@ -349,6 +349,15 @@ def test_drinking_trends_empty_period_short_week_and_range_cap(client):
         == 422
     )
 
+    aggregate_only = client.get(
+        "/api/v1/analytics/drinking-trends?start=2024-01-01&end=2025-01-01&daily=false"
+    )
+    assert aggregate_only.status_code == 200
+    assert aggregate_only.json()["daily"] == []
+    assert len(aggregate_only.json()["weekday"]) == 7
+    assert len(aggregate_only.json()["hourly"]) == 24
+    assert sum(row["days_in_period"] for row in aggregate_only.json()["weekday"]) == 367
+
 
 def test_drinking_trends_default_is_year_to_date_and_not_m7_all_time(client):
     from datetime import datetime
