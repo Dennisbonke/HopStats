@@ -795,7 +795,9 @@ test("invalid trends metric falls back to total without changing the selected vi
   renderAnalytics(
     "/analytics?period=custom&start=2026-01-01&end=2026-01-02&view=trends&metric=unknown",
   );
-  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  expect(
+    await screen.findByRole("grid", { name: /daily activity/ }),
+  ).toBeInTheDocument();
   expect(
     screen.getByRole("tabpanel", { name: "Drinking Trends" }),
   ).toHaveAttribute("data-metric", "total");
@@ -836,7 +838,9 @@ test("tabs preserve shared filters and metric, use keyboard navigation, and rest
 
   fireEvent.keyDown(overview, { key: "ArrowRight" });
   expect(trends).toHaveFocus();
-  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  expect(
+    await screen.findByRole("grid", { name: /daily activity/ }),
+  ).toBeInTheDocument();
   expect(trends).toHaveAttribute("aria-selected", "true");
   expect(
     screen.getByRole("tabpanel", { name: "Drinking Trends" }),
@@ -945,7 +949,9 @@ test("trends fetch is scoped to its active view and custom date changes preserve
   renderAnalytics(
     "/analytics?period=custom&start=2026-01-01&end=2026-01-02&view=trends&metric=repeats",
   );
-  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  expect(
+    await screen.findByRole("grid", { name: /daily activity/ }),
+  ).toBeInTheDocument();
   expect(vi.mocked(globalThis.fetch).mock.calls).toHaveLength(2);
   fireEvent.change(screen.getByLabelText("Start date"), {
     target: { value: "2026-01-02" },
@@ -981,6 +987,13 @@ test("distribution tables expose ordered buckets, exact normalization, URL state
       total: hour === 12 ? 12 : hour === 23 ? 4 : 0,
       discoveries: hour === 12 ? 3 : hour === 23 ? 1 : 0,
       repeats: hour === 12 ? 9 : hour === 23 ? 3 : 0,
+    })),
+    weekday_hour: Array.from({ length: 168 }, (_, index) => ({
+      weekday: Math.floor(index / 24),
+      hour: index % 24,
+      total: index === 4 * 24 + 20 ? 12 : index === 4 * 24 + 23 ? 4 : 0,
+      discoveries: index === 4 * 24 + 20 ? 3 : index === 4 * 24 + 23 ? 1 : 0,
+      repeats: index === 4 * 24 + 20 ? 9 : index === 4 * 24 + 23 ? 3 : 0,
     })),
   };
   vi.stubGlobal(
@@ -1032,6 +1045,15 @@ test("distribution tables expose ordered buckets, exact normalization, URL state
   expect(within(hours).getByRole("row", { name: /12:00/ })).toHaveTextContent(
     "12:00128 calendar days1.50",
   );
+  const heatmap = screen.getByRole("grid", {
+    name: /Check-in Activity by Weekday and Hour.*2026-01-05/,
+  });
+  expect(within(heatmap).getAllByRole("gridcell")).toHaveLength(168);
+  expect(
+    within(heatmap).getByRole("gridcell", {
+      name: /Friday, 20:00–20:59, 12 all check-ins/,
+    }),
+  ).toBeInTheDocument();
 
   const callCount = vi.mocked(globalThis.fetch).mock.calls.length;
   fireEvent.change(screen.getByLabelText("Activity metric"), {
@@ -1064,6 +1086,11 @@ test("distribution tables expose ordered buckets, exact normalization, URL state
   expect(
     within(repeatHours).getByRole("row", { name: /12:00/ }),
   ).toHaveTextContent("12:0098 calendar days1.13");
+  expect(
+    within(heatmap).getByRole("gridcell", {
+      name: /Friday, 20:00–20:59, 9 repeat check-ins/,
+    }),
+  ).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Distribution display mode"), {
     target: { value: "total" },
   });
@@ -1121,7 +1148,9 @@ test("invalid distribution URL state canonicalizes while preserving analytics fi
   renderAnalytics(
     "/analytics?period=custom&start=2026-01-01&end=2026-01-02&view=trends&metric=discoveries&distribution=invalid&year=2026&debugLayout=1",
   );
-  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  expect(
+    await screen.findByRole("grid", { name: /daily activity/ }),
+  ).toBeInTheDocument();
   await waitFor(() =>
     expect(screen.getByLabelText("Current query")).not.toHaveTextContent(
       "distribution=invalid",
@@ -1194,22 +1223,38 @@ test("distribution data is keyed to its active reporting range and stale request
     "/analytics?period=custom&start=2026-01-05&end=2026-01-12&view=trends",
   );
   await waitFor(() => expect(pending).toHaveLength(1));
-  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  expect(
+    await screen.findByRole("grid", { name: /daily activity/ }),
+  ).toBeInTheDocument();
   pending[0].resolve({
     ok: true,
     json: async () => aggregateFor("2026-01-05", "2026-01-12", 5),
   });
   expect(
-    await screen.findAllByRole("table", { name: /2026-01-05–2026-01-12/ }),
-  ).toHaveLength(2);
+    await screen.findByRole("table", {
+      name: /Check-ins by Weekday.*2026-01-05–2026-01-12/,
+    }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("table", {
+      name: /Check-ins by Hour of Day.*2026-01-05–2026-01-12/,
+    }),
+  ).toBeInTheDocument();
 
   fireEvent.change(screen.getByLabelText("Start date"), {
     target: { value: "2026-01-06" },
   });
   await waitFor(() => expect(pending).toHaveLength(2));
   expect(pending[0].signal?.aborted).toBe(true);
-  expect(screen.queryByRole("table")).not.toBeInTheDocument();
-  expect(screen.getByRole("grid")).toBeInTheDocument();
+  expect(
+    screen.queryByRole("table", { name: /Check-ins by Weekday/ }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("table", { name: /Check-ins by Hour of Day/ }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.getByRole("grid", { name: /daily activity/ }),
+  ).toBeInTheDocument();
 
   fireEvent.change(screen.getByLabelText("Start date"), {
     target: { value: "2026-01-07" },
@@ -1219,7 +1264,12 @@ test("distribution data is keyed to its active reporting range and stale request
     ok: true,
     json: async () => aggregateFor("2026-01-06", "2026-01-12", 99),
   });
-  expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("table", { name: /Check-ins by Weekday/ }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("table", { name: /Check-ins by Hour of Day/ }),
+  ).not.toBeInTheDocument();
   pending[2].resolve({
     ok: true,
     json: async () => aggregateFor("2026-01-07", "2026-01-12", 7),
@@ -1236,13 +1286,20 @@ test("distribution data is keyed to its active reporting range and stale request
     target: { value: "2026-01-08" },
   });
   await waitFor(() => expect(pending).toHaveLength(4));
-  expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("table", { name: /Check-ins by Weekday/ }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("table", { name: /Check-ins by Hour of Day/ }),
+  ).not.toBeInTheDocument();
   pending[3].reject(new Error("Distribution service unavailable"));
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "Distribution service unavailable",
   );
   expect(screen.queryByRole("table")).not.toBeInTheDocument();
-  expect(screen.getByRole("grid")).toBeInTheDocument();
+  expect(
+    screen.getByRole("grid", { name: /daily activity/ }),
+  ).toBeInTheDocument();
 });
 
 test("single-day averages mark weekdays without occurrences as unavailable", async () => {
@@ -1300,7 +1357,9 @@ test("calendar year and metric URL state drive one-year requests without refetch
       <Analytics />
     </MemoryRouter>,
   );
-  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  expect(
+    await screen.findByRole("grid", { name: /daily activity/ }),
+  ).toBeInTheDocument();
   expect(screen.getByLabelText("Calendar year")).toHaveValue("2024");
   expect(screen.getByLabelText("Activity metric")).toHaveValue("discoveries");
   expect(screen.getByLabelText("Current query")).toHaveTextContent(
@@ -1368,7 +1427,9 @@ test("calendar year and metric URL state drive one-year requests without refetch
   expect(await screen.findByText("Check-in Breakdown")).toBeInTheDocument();
   expect(screen.getByLabelText("Current query")).toHaveTextContent("year=2023");
   fireEvent.click(screen.getByRole("tab", { name: "Drinking Trends" }));
-  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  expect(
+    await screen.findByRole("grid", { name: /daily activity/ }),
+  ).toBeInTheDocument();
   expect(screen.getByLabelText("Calendar year")).toHaveValue("2023");
 });
 
@@ -1380,7 +1441,9 @@ test("invalid ineligible calendar year safely falls back and is canonicalized", 
   renderAnalytics(
     "/analytics?period=custom&start=2023-01-01&end=2025-12-31&view=trends&year=1999",
   );
-  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  expect(
+    await screen.findByRole("grid", { name: /daily activity/ }),
+  ).toBeInTheDocument();
   expect(screen.getByLabelText("Calendar year")).toHaveValue("2025");
   await waitFor(() =>
     expect(screen.getByLabelText("Current query")).not.toHaveTextContent(
@@ -1407,7 +1470,9 @@ test("explicit calendar years survive overlapping period edits and fall back onl
   renderAnalytics(
     "/analytics?period=custom&start=2023-01-01&end=2025-12-31&view=trends&metric=discoveries&granularity=week&debugLayout=1",
   );
-  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  expect(
+    await screen.findByRole("grid", { name: /daily activity/ }),
+  ).toBeInTheDocument();
   expect(screen.getByLabelText("Calendar year")).toHaveValue("2025");
 
   // Explicitly select the current default year; its presence now means user-selected.
@@ -1492,7 +1557,9 @@ test("Back and Forward restore reporting periods and explicit calendar years tog
       <Analytics />
     </MemoryRouter>,
   );
-  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  expect(
+    await screen.findByRole("grid", { name: /daily activity/ }),
+  ).toBeInTheDocument();
   expect(screen.getByLabelText("Reporting period")).toHaveValue("last_year");
   expect(screen.getByLabelText("Calendar year")).toHaveValue("2025");
   expect(screen.getByLabelText("Current query")).not.toHaveTextContent("year=");
@@ -1550,7 +1617,9 @@ test("all time uses M7 bounds but requests only the selected calendar-year inter
     }),
   );
   renderAnalytics("/analytics?period=all&view=trends&metric=total&year=2024");
-  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  expect(
+    await screen.findByRole("grid", { name: /daily activity/ }),
+  ).toBeInTheDocument();
   const requests = vi
     .mocked(globalThis.fetch)
     .mock.calls.map(([input]) => new URL(String(input), "http://localhost"));
@@ -1572,7 +1641,9 @@ test("all time uses M7 bounds but requests only the selected calendar-year inter
     target: { value: "2025" },
   });
   await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(4));
-  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  expect(
+    await screen.findByRole("grid", { name: /daily activity/ }),
+  ).toBeInTheDocument();
   expect(screen.getByLabelText("Reporting period")).toHaveValue("all");
   expect(screen.getByLabelText("Calendar year")).toHaveValue("2025");
   const yearRequest = vi
@@ -1661,7 +1732,9 @@ test("explicit All-time year survives asynchronous M7 bounds resolution", async 
     }),
   });
 
-  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  expect(
+    await screen.findByRole("grid", { name: /daily activity/ }),
+  ).toBeInTheDocument();
   expect(screen.getByLabelText("Calendar year")).toHaveValue("2024");
   expect(screen.getByLabelText("Current query")).toHaveTextContent("year=2024");
   const trendRequest = new URL(

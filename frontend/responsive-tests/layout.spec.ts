@@ -267,6 +267,27 @@ test("application pages fit mobile portrait, landscape, tablet and desktop", asy
             .getByRole("table", { name: /Check-ins by Hour of Day/ })
             .getByRole("row"),
         ).toHaveCount(25);
+        const weekdayHourGrid = page.getByRole("grid", {
+          name: /Check-in Activity by Weekday and Hour/,
+        });
+        await expect(weekdayHourGrid.getByRole("gridcell")).toHaveCount(168);
+        await weekdayHourGrid
+          .getByRole("gridcell", { name: /Monday, 12:00–12:59/ })
+          .click();
+        await expect(
+          page.getByRole("heading", { name: "Monday, 12:00–12:59" }),
+        ).toBeVisible();
+        await page
+          .getByRole("gridcell", { name: /Monday, 12:00–12:59/ })
+          .press("ArrowRight");
+        await expect(
+          page.getByRole("gridcell", { name: /Monday, 13:00–13:59/ }),
+        ).toBeFocused();
+        const heatmapScroll = await weekdayHourGrid.evaluate((element) => ({
+          client: element.clientWidth,
+          scroll: element.scrollWidth,
+        }));
+        expect(heatmapScroll.scroll).toBeGreaterThan(heatmapScroll.client);
         await expectNoDocumentOverflow(page);
         const calendarWidth = await page
           .locator(".calendar-scroll")
@@ -290,6 +311,11 @@ test("application pages fit mobile portrait, landscape, tablet and desktop", asy
   await expect(
     page.getByRole("table", { name: /Check-ins by Hour of Day/ }),
   ).toHaveCount(1);
+  await expect(
+    page
+      .getByRole("grid", { name: /Check-in Activity by Weekday and Hour/ })
+      .getByRole("gridcell"),
+  ).toHaveCount(168);
   await page.setViewportSize({ width: 844, height: 390 });
   await expectNoDocumentOverflow(page);
   await page.setViewportSize({ width: 390, height: 844 });
