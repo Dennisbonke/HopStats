@@ -968,6 +968,204 @@ section {
     flex-basis: 100%;
   }
 }
+.milestone-page {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.milestone-page-heading {
+  align-items: flex-start;
+}
+.milestone-page-heading h1,
+.milestone-page-heading p {
+  margin-top: 0;
+}
+.milestone-page-heading p {
+  margin-bottom: 0;
+  color: #526176;
+}
+.milestone-counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.milestone-count {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.6rem;
+  background: white;
+  box-shadow: 0 1px 3px #0001;
+}
+.milestone-count strong {
+  font-size: 1.3rem;
+}
+.milestone-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.milestone-filters button {
+  min-height: 2.4rem;
+  padding: 0.45rem 0.7rem;
+  background: #e8eef8;
+  color: #172033;
+}
+.milestone-filters button.selected {
+  background: #176b4d;
+  color: white;
+}
+.milestone-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+.milestone-card {
+  display: grid;
+  align-content: start;
+  gap: 0.65rem;
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.65rem;
+  background: white;
+  color: #172033;
+  text-decoration: none;
+  box-shadow: 0 1px 3px #0001;
+}
+.milestone-card:hover {
+  border-color: #176b4d;
+  box-shadow: 0 3px 10px #0002;
+}
+.milestone-card:focus-visible,
+.milestone-filters button:focus-visible,
+.milestone-dialog button:focus-visible,
+.milestone-dialog input:focus-visible,
+.milestone-dialog select:focus-visible {
+  outline: 3px solid #0b7a55;
+  outline-offset: 2px;
+}
+.milestone-card-heading {
+  align-items: flex-start;
+}
+.milestone-card-heading h2 {
+  min-width: 0;
+  margin: 0;
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+.milestone-status {
+  flex: 0 0 auto;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  background: #e8eef8;
+  color: #334155;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.milestone-status.active {
+  background: #e8f6ed;
+  color: #14532d;
+}
+.milestone-status.scheduled {
+  background: #eaf2ff;
+  color: #1e40af;
+}
+.milestone-status.overdue {
+  background: #fff1f0;
+  color: #a32920;
+}
+.milestone-status.completed {
+  background: #dcfce7;
+  color: #14532d;
+}
+.milestone-status.period_ended {
+  background: #fef3c7;
+  color: #78350f;
+}
+.milestone-status.archived {
+  background: #e5e7eb;
+  color: #374151;
+}
+.milestone-card-meta,
+.milestone-card-deadline {
+  margin: 0;
+  color: #526176;
+  font-size: 0.85rem;
+}
+.milestone-card-count {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin: 0;
+  font-size: 0.9rem;
+}
+.milestone-card-count strong {
+  font-size: 1.25rem;
+}
+.milestone-card-count span {
+  margin-left: auto;
+  font-weight: 700;
+}
+.milestone-card progress,
+.milestone-detail-progress progress {
+  width: 100%;
+  height: 0.8rem;
+  accent-color: #176b4d;
+}
+.milestone-state {
+  padding: 1.25rem;
+  border-radius: 0.65rem;
+  background: white;
+  box-shadow: 0 1px 3px #0001;
+}
+.milestone-state h2,
+.milestone-state p {
+  margin-top: 0;
+}
+@media (prefers-color-scheme: dark) {
+  .milestone-count,
+  .milestone-card,
+  .milestone-state {
+    border-color: #334155;
+    background: #172033;
+    color: #f8fafc;
+  }
+  .milestone-page-heading p,
+  .milestone-card-meta,
+  .milestone-card-deadline {
+    color: #cbd5e1;
+  }
+  .milestone-filters button {
+    background: #334155;
+    color: #f8fafc;
+  }
+  .milestone-filters button.selected {
+    background: #176b4d;
+  }
+}
+@media (max-width: 900px) {
+  .milestone-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 620px) {
+  .milestone-page-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .milestone-page-heading > button {
+    width: 100%;
+  }
+  .milestone-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .milestone-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .inventory-results,
 .inventory-state,
 .location-panel {
