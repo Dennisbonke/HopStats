@@ -89,4 +89,22 @@ class MilestoneListResponse(BaseModel):
 
 
 class MilestoneSummaryResponse(BaseModel):
-    milestones: list[MilestoneResponse]
+    active_count: int
+    completed_count: int
+    overdue_count: int
+    milestones: list["MilestoneSummaryItem"]
+
+
+class MilestoneSummaryItem(BaseModel):
+    id: int
+    name: str
+    metric: str
+    goal_type: str
+    target: int
+    current: int
+    remaining: int
+    progress_percent: float
+    status: str
+    deadline_date: date | None
+    deadline_outcome: str | None
+    completed_at: datetime | None

@@ -10,6 +10,7 @@ from ..schemas.milestones import (
     MilestoneListResponse,
     MilestonePatch,
     MilestoneResponse,
+    MilestoneSummaryResponse,
     MilestoneWrite,
 )
 from ..services.milestones import MilestoneNotFound, MilestoneService
@@ -26,13 +27,12 @@ def list_milestones(
     return {"milestones": MilestoneService(session).list(user.id, archived)}
 
 
-@router.get("/summary", response_model=MilestoneListResponse)
+@router.get("/summary", response_model=MilestoneSummaryResponse)
 def milestone_summary(
     session: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
-    archived: bool = False,
 ):
-    return {"milestones": MilestoneService(session).list(user.id, archived)}
+    return MilestoneService(session).summary(user.id)
 
 
 @router.post(

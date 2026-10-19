@@ -16,20 +16,70 @@ class MilestoneService:
     def __init__(self, session: Session):
         self.session = session
 
-    def list(self, user_id: int, archived: bool | None = False):
+    def list(
+        self,
+        user_id: int,
+        archived: bool | None = False,
+        evaluation_time: datetime | None = None,
+    ):
         statement = select(Milestone).where(Milestone.user_id == user_id)
         if archived is not None:
             statement = statement.where(
                 Milestone.archived_at.is_not(None) if archived else Milestone.archived_at.is_(None)
             )
         items = self.session.scalars(statement.order_by(Milestone.created_at, Milestone.id)).all()
-        return self._calculate(user_id, items)
+        return self._calculate(user_id, items, evaluation_time)
 
-    def get(self, user_id: int, milestone_id: int):
+    def get(self, user_id: int, milestone_id: int, evaluation_time: datetime | None = None):
         milestone = self.session.scalar(
             select(Milestone).where(Milestone.id == milestone_id, Milestone.user_id == user_id)
         )
-        return self._calculate(user_id, [milestone])[0] if milestone else None
+        return self._calculate(user_id, [milestone], evaluation_time)[0] if milestone else None
+
+    def summary(self, user_id: int, evaluation_time: datetime | None = None):
+        items = self.session.scalars(
+            select(Milestone)
+            .where(Milestone.user_id == user_id, Milestone.archived_at.is_(None))
+            .order_by(Milestone.created_at, Milestone.id)
+        ).all()
+        calculated = self._calculate(user_id, items, evaluation_time)
+        priority = {"overdue": 0, "active": 1, "scheduled": 2, "completed": 3, "period_ended": 4}
+        by_id = {item.id: state for item, state in zip(items, calculated, strict=True)}
+        ordered = sorted(
+            items,
+            key=lambda item: (
+                priority.get(by_id[item.id].status, 5),
+                item.deadline_date or date.max,
+                item.created_at,
+                item.id,
+            ),
+        )
+        relevant = [item for item in ordered if by_id[item.id].status != "period_ended"][:5]
+        return {
+            "active_count": sum(state.status in {"active", "scheduled"} for state in calculated),
+            "completed_count": sum(state.status == "completed" for state in calculated),
+            "overdue_count": sum(state.status == "overdue" for state in calculated),
+            "milestones": [
+                {
+                    field: getattr(by_id[item.id], field)
+                    for field in (
+                        "id",
+                        "name",
+                        "metric",
+                        "goal_type",
+                        "target",
+                        "current",
+                        "remaining",
+                        "progress_percent",
+                        "status",
+                        "deadline_date",
+                        "deadline_outcome",
+                        "completed_at",
+                    )
+                }
+                for item in relevant
+            ],
+        }
 
     def create(self, user_id: int, definition: MilestoneWrite):
         item = Milestone(user_id=user_id, **definition.model_dump())
@@ -64,9 +114,19 @@ class MilestoneService:
         self.session.delete(item)
         self.session.commit()
 
-    def _calculate(self, user_id: int, milestones: list[Milestone]):
+    def _calculate(
+        self,
+        user_id: int,
+        milestones: list[Milestone],
+        evaluation_time: datetime | None = None,
+    ):
         if not milestones:
             return []
+        evaluated_at = evaluation_time or datetime.now(UTC)
+        if evaluated_at.tzinfo is None:
+            evaluated_at = evaluated_at.replace(tzinfo=UTC)
+        else:
+            evaluated_at = evaluated_at.astimezone(UTC)
         rows = self.session.execute(
             select(Checkin.id, Checkin.beer_id, Checkin.occurred_at_utc)
             .where(Checkin.user_id == user_id)
@@ -85,13 +145,12 @@ class MilestoneService:
             discovery = row.beer_id not in first_seen
             first_seen.add(row.beer_id)
             events.append((moment, row.id, row.beer_id, discovery))
-        return [self._one(m, events) for m in milestones]
+        return [self._one(m, events, evaluated_at) for m in milestones]
 
     @staticmethod
-    def _one(m: Milestone, events):
+    def _one(m: Milestone, events, evaluated_at: datetime):
         tz = ZoneInfo(m.timezone)
-        now = datetime.now(UTC)
-        today = now.astimezone(tz).date()
+        today = evaluated_at.astimezone(tz).date()
         if m.goal_type == "absolute":
             start = None
             end = None
@@ -107,19 +166,19 @@ class MilestoneService:
             if cutoff
             else None
         )
+        scheduled = start is not None and today < start
+        eligible_events = [event for event in events if event[0] <= evaluated_at]
         selected = [
             e
-            for e in events
+            for e in eligible_events
             if (start_utc is None or e[0] >= start_utc) and (end_utc is None or e[0] < end_utc)
         ]
-        if m.metric == "discoveries":
+        if m.metric in {"discoveries", "unique_beers"}:
             selected = [e for e in selected if e[3]]
-        elif m.metric == "unique_beers":
-            seen: set[int] = set()
-            selected = [e for e in selected if not (e[2] in seen or seen.add(e[2]))]
+        if scheduled:
+            selected = []
         count = len(selected)
         completed_at = selected[m.target - 1][0] if count >= m.target else None
-        scheduled = start is not None and today < start
         period_ended = m.goal_type == "calendar_year" and today > end
         completed = completed_at is not None or count >= m.target
         if m.archived_at is not None:
