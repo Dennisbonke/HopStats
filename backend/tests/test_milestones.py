@@ -261,6 +261,16 @@ def test_deadline_outcome_progress_pace_and_period_end(client):
         assert late.status == "completed"
         assert late.deadline_outcome == "late"
         assert late.completed_before_deadline is False
+        assert late.elapsed_per_day == 0.75
+        assert late.elapsed_per_week == 5.25
+        no_deadline_goal = _milestone(
+            session, "checkins", "incremental", 4, start_date=date(2026, 1, 1)
+        )
+        no_deadline = MilestoneService(session)._calculate(
+            1, [no_deadline_goal], datetime(2026, 1, 4, tzinfo=UTC)
+        )[0]
+        assert no_deadline.elapsed_per_day == 0.75
+        assert no_deadline.elapsed_per_week == 5.25
         on_time_goal = _milestone(
             session,
             "checkins",
@@ -287,6 +297,7 @@ def test_deadline_outcome_progress_pace_and_period_end(client):
         )[0]
         assert overdue.status == "overdue"
         assert overdue.deadline_outcome == "missed"
+        assert overdue.elapsed_per_day == 0.75
 
         pace_goal = _milestone(
             session,

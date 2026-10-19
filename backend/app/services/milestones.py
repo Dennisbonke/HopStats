@@ -206,7 +206,13 @@ class MilestoneService:
             )
         boundary_day = m.deadline_date or end
         duration_days = (boundary_day - start).days + 1 if start and boundary_day else None
+        elapsed_boundary = end if m.goal_type == "calendar_year" else today
         elapsed_days = (
+            max(0, (min(today, elapsed_boundary) - start).days + 1)
+            if start and today >= start
+            else None
+        )
+        trajectory_days = (
             max(0, (min(today, boundary_day) - start).days + 1)
             if start and boundary_day and today >= start
             else None
@@ -218,8 +224,8 @@ class MilestoneService:
         )
         elapsed_day = count / elapsed_days if elapsed_days and not scheduled else None
         trajectory = (
-            count - m.target * elapsed_days / duration_days
-            if elapsed_days and duration_days and not completed
+            count - m.target * trajectory_days / duration_days
+            if trajectory_days and duration_days and not completed
             else None
         )
         return MilestoneResponse(
