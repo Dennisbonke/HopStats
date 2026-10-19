@@ -90,6 +90,42 @@ test("detail uses backend values, describes overdue progress, and omits null pac
   ).toHaveAttribute("value", "40");
 });
 
+test.each([
+  ["scheduled", "Scheduled"],
+  ["active", "In progress"],
+  ["overdue", "Overdue"],
+  ["completed", "Completed"],
+  ["period_ended", "Period ended"],
+  ["archived", "Archived"],
+] as const)("formats the %s milestone status as %s", async (status, label) => {
+  const item = milestone({ status });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({ ok: true, json: async () => item })),
+  );
+  mount();
+  expect(
+    await screen.findByText(label, { selector: ".milestone-status" }),
+  ).toBeInTheDocument();
+});
+
+test.each([
+  ["pending", "Pending"],
+  ["on_time", "Met"],
+  ["late", "Completed late"],
+  ["missed", "Missed"],
+] as const)("formats deadline outcome %s as %s", async (outcome, label) => {
+  const item = milestone({ deadline_outcome: outcome });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({ ok: true, json: async () => item })),
+  );
+  mount();
+  expect(
+    await screen.findByText(label, { selector: ".milestone-detail-list dd" }),
+  ).toBeInTheDocument();
+});
+
 test("completed milestones remain editable and display recalculated backend data", async () => {
   let current = milestone({
     status: "completed",

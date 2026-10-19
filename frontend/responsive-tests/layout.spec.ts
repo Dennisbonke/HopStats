@@ -369,27 +369,49 @@ test("application pages fit mobile portrait, landscape, tablet and desktop", asy
   await expectNoDocumentOverflow(page);
 });
 
-test("milestones subtitle meets WCAG AA contrast in light and dark preferences", async ({
+test("milestone overview and detail text meet WCAG AA contrast in light and dark preferences", async ({
   page,
 }) => {
+  const milestone = {
+    id: 8,
+    name: "Contrast goal",
+    metric: "discoveries",
+    goal_type: "incremental",
+    target: 10,
+    calendar_year: null,
+    start_date: "2026-01-01",
+    deadline_date: "2026-12-31",
+    timezone: "Europe/Amsterdam",
+    archived_at: null,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    current: 3,
+    remaining: 7,
+    progress_percent: 30,
+    status: "overdue",
+    deadline_outcome: "pending",
+    completed_at: null,
+    completed_before_deadline: null,
+    required_per_day: 0.1,
+    required_per_week: 0.7,
+    elapsed_per_day: 0.05,
+    elapsed_per_week: 0.35,
+    trajectory_difference: -1,
+  };
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const body = path.endsWith("/auth/me")
       ? { id: 1, username: "test", created_at: "2026-01-01T00:00:00Z" }
-      : path.endsWith("/milestones")
-        ? { milestones: [] }
-        : { status: "ok" };
+      : path.endsWith("/milestones/8")
+        ? milestone
+        : path.endsWith("/milestones")
+          ? { milestones: [milestone] }
+          : { status: "ok" };
     await route.fulfill({ json: body });
   });
 
-  for (const colorScheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme });
-    await page.goto("/milestones");
-    const subtitle = page.getByText(
-      "Set a personal target and track progress from your imported check-ins.",
-    );
-    await expect(subtitle).toBeVisible();
-    const contrast = await subtitle.evaluate((element) => {
+  async function expectContrast(selectors: string[]) {
+    const ratios = await page.evaluate((targetSelectors) => {
       const channels = (color: string) =>
         color
           .match(/[\d.]+/g)
@@ -404,24 +426,55 @@ test("milestones subtitle meets WCAG AA contrast in light and dark preferences",
         });
         return 0.2126 * values[0] + 0.7152 * values[1] + 0.0722 * values[2];
       };
-      const foreground = getComputedStyle(element).color;
-      let ancestor: HTMLElement | null = element as HTMLElement;
-      let background = getComputedStyle(
-        document.documentElement,
-      ).backgroundColor;
-      while (ancestor) {
-        const candidate = getComputedStyle(ancestor).backgroundColor;
-        if (!candidate.endsWith(", 0)")) {
-          background = candidate;
-          break;
+      return targetSelectors.map((selector) => {
+        const element = document.querySelector<HTMLElement>(selector);
+        if (!element) return { selector, ratio: 0 };
+        const foreground = getComputedStyle(element).color;
+        let ancestor: HTMLElement | null = element;
+        let background = getComputedStyle(
+          document.documentElement,
+        ).backgroundColor;
+        while (ancestor) {
+          const candidate = getComputedStyle(ancestor).backgroundColor;
+          if (!candidate.endsWith(", 0)")) {
+            background = candidate;
+            break;
+          }
+          ancestor = ancestor.parentElement;
         }
-        ancestor = ancestor.parentElement;
-      }
-      const light = Math.max(luminance(foreground), luminance(background));
-      const dark = Math.min(luminance(foreground), luminance(background));
-      return (light + 0.05) / (dark + 0.05);
-    });
-    expect(contrast).toBeGreaterThanOrEqual(4.5);
+        const light = Math.max(luminance(foreground), luminance(background));
+        const dark = Math.min(luminance(foreground), luminance(background));
+        return { selector, ratio: (light + 0.05) / (dark + 0.05) };
+      });
+    }, selectors);
+    for (const { selector, ratio } of ratios) {
+      expect(ratio, `${selector} contrast ratio`).toBeGreaterThanOrEqual(4.5);
+    }
+  }
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.goto("/milestones");
+    await expect(
+      page.getByText(
+        "Set a personal target and track progress from your imported check-ins.",
+      ),
+    ).toBeVisible();
+    await expectContrast([
+      ".milestone-page-heading > div > p",
+      ".milestone-card-meta",
+      ".milestone-card-deadline",
+    ]);
+
+    await page.goto("/milestones/8");
+    await expect(page.getByRole("heading", { name: "Pace" })).toBeVisible();
+    await expect(page.getByText("Pending", { exact: true })).toBeVisible();
+    await expectContrast([
+      ".milestone-detail .milestone-page-heading p",
+      ".milestone-pace h2",
+      ".milestone-detail-list dt",
+      ".milestone-detail .muted",
+    ]);
   }
 });
 

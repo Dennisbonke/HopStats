@@ -19,6 +19,16 @@ const statusLabels: Record<MilestoneStatus, string> = {
   archived: "Archived",
 };
 
+const deadlineOutcomeLabels: Record<
+  NonNullable<Milestone["deadline_outcome"]>,
+  string
+> = {
+  on_time: "Met",
+  late: "Completed late",
+  missed: "Missed",
+  pending: "Pending",
+};
+
 function timestamp(value: string, timezone: string): string {
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
@@ -263,7 +273,7 @@ export default function MilestoneDetail() {
           {milestone.deadline_outcome && (
             <div>
               <dt>Deadline outcome</dt>
-              <dd>{milestone.deadline_outcome.replace("_", " ")}</dd>
+              <dd>{deadlineOutcomeLabels[milestone.deadline_outcome]}</dd>
             </div>
           )}
         </dl>
