@@ -369,6 +369,62 @@ test("application pages fit mobile portrait, landscape, tablet and desktop", asy
   await expectNoDocumentOverflow(page);
 });
 
+test("milestones subtitle meets WCAG AA contrast in light and dark preferences", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const body = path.endsWith("/auth/me")
+      ? { id: 1, username: "test", created_at: "2026-01-01T00:00:00Z" }
+      : path.endsWith("/milestones")
+        ? { milestones: [] }
+        : { status: "ok" };
+    await route.fulfill({ json: body });
+  });
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.goto("/milestones");
+    const subtitle = page.getByText(
+      "Set a personal target and track progress from your imported check-ins.",
+    );
+    await expect(subtitle).toBeVisible();
+    const contrast = await subtitle.evaluate((element) => {
+      const channels = (color: string) =>
+        color
+          .match(/[\d.]+/g)
+          ?.slice(0, 3)
+          .map(Number) ?? [0, 0, 0];
+      const luminance = (color: string) => {
+        const values = channels(color).map((channel) => {
+          const normalized = channel / 255;
+          return normalized <= 0.04045
+            ? normalized / 12.92
+            : ((normalized + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * values[0] + 0.7152 * values[1] + 0.0722 * values[2];
+      };
+      const foreground = getComputedStyle(element).color;
+      let ancestor: HTMLElement | null = element as HTMLElement;
+      let background = getComputedStyle(
+        document.documentElement,
+      ).backgroundColor;
+      while (ancestor) {
+        const candidate = getComputedStyle(ancestor).backgroundColor;
+        if (!candidate.endsWith(", 0)")) {
+          background = candidate;
+          break;
+        }
+        ancestor = ancestor.parentElement;
+      }
+      const light = Math.max(luminance(foreground), luminance(background));
+      const dark = Math.min(luminance(foreground), luminance(background));
+      return (light + 0.05) / (dark + 0.05);
+    });
+    expect(contrast).toBeGreaterThanOrEqual(4.5);
+  }
+});
+
 // Recharts positions its tooltip from chart interaction coordinates. This test
 // covers stale tooltip state on resize; Playwright does not reproduce the
 // reported physical iOS Safari document overflow.

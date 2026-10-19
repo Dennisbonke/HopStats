@@ -1220,6 +1220,9 @@ section {
   .milestone-page-heading p,
   .milestone-card-meta,
   .milestone-card-deadline {
+    color: #526176;
+  }
+  .milestone-detail .milestone-page-heading p {
     color: #cbd5e1;
   }
   .milestone-filters button {
