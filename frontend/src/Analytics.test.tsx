@@ -9,6 +9,7 @@ import {
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import Analytics from "./pages/Analytics";
+import { weekdayAxisLabel } from "./pages/DrinkingTrends";
 
 let originalClipboardDescriptor: PropertyDescriptor | undefined;
 
@@ -1134,6 +1135,13 @@ test("distribution tables expose ordered buckets, exact normalization, URL state
     "total",
   );
   expect(vi.mocked(globalThis.fetch).mock.calls).toHaveLength(callCount);
+});
+
+test("weekday axis abbreviations are locale-formatted independently from full names", () => {
+  expect(
+    Array.from({ length: 7 }, (_, weekday) => weekdayAxisLabel(weekday)),
+  ).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
+  expect(weekdayAxisLabel(0, "fr-FR")).not.toBe("Mon");
 });
 
 test("invalid distribution URL state canonicalizes while preserving analytics filters", async () => {
