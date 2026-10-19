@@ -283,6 +283,9 @@ test("application pages fit mobile portrait, landscape, tablet and desktop", asy
         await expect(
           page.getByRole("gridcell", { name: /Monday, 13:00–13:59/ }),
         ).toBeFocused();
+        await expect(
+          page.getByRole("heading", { name: "Monday, 13:00–13:59" }),
+        ).toBeVisible();
         const heatmapScroll = await weekdayHourGrid.evaluate((element) => ({
           client: element.clientWidth,
           scroll: element.scrollWidth,

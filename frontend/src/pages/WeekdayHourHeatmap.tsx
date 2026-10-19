@@ -104,10 +104,58 @@ function numberLabel(value: number | null) {
   return value === null ? "unavailable" : value.toFixed(2);
 }
 
-function bandLabel(band: HeatmapBand) {
-  return band.minimum === band.maximum
-    ? String(band.minimum)
-    : `${band.minimum}–${band.maximum}`;
+export function formatHeatmapBands(
+  bands: HeatmapBand[],
+  mode: "total" | "average",
+): Array<HeatmapBand & { label: string }> {
+  if (mode === "total") {
+    const format = (value: number) =>
+      new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(
+        value,
+      );
+    return bands.map((band) => ({
+      ...band,
+      label:
+        band.minimum === band.maximum
+          ? format(band.minimum)
+          : `${format(band.minimum)}–${format(band.maximum)}`,
+    }));
+  }
+
+  const endpoints = Array.from(
+    new Set(bands.flatMap((band) => [band.minimum, band.maximum])),
+  ).sort((a, b) => a - b);
+  let digits = 2;
+  const formatFixed = (value: number, fractionDigits: number) =>
+    new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    }).format(value);
+  while (
+    digits < 12 &&
+    (endpoints.some(
+      (value, index) =>
+        index > 0 &&
+        formatFixed(value, digits) ===
+          formatFixed(endpoints[index - 1], digits),
+    ) ||
+      endpoints.some(
+        (value) => value !== 0 && Number(formatFixed(value, digits)) === 0,
+      ))
+  ) {
+    digits++;
+  }
+  const format = (value: number) =>
+    digits === 12 && value !== 0 && Number(formatFixed(value, digits)) === 0
+      ? value.toExponential(4)
+      : formatFixed(value, digits);
+  return bands.map((band) => ({
+    ...band,
+    label:
+      band.minimum === band.maximum
+        ? format(band.minimum)
+        : `${format(band.minimum)}–${format(band.maximum)}`,
+  }));
 }
 
 export default function WeekdayHourHeatmap({
@@ -131,9 +179,21 @@ export default function WeekdayHourHeatmap({
   );
   const [focused, setFocused] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
+  const [previewed, setPreviewed] = useState<number | null>(null);
+  const previewSource = useRef<"pointer" | "keyboard" | null>(null);
+  const lastPointerPosition = useRef<{ x: number; y: number } | null>(null);
   const cellRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const modeLabel = mode === "total" ? "Total" : "Average per weekday";
-  const selectedCell = selected === null ? null : cells[selected];
+  const selectedCell =
+    previewed !== null
+      ? cells[previewed]
+      : selected === null
+        ? null
+        : cells[selected];
+  const legendBands = useMemo(
+    () => formatHeatmapBands(bands, mode),
+    [bands, mode],
+  );
   const hasActivity = cells.some((cell) => cell.count > 0);
 
   function moveFocus(index: number) {
@@ -146,6 +206,8 @@ export default function WeekdayHourHeatmap({
     event: KeyboardEvent<HTMLButtonElement>,
     index: number,
   ) {
+    previewSource.current = "keyboard";
+    setPreviewed(index);
     const weekday = Math.floor(index / 24);
     const hour = index % 24;
     let next: number | null = null;
@@ -162,6 +224,8 @@ export default function WeekdayHourHeatmap({
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       setSelected(index);
+      setPreviewed(null);
+      previewSource.current = null;
     }
   }
 
@@ -186,6 +250,16 @@ export default function WeekdayHourHeatmap({
         aria-describedby="weekday-hour-instructions"
         aria-rowcount={8}
         aria-colcount={25}
+        onBlur={(event) => {
+          if (
+            !event.currentTarget.contains(event.relatedTarget as Node | null)
+          ) {
+            if (previewSource.current === "keyboard") {
+              previewSource.current = null;
+              setPreviewed(null);
+            }
+          }
+        }}
       >
         <div className="weekday-hour-row weekday-hour-axis" role="row">
           <span className="weekday-hour-day-heading" role="columnheader">
@@ -205,6 +279,7 @@ export default function WeekdayHourHeatmap({
             {cells.slice(weekday * 24, (weekday + 1) * 24).map((cell) => {
               const index = weekday * 24 + cell.hour;
               const isSelected = selected === index;
+              const isPreviewed = previewed === index;
               const averageText = numberLabel(cell.average);
               const valueText =
                 mode === "total" ? `${cell.count}` : averageText;
@@ -217,14 +292,51 @@ export default function WeekdayHourHeatmap({
                   }}
                   type="button"
                   role="gridcell"
-                  className={`weekday-hour-cell heat-level-${cell.level}${isSelected ? " is-selected" : ""}`}
+                  className={`weekday-hour-cell heat-level-${cell.level}${isPreviewed ? " is-previewed" : ""}${isSelected ? " is-selected" : ""}`}
                   aria-label={accessibleName}
                   aria-selected={isSelected}
                   aria-describedby="weekday-hour-instructions"
                   title={accessibleName}
                   tabIndex={focused === index ? 0 : -1}
-                  onFocus={() => setFocused(index)}
-                  onClick={() => setSelected(index)}
+                  onPointerDown={() => {
+                    previewSource.current = "pointer";
+                    setPreviewed(index);
+                  }}
+                  onPointerMove={(event) => {
+                    if (event.pointerType !== "mouse") return;
+                    const position = { x: event.clientX, y: event.clientY };
+                    const moved =
+                      lastPointerPosition.current?.x !== position.x ||
+                      lastPointerPosition.current?.y !== position.y;
+                    lastPointerPosition.current = position;
+                    // Ignore stationary-pointer hover updates while keyboard
+                    // navigation owns the preview (notably after Safari layout).
+                    if (previewSource.current === "keyboard" && !moved) return;
+                    previewSource.current = "pointer";
+                    setPreviewed(index);
+                  }}
+                  onPointerEnter={() => {
+                    if (previewSource.current !== "keyboard") {
+                      previewSource.current = "pointer";
+                      setPreviewed(index);
+                    }
+                  }}
+                  onPointerLeave={() => {
+                    if (previewSource.current === "pointer") {
+                      previewSource.current = null;
+                      setPreviewed(null);
+                    }
+                  }}
+                  onFocus={() => {
+                    setFocused(index);
+                    previewSource.current = "keyboard";
+                    setPreviewed(index);
+                  }}
+                  onClick={() => {
+                    setSelected(index);
+                    setPreviewed(null);
+                    previewSource.current = null;
+                  }}
                   onKeyDown={(event) => onCellKeyDown(event, index)}
                   data-heat-level={cell.level}
                   data-value={valueText}
@@ -244,10 +356,10 @@ export default function WeekdayHourHeatmap({
         <span className="weekday-hour-legend-item">
           <i className="heat-level-0" />0
         </span>
-        {bands.map((band) => (
+        {legendBands.map((band) => (
           <span className="weekday-hour-legend-item" key={band.level}>
             <i className={`heat-level-${band.level}`} />
-            {bandLabel(band)}
+            {band.label}
           </span>
         ))}
       </div>
@@ -269,6 +381,13 @@ export default function WeekdayHourHeatmap({
             <h4>
               {DAYS[selectedCell.weekday]}, {hourLabel(selectedCell.hour)}
             </h4>
+            <p className="weekday-hour-preview-state">
+              {previewed === null
+                ? "Selected cell"
+                : previewSource.current === "pointer"
+                  ? "Pointer preview"
+                  : "Keyboard focus preview"}
+            </p>
             <dl>
               <div>
                 <dt>{METRIC_LABELS[metric]} (raw count)</dt>

@@ -8,6 +8,7 @@ import {
 import { afterEach, expect, test } from "vitest";
 import WeekdayHourHeatmap, {
   buildHeatmapCells,
+  formatHeatmapBands,
   heatmapBands,
 } from "./WeekdayHourHeatmap";
 import type { DrinkingTrends } from "../api/analytics";
@@ -109,6 +110,48 @@ test("adaptive quantile intensity is deterministic and resists one large outlier
   expect(bands.at(-1)).toMatchObject({ minimum: 20, maximum: 10000 });
 });
 
+test("legend labels format integers and averages without colliding or rounding nonzero to zero", () => {
+  expect(
+    formatHeatmapBands(
+      [
+        { level: 1, minimum: 1000, maximum: 1000 },
+        { level: 2, minimum: 1001, maximum: 2500 },
+      ],
+      "total",
+    ).map((band) => band.label),
+  ).toEqual(["1,000", "1,001–2,500"]);
+  expect(
+    formatHeatmapBands(
+      [{ level: 1, minimum: 1 / 3, maximum: 1 / 3 }],
+      "average",
+    )[0].label,
+  ).toBe("0.33");
+  expect(
+    formatHeatmapBands(
+      [{ level: 1, minimum: 0.0000001, maximum: 0.0000001 }],
+      "average",
+    )[0].label,
+  ).toBe("0.0000001");
+  const near = formatHeatmapBands(
+    [
+      { level: 1, minimum: 0.3331, maximum: 0.3331 },
+      { level: 2, minimum: 0.3332, maximum: 0.3332 },
+    ],
+    "average",
+  );
+  expect(near.map((band) => band.label)).toEqual(["0.3331", "0.3332"]);
+  expect(new Set(near.map((band) => band.label)).size).toBe(2);
+  expect(
+    formatHeatmapBands([{ level: 1, minimum: 4, maximum: 4 }], "average")[0]
+      .label,
+  ).toBe("4.00");
+  const skewed = formatHeatmapBands(
+    heatmapBands([0.1, 0.2, 0.3, 0.4, 10000]),
+    "average",
+  );
+  expect(skewed.at(-1)?.label).toContain("10,000.00");
+});
+
 test("renders a keyboard grid and preserves the selected cell across metric and mode changes", () => {
   const trends = fixture();
   const props = {
@@ -156,6 +199,7 @@ test("renders a keyboard grid and preserves the selected cell across metric and 
   expect(
     screen.getByRole("heading", { name: "Friday, 20:00–20:59" }),
   ).toBeInTheDocument();
+  expect(screen.getByText("Selected cell")).toBeInTheDocument();
   expect(
     within(container.querySelector(".weekday-hour-details")!).getAllByText(
       "24",
@@ -169,7 +213,9 @@ test("renders a keyboard grid and preserves the selected cell across metric and 
   ).toBeInTheDocument();
   expect(screen.getByText("8", { selector: "dd" })).toBeInTheDocument();
   expect(screen.getAllByText("8.00", { selector: "dd" })).toHaveLength(2);
-  expect(screen.getAllByText(/Average per weekday/).length).toBeGreaterThan(0);
+  expect(
+    screen.getByText("Displayed average per weekday", { selector: "dt" }),
+  ).toBeInTheDocument();
   expect(cells[2 * 24].getAttribute("aria-label")).toContain(
     "average unavailable",
   );
@@ -180,6 +226,63 @@ test("renders a keyboard grid and preserves the selected cell across metric and 
   fireEvent.click(expandedTable);
   const table = screen.getByRole("table", { name: /2025-12-28–2026-01-05/ });
   expect(within(table).getAllByRole("row")).toHaveLength(169);
+});
+
+test("pointer and keyboard previews yield to the active interaction and restore selection", () => {
+  render(
+    <WeekdayHourHeatmap
+      trends={fixture()}
+      metric="total"
+      mode="total"
+      reportingPeriod="2025-12-28–2026-01-05"
+    />,
+  );
+  const grid = screen.getByRole("grid");
+  const fridayCell = within(grid).getAllByRole("gridcell", {
+    name: /Friday, 20:00–20:59/,
+  })[0] as HTMLButtonElement;
+  const mondayCell = within(grid).getAllByRole("gridcell", {
+    name: /Monday, 08:00–08:59/,
+  })[0] as HTMLButtonElement;
+  fireEvent.click(fridayCell);
+  expect(
+    screen.getByRole("heading", { name: "Friday, 20:00–20:59" }),
+  ).toBeInTheDocument();
+
+  fireEvent.pointerEnter(mondayCell);
+  expect(
+    screen.getByRole("heading", { name: "Monday, 08:00–08:59" }),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Pointer preview")).toBeInTheDocument();
+  fireEvent.pointerLeave(mondayCell);
+  expect(
+    screen.getByRole("heading", { name: "Friday, 20:00–20:59" }),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Selected cell")).toBeInTheDocument();
+
+  fireEvent.focus(mondayCell);
+  expect(
+    screen.getByRole("heading", { name: "Monday, 08:00–08:59" }),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Keyboard focus preview")).toBeInTheDocument();
+  fireEvent.keyDown(mondayCell, { key: "ArrowRight" });
+  expect(
+    screen.getByRole("heading", { name: "Monday, 09:00–09:59" }),
+  ).toBeInTheDocument();
+  fireEvent.pointerEnter(fridayCell);
+  expect(
+    screen.getByRole("heading", { name: "Monday, 09:00–09:59" }),
+  ).toBeInTheDocument();
+
+  fireEvent.keyDown(mondayCell.nextElementSibling!, { key: " " });
+  expect(
+    screen.getByRole("heading", { name: "Monday, 09:00–09:59" }),
+  ).toBeInTheDocument();
+  fireEvent.pointerEnter(fridayCell);
+  fireEvent.pointerLeave(fridayCell);
+  expect(
+    screen.getByRole("heading", { name: "Monday, 09:00–09:59" }),
+  ).toBeInTheDocument();
 });
 
 test("all-zero periods keep all cells neutral and explain zero activity", () => {

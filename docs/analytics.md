@@ -168,6 +168,15 @@ check-ins returned by the API remain visible and contribute normally.
 The date-grid utility accepts Sunday-first alignment for future configuration,
 but M8.3 uses Monday-first only.
 
+The M8.3 calendar heatmap uses a **fixed** activity scale of 0, 1–2, 3–5,
+6–9, and 10 or more for the selected metric. Years are not independently
+normalized, so colors remain comparable while navigating years. For the initial
+year, the UI uses the latest active year when matching M7 bucket activity is
+available; otherwise it chooses the latest year overlapping the reporting
+period. Empty years remain selectable. Daily counts are available by pointer,
+focus, or activation in the details panel. The calendar scrolls internally on
+narrow screens.
+
 ## Weekday and hourly distributions (M8.4)
 
 Below the calendar, Check-ins by Weekday shows Monday through Sunday and
@@ -220,12 +229,3 @@ left/right moves within an hour row, up/down within the same hour column, and
 Home/End moves to that weekday's first/last hour. Navigation does not wrap.
 Enter/Space selects; the persistent details panel supports touch/mobile use.
 On narrow screens the matrix scrolls inside its own container.
-
-Intensity uses a fixed, cross-year scale for the selected metric: 0, 1–2, 3–5,
-6–9, and 10 or more. Years are not independently normalized, so colors remain
-comparable when navigating between them. For the initial year, the UI uses the
-latest active year when a matching M7 response provides bucket activity; if not,
-it deterministically chooses the latest year overlapping the period. Empty
-years remain selectable. Daily counts are available by pointer, focus, or
-activation in the details panel. The calendar scrolls internally on narrow
-screens.
