@@ -53,12 +53,10 @@ export default function DrinkingTrendsView({
   const [result, setResult] = useState<TrendResult | null>(null);
   const [failure, setFailure] = useState<TrendFailure | null>(null);
   const [loading, setLoading] = useState(false);
-  const [distributionData, setDistributionData] =
-    useState<DrinkingTrends | null>(null);
-  const [distributionError, setDistributionError] = useState<string | null>(
-    null,
-  );
-  const [distributionLoading, setDistributionLoading] = useState(false);
+  const [distributionResult, setDistributionResult] =
+    useState<TrendResult | null>(null);
+  const [distributionFailure, setDistributionFailure] =
+    useState<TrendFailure | null>(null);
   const requestedRange = useMemo(
     () => (range && year !== null ? yearIntersection(range, year) : null),
     [range?.start, range?.end, year],
@@ -105,18 +103,30 @@ export default function DrinkingTrendsView({
   }, [active, requestKey]);
 
   const distributionKey = range ? `${range.start}/${range.end}` : null;
+  const currentDistribution =
+    distributionResult?.key === distributionKey
+      ? distributionResult.data
+      : null;
+  const distributionError =
+    distributionFailure?.key === distributionKey
+      ? distributionFailure.message
+      : null;
+  const distributionLoading = Boolean(
+    active &&
+    distributionKey &&
+    distributionResult?.key !== distributionKey &&
+    distributionFailure?.key !== distributionKey,
+  );
   useEffect(() => {
     if (!active || !distributionKey) {
-      setDistributionData(null);
-      setDistributionError(null);
-      setDistributionLoading(false);
+      setDistributionResult(null);
+      setDistributionFailure(null);
       return;
     }
     const [requestStart, requestEnd] = distributionKey.split("/");
     const controller = new AbortController();
     let current = true;
-    setDistributionLoading(true);
-    setDistributionError(null);
+    setDistributionFailure(null);
     fetchDrinkingTrends(
       requestStart,
       requestEnd,
@@ -124,16 +134,21 @@ export default function DrinkingTrendsView({
       controller.signal,
       false,
     )
-      .then((response) => current && setDistributionData(response))
+      .then(
+        (response) =>
+          current &&
+          setDistributionResult({ key: distributionKey, data: response }),
+      )
       .catch((requestError: unknown) => {
         if (!current || controller.signal.aborted) return;
-        setDistributionError(
-          requestError instanceof Error
-            ? requestError.message
-            : "Unable to load distributions.",
-        );
-      })
-      .finally(() => current && setDistributionLoading(false));
+        setDistributionFailure({
+          key: distributionKey,
+          message:
+            requestError instanceof Error
+              ? requestError.message
+              : "Unable to load distributions.",
+        });
+      });
     return () => {
       current = false;
       controller.abort();
@@ -267,12 +282,13 @@ export default function DrinkingTrendsView({
             {distributionError}
           </p>
         )}
-        {distributionData && !distributionError && (
+        {currentDistribution && !distributionError && (
           <>
             <DistributionChart
               title="Check-ins by Weekday"
               description="Monday through Sunday check-in distribution for the complete reporting period."
-              rows={distributionData.weekday.map((row) => ({
+              reportingPeriod={`${currentDistribution.start}–${currentDistribution.end}`}
+              rows={currentDistribution.weekday.map((row) => ({
                 ...row,
                 label: [
                   "Monday",
@@ -287,43 +303,21 @@ export default function DrinkingTrendsView({
               }))}
               metric={metric}
               mode={distribution}
-              denominator={
-                distributionData.start && distributionData.end
-                  ? Math.round(
-                      (Date.parse(`${distributionData.end}T00:00:00Z`) -
-                        Date.parse(`${distributionData.start}T00:00:00Z`)) /
-                        86400000,
-                    ) + 1
-                  : 0
-              }
             />
             <DistributionChart
               title="Check-ins by Hour of Day"
               description="Local check-in clock hour (00:00 to 23:00), aggregated across the complete reporting period."
-              rows={distributionData.hourly.map((row) => ({
+              reportingPeriod={`${currentDistribution.start}–${currentDistribution.end}`}
+              rows={currentDistribution.hourly.map((row) => ({
                 ...row,
                 label: `${String(row.hour).padStart(2, "0")}:00`,
-                denominator:
-                  distributionData.start && distributionData.end
-                    ? Math.round(
-                        (Date.parse(`${distributionData.end}T00:00:00Z`) -
-                          Date.parse(`${distributionData.start}T00:00:00Z`)) /
-                          86400000,
-                      ) + 1
-                    : 0,
+                denominator: inclusiveDays(
+                  currentDistribution.start,
+                  currentDistribution.end,
+                ),
               }))}
               metric={metric}
               mode={distribution}
-              denominator={
-                distributionData.start && distributionData.end
-                  ? Math.round(
-                      (Date.parse(`${distributionData.end}T00:00:00Z`) -
-                        Date.parse(`${distributionData.start}T00:00:00Z`)) /
-                        86400000,
-                    ) + 1
-                  : 0
-              }
-              hourly
             />
           </>
         )}
@@ -339,22 +333,30 @@ type DistributionRow = {
   repeats: number;
   denominator: number;
 };
+
+function inclusiveDays(start: string, end: string) {
+  return (
+    Math.round(
+      (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) /
+        86400000,
+    ) + 1
+  );
+}
+
 function DistributionChart({
   title,
   description,
+  reportingPeriod,
   rows,
   metric,
   mode,
-  denominator,
-  hourly = false,
 }: {
   title: string;
   description: string;
+  reportingPeriod: string;
   rows: DistributionRow[];
   metric: ActivityMetric;
   mode: "total" | "average";
-  denominator: number;
-  hourly?: boolean;
 }) {
   const key =
     metric === "total"
@@ -362,92 +364,133 @@ function DistributionChart({
       : metric === "discoveries"
         ? "discoveries"
         : "repeats";
-  const data = rows.map((row) => ({
-    ...row,
-    count: row[key],
-    value:
-      mode === "total"
-        ? row[key]
-        : row[key] / (hourly ? denominator : row.denominator || 1),
-  }));
+  const metricName =
+    metric === "total"
+      ? "All check-ins"
+      : metric === "discoveries"
+        ? "New discoveries"
+        : "Repeat check-ins";
+  const data = rows.map((row) => {
+    const count = row[key];
+    const average = row.denominator > 0 ? count / row.denominator : null;
+    return {
+      ...row,
+      count,
+      average,
+      value: mode === "total" ? count : (average ?? 0),
+    };
+  });
+  const descriptionId = `${title.replaceAll(" ", "-").toLowerCase()}-description`;
+  const isHourly = rows.length > 7;
   return (
-    <article
-      className={`distribution-chart ${hourly ? "hourly-chart" : "weekday-chart"}`}
-    >
+    <article className="distribution-chart">
       <h3>{title}</h3>
-      <p
-        className="sr-only"
-        id={`${hourly ? "hourly" : "weekday"}-description`}
-      >
-        {description}
+      <p className="sr-only" id={descriptionId}>
+        {description} Reporting period: {reportingPeriod}. Displaying{" "}
+        {metricName} as {mode === "total" ? "totals" : "averages"}.
       </p>
       <div
         className="distribution-canvas"
         role="img"
-        aria-label={`${title}. ${description}`}
+        aria-label={`${title}. ${description} Reporting period: ${reportingPeriod}. ${metricName}, ${mode === "total" ? "totals" : "averages"}.`}
+        aria-describedby={descriptionId}
       >
-        {rows.every((row) => row.total === 0) ? (
-          <p className="analytics-state">
-            No check-ins in this reporting period.
-          </p>
-        ) : (
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart
-              data={data}
-              margin={{ top: 8, right: 12, left: 0, bottom: 8 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="label"
-                interval={hourly ? 2 : 0}
-                tick={{ fontSize: hourly ? 10 : 12 }}
-              />
-              <YAxis allowDecimals={mode === "average"} />
-              <Tooltip
-                content={({ active, payload }) => {
-                  const row = payload?.[0]?.payload as
-                    | (DistributionRow & { count: number; value: number })
-                    | undefined;
-                  if (!active || !row) return null;
-                  const divisor = hourly ? denominator : row.denominator;
-                  return (
-                    <div className="analytics-tooltip">
-                      <strong>{row.label}</strong>
-                      <div>Selected count: {row.count}</div>
-                      <div>
-                        Denominator: {divisor}
-                        {hourly
-                          ? " calendar days"
-                          : " occurrences of this weekday"}
-                      </div>
-                      <div>
-                        Average:{" "}
-                        {divisor ? (row.count / divisor).toFixed(2) : "—"}
-                      </div>
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart
+            data={data}
+            margin={{ top: 8, right: 12, left: 0, bottom: 8 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis
+              dataKey="label"
+              interval={isHourly ? 2 : 0}
+              tick={{ fontSize: isHourly ? 10 : 12 }}
+            />
+            <YAxis allowDecimals={mode === "average"} />
+            <Tooltip
+              content={({ active, payload }) => {
+                const row = payload?.[0]?.payload as
+                  | (DistributionRow & {
+                      count: number;
+                      average: number | null;
+                      value: number;
+                    })
+                  | undefined;
+                if (!active || !row) return null;
+                return (
+                  <div className="analytics-tooltip">
+                    <strong>{row.label}</strong>
+                    <div>
+                      {mode === "total" ? "Total" : "Average"}:{" "}
+                      {mode === "total"
+                        ? row.count
+                        : (row.average?.toFixed(2) ?? "Unavailable")}
                     </div>
-                  );
-                }}
-              />
-              <Bar
-                dataKey="value"
-                name={
-                  mode === "total"
-                    ? "Check-ins"
-                    : hourly
-                      ? "Average per day"
-                      : "Average per weekday"
-                }
-                fill="#2f855a"
-                isAnimationActive={false}
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
+                    <div>Selected count: {row.count}</div>
+                    <div>
+                      Denominator: {row.denominator}
+                      {isHourly
+                        ? " calendar days"
+                        : " occurrences of this weekday"}
+                    </div>
+                    <div>
+                      Average:{" "}
+                      {row.average?.toFixed(2) ??
+                        "Unavailable (no occurrences)"}
+                    </div>
+                  </div>
+                );
+              }}
+            />
+            <Bar
+              dataKey="value"
+              name={mode === "total" ? "Check-ins" : "Average"}
+              fill="#2f855a"
+              isAnimationActive={false}
+            />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
+      {data.every((row) => row.count === 0) && (
+        <p className="analytics-state">
+          No check-ins in this reporting period.
+        </p>
+      )}
+      <table className="sr-only distribution-data-table">
+        <caption>
+          {title} · {reportingPeriod} · {metricName} ·{" "}
+          {mode === "total" ? "Totals" : "Averages"}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">{isHourly ? "Local hour" : "Weekday"}</th>
+            <th scope="col">{metricName}</th>
+            <th scope="col">Denominator</th>
+            <th scope="col">Average</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row) => (
+            <tr key={row.label}>
+              <th scope="row">{row.label}</th>
+              <td>{row.count}</td>
+              <td>
+                {row.denominator}
+                {isHourly ? " calendar days" : " occurrences"}
+              </td>
+              <td>
+                {row.average === null
+                  ? "Unavailable (no occurrences)"
+                  : row.average.toFixed(2)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
       <p className="distribution-axis-label">
         {mode === "total"
           ? "Check-ins"
-          : hourly
+          : isHourly
             ? "Average check-ins per calendar day"
             : "Average check-ins per occurrence of weekday"}
       </p>

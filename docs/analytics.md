@@ -178,13 +178,15 @@ mode selects totals or averages: weekday average = weekday count divided by the
 number of occurrences of that weekday in the inclusive range; hourly average =
 hour count divided by the number of calendar dates in the range. Thus hourly
 normalization is explicitly per calendar day, not per occurrence of a local hour.
-Tooltips expose selected count, denominator, and calculated average.
+Tooltips and screen-reader tables expose the selected count, denominator, and
+calculated average. A weekday absent from the range has no defined average; it is
+shown as unavailable, not as a measured zero.
 
 The API keeps the M8.1 response unchanged by default. `daily=false` opts into
 aggregate-only output: daily rows are omitted while weekday/hour and weekday
 denominators still span the complete range. This avoids materializing dense daily
-buckets and bypasses the 366-day cap for All time without changing discovery ranking. Timestamp
-groups use the requested timezone; repeated autumn DST local hours combine into
+buckets and bypasses the 366-day cap for All time without changing discovery
+ranking. Timestamp groups use the requested timezone; repeated autumn DST local hours combine into
 one clock-hour bucket and missing spring hours have zero activity. Imports require
 a complete `created_at` timestamp; date-only or missing-time records are not
 supported, and these charts describe imported check-in time, not when the beer

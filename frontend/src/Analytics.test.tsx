@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -959,6 +960,324 @@ test("trends fetch is scoped to its active view and custom date changes preserve
   expect(screen.getByLabelText("Current query")).toHaveTextContent(
     "start=2026-01-02",
   );
+});
+
+test("distribution tables expose ordered buckets, exact normalization, URL state, and local metric changes", async () => {
+  const weekdayCounts = [10, 8, 3, 4, 5, 2, 7];
+  const weekdayDiscoveries = [2, 4, 1, 1, 3, 0, 5];
+  const trends = {
+    ...trendsSample,
+    start: "2026-01-05",
+    end: "2026-01-12",
+    weekday: weekdayCounts.map((total, weekday) => ({
+      weekday,
+      total,
+      discoveries: weekdayDiscoveries[weekday],
+      repeats: total - weekdayDiscoveries[weekday],
+      days_in_period: [2, 2, 1, 1, 1, 1, 1][weekday],
+    })),
+    hourly: Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      total: hour === 12 ? 12 : hour === 23 ? 4 : 0,
+      discoveries: hour === 12 ? 3 : hour === 23 ? 1 : 0,
+      repeats: hour === 12 ? 9 : hour === 23 ? 3 : 0,
+    })),
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) =>
+      String(input).includes("drinking-trends")
+        ? { ok: true, json: async () => trends }
+        : { ok: true, json: async () => sample },
+    ),
+  );
+  render(
+    <MemoryRouter
+      initialEntries={[
+        "/analytics?period=custom&start=2026-01-05&end=2026-01-12&view=trends&year=2026&metric=total&distribution=average&debugLayout=1",
+      ]}
+    >
+      <HistoryControls />
+      <QueryView />
+      <Analytics />
+    </MemoryRouter>,
+  );
+
+  const weekdays = await screen.findByRole("table", {
+    name: /Check-ins by Weekday.*All check-ins.*Averages/,
+  });
+  const hours = screen.getByRole("table", {
+    name: /Check-ins by Hour of Day.*All check-ins.*Averages/,
+  });
+  const weekdayRows = within(weekdays).getAllByRole("row");
+  expect(weekdayRows).toHaveLength(8);
+  expect(
+    weekdayRows.slice(1).map((row) => row.querySelector("th")?.textContent),
+  ).toEqual([
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+  ]);
+  expect(
+    within(weekdays).getByRole("row", { name: /Monday/ }),
+  ).toHaveTextContent("Monday102 occurrences5.00");
+  expect(within(hours).getAllByRole("row")).toHaveLength(25);
+  expect(within(hours).getByRole("row", { name: /00:00/ })).toHaveTextContent(
+    "00:0008 calendar days0.00",
+  );
+  expect(within(hours).getByRole("row", { name: /12:00/ })).toHaveTextContent(
+    "12:00128 calendar days1.50",
+  );
+
+  const callCount = vi.mocked(globalThis.fetch).mock.calls.length;
+  fireEvent.change(screen.getByLabelText("Activity metric"), {
+    target: { value: "discoveries" },
+  });
+  const discoveries = await screen.findByRole("table", {
+    name: /Check-ins by Weekday.*New discoveries.*Averages/,
+  });
+  expect(
+    within(discoveries).getByRole("row", { name: /Monday/ }),
+  ).toHaveTextContent("Monday22 occurrences1.00");
+  const discoveryHours = screen.getByRole("table", {
+    name: /Check-ins by Hour of Day.*New discoveries.*Averages/,
+  });
+  expect(
+    within(discoveryHours).getByRole("row", { name: /12:00/ }),
+  ).toHaveTextContent("12:0038 calendar days0.38");
+  fireEvent.change(screen.getByLabelText("Activity metric"), {
+    target: { value: "repeats" },
+  });
+  const repeats = await screen.findByRole("table", {
+    name: /Check-ins by Weekday.*Repeat check-ins.*Averages/,
+  });
+  expect(
+    within(repeats).getByRole("row", { name: /Monday/ }),
+  ).toHaveTextContent("Monday82 occurrences4.00");
+  const repeatHours = screen.getByRole("table", {
+    name: /Check-ins by Hour of Day.*Repeat check-ins.*Averages/,
+  });
+  expect(
+    within(repeatHours).getByRole("row", { name: /12:00/ }),
+  ).toHaveTextContent("12:0098 calendar days1.13");
+  fireEvent.change(screen.getByLabelText("Distribution display mode"), {
+    target: { value: "total" },
+  });
+  expect(
+    await screen.findAllByRole("table", { name: /Repeat check-ins.*Totals/ }),
+  ).toHaveLength(2);
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "metric=repeats",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "start=2026-01-05",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "end=2026-01-12",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent("year=2026");
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "debugLayout=1",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "granularity=auto",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "timezone=Europe%2FAmsterdam",
+  );
+  expect(vi.mocked(globalThis.fetch).mock.calls).toHaveLength(callCount);
+
+  fireEvent.click(screen.getByRole("button", { name: "Browser back" }));
+  expect(
+    await screen.findAllByRole("table", { name: /Repeat check-ins.*Averages/ }),
+  ).toHaveLength(2);
+  expect(screen.getByLabelText("Distribution display mode")).toHaveValue(
+    "average",
+  );
+  expect(vi.mocked(globalThis.fetch).mock.calls).toHaveLength(callCount);
+  fireEvent.click(screen.getByRole("button", { name: "Browser forward" }));
+  expect(
+    await screen.findAllByRole("table", { name: /Repeat check-ins.*Totals/ }),
+  ).toHaveLength(2);
+  expect(screen.getByLabelText("Distribution display mode")).toHaveValue(
+    "total",
+  );
+  expect(vi.mocked(globalThis.fetch).mock.calls).toHaveLength(callCount);
+});
+
+test("invalid distribution URL state canonicalizes while preserving analytics filters", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) =>
+      String(input).includes("drinking-trends")
+        ? { ok: true, json: async () => trendsSample }
+        : { ok: true, json: async () => sample },
+    ),
+  );
+  renderAnalytics(
+    "/analytics?period=custom&start=2026-01-01&end=2026-01-02&view=trends&metric=discoveries&distribution=invalid&year=2026&debugLayout=1",
+  );
+  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  await waitFor(() =>
+    expect(screen.getByLabelText("Current query")).not.toHaveTextContent(
+      "distribution=invalid",
+    ),
+  );
+  expect(screen.getByLabelText("Distribution display mode")).toHaveValue(
+    "total",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "period=custom",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "view=trends",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "metric=discoveries",
+  );
+  expect(screen.getByLabelText("Current query")).toHaveTextContent("year=2026");
+  expect(screen.getByLabelText("Current query")).toHaveTextContent(
+    "debugLayout=1",
+  );
+});
+
+test("distribution data is keyed to its active reporting range and stale requests cannot replace it", async () => {
+  const pending: Array<{
+    start: string;
+    end: string;
+    resolve: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    reject: (reason: Error) => void;
+    signal?: AbortSignal;
+  }> = [];
+  const aggregateFor = (start: string, end: string, count: number) => ({
+    ...trendsSample,
+    start,
+    end,
+    weekday: trendsSample.weekday.map((row, weekday) => ({
+      ...row,
+      total: weekday === 0 ? count : 0,
+      discoveries: weekday === 0 ? count : 0,
+      repeats: 0,
+      days_in_period: weekday === 0 ? 1 : 0,
+    })),
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), "http://localhost");
+      if (
+        url.pathname.endsWith("drinking-trends") &&
+        url.searchParams.get("daily") === "false"
+      ) {
+        return new Promise((resolve, reject) =>
+          pending.push({
+            start: url.searchParams.get("start")!,
+            end: url.searchParams.get("end")!,
+            resolve,
+            reject,
+            signal: init?.signal as AbortSignal | undefined,
+          }),
+        );
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () =>
+          url.pathname.endsWith("drinking-trends") ? trendsSample : sample,
+      });
+    }),
+  );
+  renderAnalytics(
+    "/analytics?period=custom&start=2026-01-05&end=2026-01-12&view=trends",
+  );
+  await waitFor(() => expect(pending).toHaveLength(1));
+  expect(await screen.findByRole("grid")).toBeInTheDocument();
+  pending[0].resolve({
+    ok: true,
+    json: async () => aggregateFor("2026-01-05", "2026-01-12", 5),
+  });
+  expect(
+    await screen.findAllByRole("table", { name: /2026-01-05–2026-01-12/ }),
+  ).toHaveLength(2);
+
+  fireEvent.change(screen.getByLabelText("Start date"), {
+    target: { value: "2026-01-06" },
+  });
+  await waitFor(() => expect(pending).toHaveLength(2));
+  expect(pending[0].signal?.aborted).toBe(true);
+  expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  expect(screen.getByRole("grid")).toBeInTheDocument();
+
+  fireEvent.change(screen.getByLabelText("Start date"), {
+    target: { value: "2026-01-07" },
+  });
+  await waitFor(() => expect(pending).toHaveLength(3));
+  pending[1].resolve({
+    ok: true,
+    json: async () => aggregateFor("2026-01-06", "2026-01-12", 99),
+  });
+  expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  pending[2].resolve({
+    ok: true,
+    json: async () => aggregateFor("2026-01-07", "2026-01-12", 7),
+  });
+  const current = await screen.findByRole("table", {
+    name: /Check-ins by Weekday.*2026-01-07–2026-01-12/,
+  });
+  expect(
+    within(current).getByRole("row", { name: /Monday/ }),
+  ).toHaveTextContent("Monday7");
+  expect(screen.queryByText(/99/)).not.toBeInTheDocument();
+
+  fireEvent.change(screen.getByLabelText("Start date"), {
+    target: { value: "2026-01-08" },
+  });
+  await waitFor(() => expect(pending).toHaveLength(4));
+  expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  pending[3].reject(new Error("Distribution service unavailable"));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Distribution service unavailable",
+  );
+  expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  expect(screen.getByRole("grid")).toBeInTheDocument();
+});
+
+test("single-day averages mark weekdays without occurrences as unavailable", async () => {
+  const oneDay = {
+    ...trendsSample,
+    start: "2026-01-05",
+    end: "2026-01-05",
+    weekday: trendsSample.weekday.map((row, weekday) => ({
+      ...row,
+      total: weekday === 0 ? 2 : 0,
+      discoveries: weekday === 0 ? 1 : 0,
+      repeats: weekday === 0 ? 1 : 0,
+      days_in_period: weekday === 0 ? 1 : 0,
+    })),
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) =>
+      String(input).includes("drinking-trends")
+        ? { ok: true, json: async () => oneDay }
+        : { ok: true, json: async () => sample },
+    ),
+  );
+  renderAnalytics(
+    "/analytics?period=custom&start=2026-01-05&end=2026-01-05&view=trends&distribution=average",
+  );
+  const weekdays = await screen.findByRole("table", {
+    name: /Check-ins by Weekday.*Averages/,
+  });
+  expect(
+    within(weekdays).getByRole("row", { name: /Monday/ }),
+  ).toHaveTextContent("Monday21 occurrences2.00");
+  expect(
+    within(weekdays).getByRole("row", { name: /Tuesday/ }),
+  ).toHaveTextContent("Tuesday00 occurrencesUnavailable (no occurrences)");
 });
 
 test("calendar year and metric URL state drive one-year requests without refetching on metric changes", async () => {

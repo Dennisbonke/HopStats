@@ -362,6 +362,10 @@ section {
 .distribution-chart h3 {
   margin-top: 0;
 }
+.sr-only.distribution-data-table {
+  position: fixed;
+  table-layout: fixed;
+}
 .distribution-canvas {
   min-width: 0;
   width: 100%;

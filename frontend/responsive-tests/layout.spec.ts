@@ -27,6 +27,27 @@ async function expectNoDocumentOverflow(page: Page) {
       ),
   );
   const overflow = await page.evaluate(() => ({
+    viewport: window.innerWidth,
+    documentClient: document.documentElement.clientWidth,
+    documentScroll: document.documentElement.scrollWidth,
+    layout: [
+      "main",
+      ".analytics-page",
+      ".drinking-trends-view",
+      ".distribution-grid",
+      ".calendar-heatmap",
+      ".calendar-scroll",
+    ].map((selector) => {
+      const element = document.querySelector(selector);
+      if (!element) return { selector, bounds: null };
+      const rect = element.getBoundingClientRect();
+      return {
+        selector,
+        bounds: { x: rect.x, width: rect.width, right: rect.right },
+        overflowX: getComputedStyle(element).overflowX,
+        minWidth: getComputedStyle(element).minWidth,
+      };
+    }),
     amount:
       document.documentElement.scrollWidth -
       document.documentElement.clientWidth,
@@ -62,10 +83,7 @@ async function expectNoDocumentOverflow(page: Page) {
       )
       .slice(0, 5),
   }));
-  expect(
-    overflow.amount,
-    JSON.stringify(overflow.offenders),
-  ).toBeLessThanOrEqual(1);
+  expect(overflow.amount, JSON.stringify(overflow)).toBeLessThanOrEqual(1);
 }
 
 test("application pages fit mobile portrait, landscape, tablet and desktop", async ({
@@ -88,7 +106,8 @@ test("application pages fit mobile portrait, landscape, tablet and desktop", asy
   await loginPage.close();
 
   await page.route("**/api/v1/**", async (route) => {
-    const path = new URL(route.request().url()).pathname;
+    const requestUrl = new URL(route.request().url());
+    const path = requestUrl.pathname;
     let body: unknown = {};
     if (path.endsWith("/auth/me")) {
       body = { id: 1, username: "test", created_at: "2026-01-01T00:00:00Z" };
@@ -149,17 +168,38 @@ test("application pages fit mobile portrait, landscape, tablet and desktop", asy
         start: "2026-01-01",
         end: "2026-12-31",
         timezone: "Europe/Amsterdam",
-        daily: Array.from({ length: 365 }, (_, index) => ({
-          date: new Date(Date.UTC(2026, 0, index + 1))
-            .toISOString()
-            .slice(0, 10),
-          total: 0,
-          discoveries: 0,
-          repeats: 0,
+        daily:
+          requestUrl.searchParams.get("daily") === "false"
+            ? []
+            : Array.from({ length: 365 }, (_, index) => ({
+                date: new Date(Date.UTC(2026, 0, index + 1))
+                  .toISOString()
+                  .slice(0, 10),
+                total: 0,
+                discoveries: 0,
+                repeats: 0,
+              })),
+        weekday: Array.from({ length: 7 }, (_, weekday) => ({
+          weekday,
+          total: weekday === 0 ? 2 : 0,
+          discoveries: weekday === 0 ? 1 : 0,
+          repeats: weekday === 0 ? 1 : 0,
+          days_in_period: weekday === 0 ? 53 : 52,
         })),
-        weekday: [],
-        hourly: [],
-        weekday_hour: [],
+        hourly: Array.from({ length: 24 }, (_, hour) => ({
+          hour,
+          total: hour === 12 ? 2 : 0,
+          discoveries: hour === 12 ? 1 : 0,
+          repeats: hour === 12 ? 1 : 0,
+        })),
+        weekday_hour: Array.from({ length: 168 }, (_, index) => ({
+          weekday: Math.floor(index / 24),
+          hour: index % 24,
+          total: Math.floor(index / 24) === 0 && index % 24 === 12 ? 2 : 0,
+          discoveries:
+            Math.floor(index / 24) === 0 && index % 24 === 12 ? 1 : 0,
+          repeats: Math.floor(index / 24) === 0 && index % 24 === 12 ? 1 : 0,
+        })),
       };
     } else if (path.endsWith("/inventory/styles")) {
       body = [];
@@ -211,6 +251,22 @@ test("application pages fit mobile portrait, landscape, tablet and desktop", asy
         await expect(
           page.getByRole("grid", { name: /2026 daily activity/ }),
         ).toBeVisible();
+        await expect(
+          page.getByRole("table", { name: /Check-ins by Weekday/ }),
+        ).toHaveCount(1);
+        await expect(
+          page.getByRole("table", { name: /Check-ins by Hour of Day/ }),
+        ).toHaveCount(1);
+        await expect(
+          page
+            .getByRole("table", { name: /Check-ins by Weekday/ })
+            .getByRole("row"),
+        ).toHaveCount(8);
+        await expect(
+          page
+            .getByRole("table", { name: /Check-ins by Hour of Day/ })
+            .getByRole("row"),
+        ).toHaveCount(25);
         await expectNoDocumentOverflow(page);
         const calendarWidth = await page
           .locator(".calendar-scroll")
@@ -230,8 +286,15 @@ test("application pages fit mobile portrait, landscape, tablet and desktop", asy
     page.getByRole("group", { name: /stacked bar chart/i }),
   ).toBeVisible();
   await expectNoDocumentOverflow(page);
+  await page.getByRole("tab", { name: "Drinking Trends" }).click();
+  await expect(
+    page.getByRole("table", { name: /Check-ins by Hour of Day/ }),
+  ).toHaveCount(1);
   await page.setViewportSize({ width: 844, height: 390 });
   await expectNoDocumentOverflow(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoDocumentOverflow(page);
+  await page.getByRole("tab", { name: "Overview" }).click();
   await page.getByLabel("Granularity").selectOption("week");
   await expectNoDocumentOverflow(page);
   await page.getByRole("button", { name: "Cumulative" }).click();

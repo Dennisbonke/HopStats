@@ -1002,7 +1002,7 @@ export default function Analytics() {
           const params = new URLSearchParams(searchParams);
           if (value === "total") params.delete("distribution");
           else params.set("distribution", value);
-          setSearchParams(params, { replace: true });
+          setSearchParams(params);
         }}
       />
       <section
