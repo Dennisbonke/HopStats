@@ -147,6 +147,42 @@ class Checkin(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
 
+class Milestone(Base):
+    __tablename__ = "milestones"
+    __table_args__ = (
+        CheckConstraint("target > 0", name="ck_milestones_target_positive"),
+        CheckConstraint(
+            "goal_type IN ('absolute', 'calendar_year', 'incremental')",
+            name="ck_milestones_goal_type",
+        ),
+        CheckConstraint(
+            "metric IN ('unique_beers', 'checkins', 'discoveries')", name="ck_milestones_metric"
+        ),
+        CheckConstraint(
+            "(goal_type = 'calendar_year' AND calendar_year IS NOT NULL AND start_date IS NULL) "
+            "OR (goal_type = 'incremental' AND start_date IS NOT NULL AND calendar_year IS NULL) "
+            "OR (goal_type = 'absolute' AND calendar_year IS NULL AND start_date IS NULL)",
+            name="ck_milestones_period",
+        ),
+        Index("ix_milestones_user_archived_created", "user_id", "archived_at", "created_at", "id"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    name: Mapped[str] = mapped_column(String(150))
+    metric: Mapped[str] = mapped_column(String(30))
+    goal_type: Mapped[str] = mapped_column(String(20))
+    target: Mapped[int] = mapped_column(Integer)
+    calendar_year: Mapped[int | None] = mapped_column(Integer)
+    start_date: Mapped[date | None] = mapped_column(Date)
+    deadline_date: Mapped[date | None] = mapped_column(Date)
+    timezone: Mapped[str] = mapped_column(String(100), default="Europe/Amsterdam")
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utc_now, onupdate=_utc_now
+    )
+
+
 class Location(Base):
     __tablename__ = "locations"
     __table_args__ = (
