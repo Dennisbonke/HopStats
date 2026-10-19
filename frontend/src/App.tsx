@@ -6,6 +6,8 @@ import Imports from "./pages/Imports";
 import Dashboard from "./pages/Dashboard";
 import Inventory from "./pages/Inventory";
 import Locations from "./pages/Locations";
+import Milestones from "./pages/Milestones";
+import MilestoneDetail from "./pages/MilestoneDetail";
 const Analytics = lazy(() => import("./pages/Analytics"));
 import Login from "./pages/Login";
 
@@ -13,6 +15,7 @@ const links = [
   ["/", "Dashboard"],
   ["/inventory", "Inventory"],
   ["/locations", "Locations"],
+  ["/milestones", "Milestones"],
   ["/analytics", "Analytics"],
   ["/imports", "Imports"],
 ];
@@ -147,6 +150,8 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/locations" element={<Locations />} />
+          <Route path="/milestones" element={<Milestones />} />
+          <Route path="/milestones/:id" element={<MilestoneDetail />} />
           <Route
             path="/analytics"
             element={

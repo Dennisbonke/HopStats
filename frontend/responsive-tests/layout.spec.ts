@@ -12,7 +12,15 @@ const viewports = [
   [1280, 800],
   [1920, 1080],
 ];
-const routes = ["/", "/analytics", "/inventory", "/locations", "/imports"];
+const routes = [
+  "/",
+  "/analytics",
+  "/inventory",
+  "/locations",
+  "/milestones",
+  "/milestones/1",
+  "/imports",
+];
 const crossBrowserViewports = [
   [390, 844],
   [844, 390],
@@ -207,6 +215,35 @@ test("application pages fit mobile portrait, landscape, tablet and desktop", asy
       body = { items: [], total: 0, page: 1, page_size: 25, total_pages: 0 };
     } else if (path.endsWith("/locations")) {
       body = { locations: [], unresolved: { record_count: 0, total_units: 0 } };
+    } else if (path.endsWith("/milestones/1")) {
+      body = {
+        id: 1,
+        name: "Test milestone",
+        metric: "discoveries",
+        goal_type: "incremental",
+        target: 10,
+        calendar_year: null,
+        start_date: "2026-01-01",
+        deadline_date: "2026-12-31",
+        timezone: "Europe/Amsterdam",
+        archived_at: null,
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+        current: 3,
+        remaining: 7,
+        progress_percent: 30,
+        status: "active",
+        deadline_outcome: "pending",
+        completed_at: null,
+        completed_before_deadline: null,
+        required_per_day: 0.1,
+        required_per_week: 0.7,
+        elapsed_per_day: 0.05,
+        elapsed_per_week: 0.35,
+        trajectory_difference: -1,
+      };
+    } else if (path.endsWith("/milestones")) {
+      body = { milestones: [] };
     } else if (path.endsWith("/imports")) {
       body = [];
     }
