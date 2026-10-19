@@ -4,7 +4,13 @@ import { fetchMilestones, Milestone, MilestoneStatus } from "../api/milestones";
 import MilestoneFormDialog from "../components/MilestoneFormDialog";
 
 type Filter =
-  "all" | "active" | "scheduled" | "completed" | "overdue" | "archived";
+  | "all"
+  | "active"
+  | "scheduled"
+  | "completed"
+  | "overdue"
+  | "period_ended"
+  | "archived";
 
 const filters: Array<{ id: Filter; label: string }> = [
   { id: "all", label: "All" },
@@ -12,6 +18,7 @@ const filters: Array<{ id: Filter; label: string }> = [
   { id: "scheduled", label: "Scheduled" },
   { id: "completed", label: "Completed" },
   { id: "overdue", label: "Overdue" },
+  { id: "period_ended", label: "Period ended" },
   { id: "archived", label: "Archived" },
 ];
 
@@ -85,6 +92,9 @@ function ProgressCard({ milestone }: { milestone: Milestone }) {
 export default function Milestones() {
   const [filter, setFilter] = useState<Filter>("all");
   const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [nonArchivedMilestones, setNonArchivedMilestones] = useState<
+    Milestone[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
@@ -95,7 +105,18 @@ export default function Milestones() {
     setLoading(true);
     setError(null);
     try {
-      setMilestones(await fetchMilestones(archived));
+      if (archived) {
+        const [archivedItems, currentItems] = await Promise.all([
+          fetchMilestones(true),
+          fetchMilestones(false),
+        ]);
+        setMilestones(archivedItems);
+        setNonArchivedMilestones(currentItems);
+      } else {
+        const currentItems = await fetchMilestones(false);
+        setMilestones(currentItems);
+        setNonArchivedMilestones(currentItems);
+      }
     } catch (loadError) {
       setError(
         loadError instanceof Error
@@ -117,16 +138,19 @@ export default function Milestones() {
   }, [filter, milestones]);
 
   const counts = useMemo(() => {
-    const nonArchived = filter === "archived" ? [] : milestones;
     return {
-      active: nonArchived.filter((item) => item.status === "active").length,
-      scheduled: nonArchived.filter((item) => item.status === "scheduled")
+      active: nonArchivedMilestones.filter((item) => item.status === "active")
         .length,
-      completed: nonArchived.filter((item) => item.status === "completed")
+      scheduled: nonArchivedMilestones.filter(
+        (item) => item.status === "scheduled",
+      ).length,
+      completed: nonArchivedMilestones.filter(
+        (item) => item.status === "completed",
+      ).length,
+      overdue: nonArchivedMilestones.filter((item) => item.status === "overdue")
         .length,
-      overdue: nonArchived.filter((item) => item.status === "overdue").length,
     };
-  }, [filter, milestones]);
+  }, [nonArchivedMilestones]);
 
   return (
     <div className="milestone-page">

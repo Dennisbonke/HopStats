@@ -85,7 +85,9 @@ test("overview renders status counts, filters, period-ended status, and clamps v
   expect(
     screen.getByRole("progressbar", { name: "Goal 1 progress" }),
   ).toHaveAttribute("value", "100");
-  expect(screen.getByText("Period ended")).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Period ended" }),
+  ).toBeInTheDocument();
   expect(
     screen.getByText("This calendar-year counting window has closed."),
   ).toBeInTheDocument();
@@ -133,6 +135,51 @@ test("overview handles empty, error, retry, and archived filter", async () => {
       expect.anything(),
     ),
   );
+});
+
+test("archived filtering preserves summary counts and period-ended filtering works", async () => {
+  const nonArchived = [
+    milestone(1, "active"),
+    milestone(2, "scheduled"),
+    milestone(3, "completed"),
+    milestone(4, "overdue"),
+    milestone(5, "period_ended", {
+      goal_type: "calendar_year",
+      calendar_year: 2024,
+    }),
+  ];
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => ({
+    ok: true,
+    json: async () => ({
+      milestones: String(input).includes("archived=true")
+        ? [milestone(6, "archived")]
+        : nonArchived,
+    }),
+  }));
+  vi.stubGlobal("fetch", fetchMock);
+  render(
+    <MemoryRouter initialEntries={["/milestones"]}>
+      <Milestones />
+    </MemoryRouter>,
+  );
+
+  expect(await screen.findByText("Goal 5")).toBeInTheDocument();
+  const counts = within(screen.getByLabelText("Milestone counts"));
+  expect(counts.getByText("In progress").parentElement).toHaveTextContent("1");
+  expect(counts.getByText("Scheduled").parentElement).toHaveTextContent("1");
+  expect(counts.getByText("Completed").parentElement).toHaveTextContent("1");
+  expect(counts.getByText("Overdue").parentElement).toHaveTextContent("1");
+
+  fireEvent.click(screen.getByRole("button", { name: "Archived" }));
+  expect(await screen.findByText("Goal 6")).toBeInTheDocument();
+  expect(counts.getByText("In progress").parentElement).toHaveTextContent("1");
+  expect(counts.getByText("Scheduled").parentElement).toHaveTextContent("1");
+
+  fireEvent.click(screen.getByRole("button", { name: "Period ended" }));
+  expect(await screen.findByText("Goal 5")).toBeInTheDocument();
+  expect(screen.queryByText("Goal 1")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "All" }));
+  expect(await screen.findByText("Goal 5")).toBeInTheDocument();
 });
 
 test("overview announces loading state", () => {
