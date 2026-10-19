@@ -279,6 +279,11 @@ export default function Analytics() {
   const locationPage = parseWindowPage(locationSearch.get("window"));
   const view = selectedView(searchParams);
   const metric = selectedMetric(searchParams);
+  const rawDistribution = searchParams.get("distribution");
+  const distribution: "total" | "average" =
+    rawDistribution === "average" ? "average" : "total";
+  const invalidDistribution =
+    !!rawDistribution && !["total", "average"].includes(rawDistribution);
   const invalidView =
     !!searchParams.get("view") &&
     !["overview", "trends"].includes(searchParams.get("view") ?? "");
@@ -296,7 +301,7 @@ export default function Analytics() {
   const [start, setStart] = useState(initial.start);
   const [end, setEnd] = useState(initial.end);
   const [urlWarning, setUrlWarning] = useState(
-    initial.invalid || invalidView || invalidMetric,
+    initial.invalid || invalidView || invalidMetric || invalidDistribution,
   );
   const [allRange, setAllRange] = useState<DateRange | null>(null);
   const [allRangeLoaded, setAllRangeLoaded] = useState(false);
@@ -495,6 +500,7 @@ export default function Analytics() {
     urlParams.set("period", period);
     if (view === "trends") urlParams.set("view", "trends");
     if (metric !== "total") urlParams.set("metric", metric);
+    if (distribution !== "total") urlParams.set("distribution", distribution);
     if (trendsReportingRange) {
       if (
         calendarYear !== null &&
@@ -529,6 +535,7 @@ export default function Analytics() {
     granularity,
     view,
     metric,
+    distribution,
     trendsReportingRange,
     calendarYear,
     defaultCalendarYear,
@@ -548,13 +555,18 @@ export default function Analytics() {
     setStart(parsed.start);
     setEnd(parsed.end);
     setUrlWarning(
-      parsed.invalid || invalidView || invalidMetric || invalidCalendarYear,
+      parsed.invalid ||
+        invalidView ||
+        invalidMetric ||
+        invalidCalendarYear ||
+        invalidDistribution,
     );
   }, [
     location.search,
     navigationType,
     invalidView,
     invalidMetric,
+    invalidDistribution,
     invalidCalendarYear,
   ]);
 
@@ -985,6 +997,13 @@ export default function Analytics() {
               : "Start date must be on or before end date."
             : null
         }
+        distribution={distribution}
+        onDistributionChange={(value) => {
+          const params = new URLSearchParams(searchParams);
+          if (value === "total") params.delete("distribution");
+          else params.set("distribution", value);
+          setSearchParams(params);
+        }}
       />
       <section
         id="analytics-overview-panel"

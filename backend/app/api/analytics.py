@@ -21,6 +21,7 @@ def drinking_trends(
     start: date | None = None,
     end: date | None = None,
     timezone_name: str = Query(default="Europe/Amsterdam", alias="timezone"),
+    include_daily: bool = Query(default=True, alias="daily"),
 ) -> DrinkingTrendsResponse:
     if (start is None) != (end is None):
         raise HTTPException(status_code=422, detail="start and end must be provided together")
@@ -33,7 +34,9 @@ def drinking_trends(
             ) from None
         start, end = today.replace(month=1, day=1), today
     try:
-        return AnalyticsService(session).drinking_trends(user.id, start, end, timezone_name)
+        return AnalyticsService(session).drinking_trends(
+            user.id, start, end, timezone_name, include_daily=include_daily
+        )
     except AnalyticsValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

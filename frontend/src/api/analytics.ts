@@ -72,8 +72,10 @@ export async function fetchDrinkingTrends(
   end: string,
   timezone: string,
   signal?: AbortSignal,
+  includeDaily = true,
 ): Promise<DrinkingTrends> {
   const params = new URLSearchParams({ start, end, timezone });
+  if (!includeDaily) params.set("daily", "false");
   const response = await apiFetch(
     `/api/v1/analytics/drinking-trends?${params.toString()}`,
     { signal },
