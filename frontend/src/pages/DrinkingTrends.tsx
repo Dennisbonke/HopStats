@@ -11,6 +11,7 @@ import {
 import ActivityMetricSelector from "../components/ActivityMetricSelector";
 import { fetchDrinkingTrends } from "../api/analytics";
 import CalendarHeatmap from "./CalendarHeatmap";
+import WeekdayHourHeatmap from "./WeekdayHourHeatmap";
 import { yearIntersection } from "../utils/calendar";
 import type { ActivityMetric, ReportingRange } from "../utils/calendar";
 import type { DrinkingTrends } from "../api/analytics";
@@ -322,6 +323,15 @@ export default function DrinkingTrendsView({
           </>
         )}
       </section>
+      {currentDistribution && !distributionError && distributionKey && (
+        <WeekdayHourHeatmap
+          key={distributionKey}
+          trends={currentDistribution}
+          metric={metric}
+          mode={distribution}
+          reportingPeriod={`${currentDistribution.start}–${currentDistribution.end}`}
+        />
+      )}
     </section>
   );
 }

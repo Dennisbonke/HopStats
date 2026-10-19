@@ -374,6 +374,208 @@ section {
   text-align: center;
   font-size: 0.875rem;
 }
+.weekday-hour-heatmap {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid #d7ded9;
+  border-radius: 0.6rem;
+  background: white;
+}
+.weekday-hour-heatmap h3 {
+  margin-top: 0;
+}
+.weekday-hour-heatmap header p {
+  color: #526176;
+  font-size: 0.9rem;
+}
+.weekday-hour-scroll {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 0.25rem 0.2rem 0.65rem;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.weekday-hour-row {
+  display: grid;
+  grid-template-columns: 7rem repeat(24, 2.5rem);
+  gap: 0.2rem;
+  min-width: max-content;
+  align-items: center;
+  margin-bottom: 0.2rem;
+}
+.weekday-hour-axis {
+  min-height: 2rem;
+  margin-bottom: 0.4rem;
+}
+.weekday-hour-day-heading,
+.weekday-hour-day {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 0 0.35rem;
+  background: white;
+  font-weight: 600;
+}
+.weekday-hour-label {
+  min-height: 1.5rem;
+  color: #526176;
+  font-size: 0.68rem;
+  text-align: center;
+}
+.weekday-hour-cell,
+.weekday-hour-legend-item i {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid rgb(15 23 42 / 10%);
+  border-radius: 0.3rem;
+}
+.weekday-hour-cell {
+  cursor: pointer;
+  padding: 0;
+}
+.weekday-hour-cell:hover {
+  outline: 2px solid #334155;
+  outline-offset: 1px;
+}
+.weekday-hour-cell.is-previewed {
+  outline: 2px solid #0f766e;
+  outline-offset: 1px;
+}
+.weekday-hour-cell:focus-visible {
+  outline: 3px solid #111827;
+  outline-offset: 2px;
+  z-index: 2;
+}
+.weekday-hour-cell.is-selected {
+  box-shadow: inset 0 0 0 3px #111827;
+  border-color: #111827;
+}
+.weekday-hour-heatmap .heat-level-0 {
+  background: #f1f5f9;
+  color: #111827;
+}
+.weekday-hour-heatmap .heat-level-1 {
+  background: #d9f0e3;
+  color: #111827;
+}
+.weekday-hour-heatmap .heat-level-2 {
+  background: #a8d9bb;
+  color: #111827;
+}
+.weekday-hour-heatmap .heat-level-3 {
+  background: #65b783;
+  color: #102219;
+}
+.weekday-hour-heatmap .heat-level-4 {
+  background: #267348;
+  color: white;
+}
+.weekday-hour-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0.8rem 0;
+  font-size: 0.82rem;
+}
+.weekday-hour-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.weekday-hour-legend-item i {
+  display: inline-block;
+  width: 1.1rem;
+  height: 1.1rem;
+}
+.weekday-hour-details {
+  min-width: 0;
+  margin-top: 0.7rem;
+  padding: 0.8rem;
+  border-radius: 0.45rem;
+  background: #f8fafc;
+}
+.weekday-hour-details h4 {
+  margin: 0 0 0.55rem;
+}
+.weekday-hour-details dl {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+.weekday-hour-details dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.6rem;
+}
+.weekday-hour-details dt {
+  font-weight: 600;
+}
+.weekday-hour-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.weekday-hour-data {
+  margin-top: 0.75rem;
+}
+.weekday-hour-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.weekday-hour-table th,
+.weekday-hour-table td {
+  padding: 0.45rem;
+  border: 1px solid #cbd5e1;
+  text-align: left;
+}
+.weekday-hour-table caption {
+  padding: 0.5rem;
+  text-align: left;
+  font-weight: 600;
+}
+@media (prefers-color-scheme: dark) {
+  .weekday-hour-heatmap {
+    background: #172033;
+    color: #f8fafc;
+    border-color: #64748b;
+  }
+  .weekday-hour-day-heading,
+  .weekday-hour-day {
+    background: #172033;
+  }
+  .weekday-hour-heatmap header p,
+  .weekday-hour-label {
+    color: #cbd5e1;
+  }
+  .weekday-hour-details {
+    background: #253247;
+  }
+  .weekday-hour-heatmap .heat-level-0 {
+    background: #334155;
+    color: #f8fafc;
+  }
+  .weekday-hour-heatmap .heat-level-1 {
+    background: #27543c;
+    color: white;
+  }
+  .weekday-hour-heatmap .heat-level-2 {
+    background: #31754f;
+    color: white;
+  }
+  .weekday-hour-heatmap .heat-level-3 {
+    background: #439963;
+    color: #07170d;
+  }
+  .weekday-hour-heatmap .heat-level-4 {
+    background: #78d69b;
+    color: #07170d;
+  }
+}
 @media (max-width: 850px) {
   .distribution-grid {
     grid-template-columns: minmax(0, 1fr);

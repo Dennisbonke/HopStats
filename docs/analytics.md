@@ -168,6 +168,15 @@ check-ins returned by the API remain visible and contribute normally.
 The date-grid utility accepts Sunday-first alignment for future configuration,
 but M8.3 uses Monday-first only.
 
+The M8.3 calendar heatmap uses a **fixed** activity scale of 0, 1–2, 3–5,
+6–9, and 10 or more for the selected metric. Years are not independently
+normalized, so colors remain comparable while navigating years. For the initial
+year, the UI uses the latest active year when matching M7 bucket activity is
+available; otherwise it chooses the latest year overlapping the reporting
+period. Empty years remain selectable. Daily counts are available by pointer,
+focus, or activation in the details panel. The calendar scrolls internally on
+narrow screens.
+
 ## Weekday and hourly distributions (M8.4)
 
 Below the calendar, Check-ins by Weekday shows Monday through Sunday and
@@ -192,11 +201,31 @@ a complete `created_at` timestamp; date-only or missing-time records are not
 supported, and these charts describe imported check-in time, not when the beer
 was actually consumed.
 
-Intensity uses a fixed, cross-year scale for the selected metric: 0, 1–2, 3–5,
-6–9, and 10 or more. Years are not independently normalized, so colors remain
-comparable when navigating between them. For the initial year, the UI uses the
-latest active year when a matching M7 response provides bucket activity; if not,
-it deterministically chooses the latest year overlapping the period. Empty
-years remain selectable. Daily counts are available by pointer, focus, or
-activation in the details panel. The calendar scrolls internally on narrow
-screens.
+## Weekday × hour heatmap (M8.5)
+
+The **Check-in Activity by Weekday and Hour** matrix reuses the M8.4 aggregate
+response: rows run Monday–Sunday, columns run local clock hours 00 through 23,
+and every one of the 168 combinations is present. It uses the full reporting
+period, independently of the calendar year displayed above. Amsterdam local
+time and the backend DST grouping apply: repeated autumn clock hours are grouped
+together; a missing spring clock hour has zero activity. These are imported
+check-in timestamps, not necessarily the times the beer was consumed.
+
+The existing metric selector applies to every cell. In total mode, a cell is
+the raw count for its weekday/hour combination. In average mode, it is
+`cell count / days_in_period for that weekday`; it is not divided by all dates
+or by occurrences of the clock hour. Weekdays absent from the period have no
+defined average and display as unavailable, never as zero. Cell details retain
+the raw count, denominator, average, metric, and reporting period in both modes.
+
+The adaptive intensity legend uses zero as a neutral level and up to four
+non-zero quantile-based bands, computed from the positive values in this one
+heatmap. The same bands cover all 168 cells; they are not normalized by row or
+column and update with the reporting period, metric, and mode. Legend ranges
+show the observed values assigned to each band, so ties may result in fewer
+than four non-zero bands. Values remain available by focus/selection and in an
+expandable 168-row data table, independently of color. The grid has one tab stop;
+left/right moves within an hour row, up/down within the same hour column, and
+Home/End moves to that weekday's first/last hour. Navigation does not wrap.
+Enter/Space selects; the persistent details panel supports touch/mobile use.
+On narrow screens the matrix scrolls inside its own container.
