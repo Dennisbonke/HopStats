@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import Inventory from "./pages/Inventory";
 import Locations from "./pages/Locations";
 import Milestones from "./pages/Milestones";
+import MilestoneDetail from "./pages/MilestoneDetail";
 const Analytics = lazy(() => import("./pages/Analytics"));
 import Login from "./pages/Login";
 
@@ -150,10 +151,7 @@ export default function App() {
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/locations" element={<Locations />} />
           <Route path="/milestones" element={<Milestones />} />
-          <Route
-            path="/milestones/:id"
-            element={<Placeholder title="Milestone details" />}
-          />
+          <Route path="/milestones/:id" element={<MilestoneDetail />} />
           <Route
             path="/analytics"
             element={

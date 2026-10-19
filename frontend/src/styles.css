@@ -1125,6 +1125,90 @@ section {
 .milestone-state p {
   margin-top: 0;
 }
+.milestone-detail {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+  padding: 1.5rem;
+  border-radius: 0.7rem;
+  background: white;
+  box-shadow: 0 1px 3px #0001;
+}
+.milestone-detail .milestone-page-heading h1 {
+  margin: 0.5rem 0 0.35rem;
+  overflow-wrap: anywhere;
+}
+.milestone-detail .milestone-page-heading p {
+  margin: 0;
+}
+.milestone-detail-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.milestone-detail-progress {
+  display: grid;
+  gap: 0.45rem;
+  max-width: 46rem;
+}
+.milestone-detail-counts {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.milestone-detail-counts strong {
+  font-size: 1.35rem;
+}
+.milestone-detail-counts span {
+  font-weight: 700;
+}
+.milestone-detail-progress p {
+  margin: 0;
+  color: #526176;
+}
+.milestone-detail-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin: 0;
+}
+.milestone-detail-list > div {
+  min-width: 0;
+  padding: 0.8rem;
+  border-radius: 0.5rem;
+  background: #f1f5f9;
+}
+.milestone-detail-list dt {
+  margin-bottom: 0.25rem;
+  color: #526176;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.milestone-detail-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.milestone-pace {
+  display: grid;
+  gap: 0.75rem;
+}
+.milestone-pace h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.milestone-notice {
+  margin: 0;
+  padding: 0.8rem 1rem;
+  border-left: 4px solid #b7791f;
+  border-radius: 0.35rem;
+  background: #fffbeb;
+  color: #78350f;
+}
+.milestone-detail a:focus-visible,
+.milestone-detail button:focus-visible {
+  outline: 3px solid #0b7a55;
+  outline-offset: 2px;
+}
 @media (prefers-color-scheme: dark) {
   .milestone-count,
   .milestone-card,
@@ -1145,6 +1229,21 @@ section {
   .milestone-filters button.selected {
     background: #176b4d;
   }
+  .milestone-detail {
+    background: #172033;
+    color: #f8fafc;
+  }
+  .milestone-detail-progress p,
+  .milestone-detail-list dt {
+    color: #cbd5e1;
+  }
+  .milestone-detail-list > div {
+    background: #253247;
+  }
+  .milestone-notice {
+    background: #422006;
+    color: #fef3c7;
+  }
 }
 @media (max-width: 900px) {
   .milestone-grid {
@@ -1163,6 +1262,18 @@ section {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .milestone-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .milestone-detail {
+    padding: 1rem;
+  }
+  .milestone-detail-actions {
+    justify-content: stretch;
+  }
+  .milestone-detail-actions button {
+    flex: 1 1 auto;
+  }
+  .milestone-detail-list {
     grid-template-columns: minmax(0, 1fr);
   }
 }

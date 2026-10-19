@@ -102,15 +102,17 @@ test("creation form validates target and submits calendar year metric mapping", 
 });
 
 test("editing a legacy unique_beers milestone preserves its metric unless changed", async () => {
-  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-    if (input === "/api/v1/auth/csrf")
-      return { ok: true, status: 200 } as Response;
-    return {
-      ok: true,
-      status: 200,
-      json: async () => response({ metric: "unique_beers" }),
-    } as Response;
-  });
+  const fetchMock = vi.fn(
+    async (input: RequestInfo | URL, _init?: RequestInit) => {
+      if (input === "/api/v1/auth/csrf")
+        return { ok: true, status: 200 } as Response;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => response({ metric: "unique_beers" }),
+      } as Response;
+    },
+  );
   vi.stubGlobal("fetch", fetchMock);
   const legacy = response({
     metric: "unique_beers",
