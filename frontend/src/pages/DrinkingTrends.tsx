@@ -36,6 +36,16 @@ const TIMEZONE = "Europe/Amsterdam";
 type TrendResult = { key: string; data: DrinkingTrends };
 type TrendFailure = { key: string; message: string };
 
+// Keep display text separate from the full weekday value. This makes it easy
+// to pass the app's configured locale here when localization is introduced.
+export function weekdayAxisLabel(weekday: number, locale = "en-US") {
+  const date = new Date(Date.UTC(2024, 0, 1 + weekday)); // 2024-01-01 is Monday.
+  return new Intl.DateTimeFormat(locale, {
+    weekday: "short",
+    timeZone: "UTC",
+  }).format(date);
+}
+
 export default function DrinkingTrendsView({
   active,
   metric,
@@ -300,6 +310,7 @@ export default function DrinkingTrendsView({
                   "Saturday",
                   "Sunday",
                 ][row.weekday],
+                axisLabel: weekdayAxisLabel(row.weekday),
                 denominator: row.days_in_period,
               }))}
               metric={metric}
@@ -338,6 +349,7 @@ export default function DrinkingTrendsView({
 
 type DistributionRow = {
   label: string;
+  axisLabel?: string;
   total: number;
   discoveries: number;
   repeats: number;
@@ -412,7 +424,9 @@ function DistributionChart({
           >
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis
-              dataKey="label"
+              dataKey={
+                rows.some((row) => row.axisLabel) ? "axisLabel" : "label"
+              }
               interval={isHourly ? 2 : 0}
               tick={{ fontSize: isHourly ? 10 : 12 }}
             />
