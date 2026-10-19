@@ -24,13 +24,29 @@ class MilestoneService:
         archived: bool | None = False,
         evaluation_time: datetime | None = None,
     ):
+        items = self._list_records(user_id, archived)
+        return self._calculate(user_id, items, evaluation_time)
+
+    def list_with_history(
+        self,
+        user_id: int,
+        archived: bool | None = False,
+        evaluation_time: datetime | None = None,
+    ):
+        """Return M9.1 milestone results and the ordered history used to compute them."""
+        items = self._list_records(user_id, archived)
+        evaluated_at = self._normalize_evaluation_time(evaluation_time)
+        events = self._ordered_history(user_id, evaluated_at)
+        calculated = [self._one(item, events, evaluated_at) for item in items]
+        return calculated, events, evaluated_at
+
+    def _list_records(self, user_id: int, archived: bool | None):
         statement = select(Milestone).where(Milestone.user_id == user_id)
         if archived is not None:
             statement = statement.where(
                 Milestone.archived_at.is_not(None) if archived else Milestone.archived_at.is_(None)
             )
-        items = self.session.scalars(statement.order_by(Milestone.created_at, Milestone.id)).all()
-        return self._calculate(user_id, items, evaluation_time)
+        return self.session.scalars(statement.order_by(Milestone.created_at, Milestone.id)).all()
 
     def get(self, user_id: int, milestone_id: int, evaluation_time: datetime | None = None):
         milestone = self.session.scalar(
@@ -124,11 +140,21 @@ class MilestoneService:
     ):
         if not milestones:
             return []
+        evaluated_at = self._normalize_evaluation_time(evaluation_time)
+        events = self._ordered_history(user_id, evaluated_at)
+        return [self._one(milestone, events, evaluated_at) for milestone in milestones]
+
+    @staticmethod
+    def _normalize_evaluation_time(evaluation_time: datetime | None) -> datetime:
         evaluated_at = evaluation_time or datetime.now(UTC)
         if evaluated_at.tzinfo is None:
             evaluated_at = evaluated_at.replace(tzinfo=UTC)
         else:
             evaluated_at = evaluated_at.astimezone(UTC)
+
+        return evaluated_at
+
+    def _ordered_history(self, user_id: int, evaluated_at: datetime):
         rows = self.session.execute(
             select(Checkin.id, Checkin.beer_id, Checkin.occurred_at_utc)
             .where(Checkin.user_id == user_id)
@@ -144,10 +170,14 @@ class MilestoneService:
                 if row.occurred_at_utc.tzinfo is None
                 else row.occurred_at_utc.astimezone(UTC)
             )
+            # Future-dated rows are not yet part of the evaluated history and must
+            # not establish a beer's first-seen identity for this calculation.
+            if moment > evaluated_at:
+                continue
             discovery = row.beer_id not in first_seen
             first_seen.add(row.beer_id)
             events.append((moment, row.id, row.beer_id, discovery))
-        return [self._one(m, events, evaluated_at) for m in milestones]
+        return events
 
     @staticmethod
     def _one(m: Milestone, events, evaluated_at: datetime):

@@ -4,10 +4,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..models import Checkin
 from ..schemas.insights import Insight, InsightsResponse
 from .milestones import MilestoneService
 
@@ -42,7 +40,7 @@ class InsightsService:
 
         # Use M9.1 as the sole source of milestone status, qualifying counts,
         # reconstructed completion timestamps, and trajectory calculations.
-        milestones = MilestoneService(self.session).list(
+        milestones, history, evaluated_at = MilestoneService(self.session).list_with_history(
             user_id, archived=False, evaluation_time=evaluated_at
         )
         candidates = [
@@ -50,7 +48,7 @@ class InsightsService:
             for milestone in milestones
             if (candidate := self._milestone_candidate(milestone, evaluated_at)) is not None
         ]
-        candidates.extend(self._activity_candidates(user_id, evaluated_at))
+        candidates.extend(self._activity_candidates(history, evaluated_at))
         return InsightsResponse(insights=self._select(candidates))
 
     @staticmethod
@@ -179,27 +177,16 @@ class InsightsService:
             previous_end.astimezone(UTC),
         )
 
-    def _activity_candidates(self, user_id: int, evaluated_at: datetime) -> list[_Candidate]:
+    def _activity_candidates(self, events, evaluated_at: datetime) -> list[_Candidate]:
         timezone = ZoneInfo(EVALUATION_TIMEZONE)
         current_start, previous_start, previous_end = self._period_boundaries(
             evaluated_at, timezone
         )
         current_checkins = previous_checkins = 0
         current_discoveries = previous_discoveries = 0
-        seen_beers: set[int] = set()
-        rows = self.session.execute(
-            select(Checkin.id, Checkin.beer_id, Checkin.occurred_at_utc)
-            .where(Checkin.user_id == user_id)
-            .order_by(Checkin.occurred_at_utc, Checkin.id)
-        ).all()
-        for row in rows:
-            occurred_at = (
-                row.occurred_at_utc.replace(tzinfo=UTC)
-                if row.occurred_at_utc.tzinfo is None
-                else row.occurred_at_utc.astimezone(UTC)
-            )
-            is_discovery = row.beer_id not in seen_beers
-            seen_beers.add(row.beer_id)
+        # Reuse M9.1's ordered, canonical discovery events. Filter the evaluation
+        # boundary before counting so future timestamps cannot advance activity.
+        for occurred_at, _checkin_id, _beer_id, is_discovery in events:
             if occurred_at > evaluated_at:
                 continue
             if current_start <= occurred_at <= evaluated_at:

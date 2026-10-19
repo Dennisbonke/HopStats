@@ -2,7 +2,7 @@ from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import delete
+from sqlalchemy import delete, event
 
 from backend.app.db import SessionLocal
 from backend.app.models import Beer, Checkin, Milestone, User
@@ -268,6 +268,36 @@ def test_activity_trends_use_first_discoveries_repeats_and_exclude_future_events
         assert "16 unique beers this month" in discovery.description
         assert "22 check-ins this month" in checkins.description
         assert InsightsService(session).get(1, evaluation) == result
+
+
+def test_milestone_and_activity_insights_share_one_ordered_history_load(client):
+    evaluation = _local(date(2026, 3, 20))
+    with SessionLocal() as session:
+        _add_events(session, [(1, "shared-history", _local(date(2026, 3, 10)))])
+        _add_milestone(
+            session,
+            "Shared history milestone",
+            metric="discoveries",
+            target=10,
+            start_date=date(2026, 1, 1),
+        )
+        session.commit()
+
+        statement_log = []
+        connection = session.connection()
+
+        def record_statement(_conn, _cursor, statement, _parameters, _context, _many):
+            if "from checkins" in statement.lower():
+                statement_log.append(statement)
+
+        event.listen(connection, "before_cursor_execute", record_statement)
+        try:
+            result = InsightsService(session).get(1, evaluation)
+        finally:
+            event.remove(connection, "before_cursor_execute", record_statement)
+
+        assert result.insights == []
+        assert len(statement_log) == 1
 
 
 def test_trend_thresholds_and_previous_month_clamping_for_leap_february(client):
