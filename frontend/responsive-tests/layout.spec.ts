@@ -460,6 +460,7 @@ test("milestone overview and detail text meet WCAG AA contrast in light and dark
         "Set a personal target and track progress from your imported check-ins.",
       ),
     ).toBeVisible();
+    await expect(page.locator(".milestone-card-meta").first()).toBeVisible();
     await expectContrast([
       ".milestone-page-heading > div > p",
       ".milestone-card-meta",
