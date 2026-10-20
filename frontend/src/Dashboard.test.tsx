@@ -11,6 +11,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { DashboardData } from "./api/dashboard";
 import { Insight } from "./api/insights";
 import { Milestone } from "./api/milestones";
+import { dashboardMonthLabels } from "./components/DashboardDiscoveriesChart";
 import App from "./App";
 import { selectDashboardMilestones, sixMonthRange } from "./pages/Dashboard";
 
@@ -350,6 +351,19 @@ test("featured milestone ordering is deterministic and excludes archived and end
       milestone(36, "overdue"),
     ]).map((item) => item.id),
   ).toEqual([35, 36]);
+});
+
+test("month axis and tooltip labels identify year transitions and incomplete current month", () => {
+  expect(dashboardMonthLabels("2026-12", "2027-01")).toEqual({
+    axis: "Dec",
+    tooltip: "Dec 2026",
+    currentMonth: false,
+  });
+  expect(dashboardMonthLabels("2027-01", "2027-01")).toEqual({
+    axis: "Jan '27*",
+    tooltip: "Jan 2027 (incomplete month)",
+    currentMonth: true,
+  });
 });
 
 test("inventory and data health details are collapsed by default and preserve diagnostics", async () => {

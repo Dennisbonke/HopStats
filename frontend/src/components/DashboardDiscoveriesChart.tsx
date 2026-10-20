@@ -27,6 +27,26 @@ function localMonthLabel(key: string): string {
   }).format(new Date(Date.UTC(year, month - 1, 1)));
 }
 
+function localMonthYearLabel(key: string): string {
+  const [year, month] = key.split("-").map(Number);
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, 1)));
+}
+
+export function dashboardMonthLabels(key: string, currentMonth: string) {
+  const year = key.slice(0, 4);
+  const isJanuary = key.slice(5, 7) === "01";
+  const isCurrentMonth = key === currentMonth;
+  return {
+    axis: `${localMonthLabel(key)}${isJanuary ? ` '${year.slice(2)}` : ""}${isCurrentMonth ? "*" : ""}`,
+    tooltip: `${localMonthYearLabel(key)}${isCurrentMonth ? " (incomplete month)" : ""}`,
+    currentMonth: isCurrentMonth,
+  };
+}
+
 export default function DashboardDiscoveriesChart({
   resource,
   hasCheckins,
@@ -48,8 +68,7 @@ export default function DashboardDiscoveriesChart({
   const buckets = resource.data ?? [];
   const chartData = buckets.map((bucket) => ({
     ...bucket,
-    month_label: `${localMonthLabel(bucket.key)}${bucket.key === currentMonth ? "*" : ""}`,
-    current_month: bucket.key === currentMonth,
+    ...dashboardMonthLabels(bucket.key, currentMonth),
   }));
 
   return (
@@ -105,10 +124,7 @@ export default function DashboardDiscoveriesChart({
           <p className="sr-only" id="dashboard-discoveries-summary">
             Monthly first-ever beer discoveries:{" "}
             {chartData
-              .map(
-                (bucket) =>
-                  `${localMonthLabel(bucket.key)}${bucket.current_month ? " (incomplete month)" : ""}: ${bucket.new_discoveries}`,
-              )
+              .map((bucket) => `${bucket.tooltip}: ${bucket.new_discoveries}`)
               .join("; ")}
             .
           </p>
@@ -125,16 +141,21 @@ export default function DashboardDiscoveriesChart({
                 aria-label="Monthly unique beer discoveries"
               >
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="month_label" />
+                <XAxis dataKey="axis" />
                 <YAxis allowDecimals={false} width={38} />
                 <Tooltip
                   formatter={(value) => [
                     `${countFormatter.format(Number(value))} discoveries`,
                     "Unique beers",
                   ]}
-                  labelFormatter={(label) =>
-                    `${String(label).replace("*", "")} ${String(label).includes("*") ? "(incomplete month)" : ""}`
-                  }
+                  labelFormatter={(label, payload) => {
+                    const labelText = String(label);
+                    const bucket =
+                      chartData.find((item) => item.axis === labelText) ??
+                      (payload[0]?.payload as
+                        (typeof chartData)[number] | undefined);
+                    return bucket?.tooltip ?? String(label).replace("*", "");
+                  }}
                 />
                 <Bar
                   dataKey="new_discoveries"
