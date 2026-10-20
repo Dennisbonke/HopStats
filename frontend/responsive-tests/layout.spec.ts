@@ -243,7 +243,88 @@ test("application pages fit mobile portrait, landscape, tablet and desktop", asy
         trajectory_difference: -1,
       };
     } else if (path.endsWith("/milestones")) {
-      body = { milestones: [] };
+      body = {
+        milestones: [
+          {
+            id: 1,
+            name: "A compact progress row",
+            status: "active",
+            progress_percent: 90,
+            current: 90,
+            target: 100,
+            remaining: 10,
+            metric: "discoveries",
+            goal_type: "absolute",
+            calendar_year: null,
+            start_date: null,
+            deadline_date: null,
+            timezone: "Europe/Amsterdam",
+            archived_at: null,
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+            deadline_outcome: null,
+            completed_at: null,
+            completed_before_deadline: null,
+            required_per_day: null,
+            required_per_week: null,
+            elapsed_per_day: null,
+            elapsed_per_week: null,
+            trajectory_difference: null,
+          },
+          {
+            id: 2,
+            name: "Another compact row",
+            status: "active",
+            progress_percent: 80,
+            current: 80,
+            target: 100,
+            remaining: 20,
+            metric: "discoveries",
+            goal_type: "absolute",
+            calendar_year: null,
+            start_date: null,
+            deadline_date: null,
+            timezone: "Europe/Amsterdam",
+            archived_at: null,
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+            deadline_outcome: null,
+            completed_at: null,
+            completed_before_deadline: null,
+            required_per_day: null,
+            required_per_week: null,
+            elapsed_per_day: null,
+            elapsed_per_week: null,
+            trajectory_difference: null,
+          },
+          {
+            id: 3,
+            name: "Third compact row",
+            status: "active",
+            progress_percent: 70,
+            current: 70,
+            target: 100,
+            remaining: 30,
+            metric: "discoveries",
+            goal_type: "absolute",
+            calendar_year: null,
+            start_date: null,
+            deadline_date: null,
+            timezone: "Europe/Amsterdam",
+            archived_at: null,
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+            deadline_outcome: null,
+            completed_at: null,
+            completed_before_deadline: null,
+            required_per_day: null,
+            required_per_week: null,
+            elapsed_per_day: null,
+            elapsed_per_week: null,
+            trajectory_difference: null,
+          },
+        ],
+      };
     } else if (path.endsWith("/imports")) {
       body = [];
     }
@@ -256,6 +337,49 @@ test("application pages fit mobile portrait, landscape, tablet and desktop", asy
       await page.goto(route);
       await page.locator("main").waitFor();
       await expectNoDocumentOverflow(page);
+      if (route === "/" && [320, 375, 430].includes(width)) {
+        const progressRows = page.locator(".dashboard-milestone-row");
+        await expect(progressRows).toHaveCount(2);
+        const layout = await progressRows.first().evaluate((row) => {
+          const progress = row.querySelector("progress");
+          if (!progress)
+            throw new Error("Milestone progress bar was not rendered");
+          const rowStyle = getComputedStyle(row);
+          const contentWidth =
+            row.clientWidth -
+            parseFloat(rowStyle.paddingLeft) -
+            parseFloat(rowStyle.paddingRight);
+          const progressRect = progress.getBoundingClientRect();
+          const nameRect = row
+            .querySelector(".dashboard-milestone-row-name")!
+            .getBoundingClientRect();
+          const countRect = row
+            .querySelector(".dashboard-milestone-row-count")!
+            .getBoundingClientRect();
+          const percentageRect = row
+            .querySelector(":scope > span:last-child")!
+            .getBoundingClientRect();
+          return {
+            contentWidth,
+            progressWidth: progressRect.width,
+            progressLeft: progressRect.left,
+            rowLeft: row.getBoundingClientRect().left,
+            nameWidth: nameRect.width,
+            countWidth: countRect.width,
+            percentageWidth: percentageRect.width,
+            rowRight: row.getBoundingClientRect().right,
+            percentageRight: percentageRect.right,
+          };
+        });
+        expect(
+          Math.abs(layout.progressWidth - layout.contentWidth),
+        ).toBeLessThan(2);
+        expect(layout.progressLeft).toBeGreaterThanOrEqual(layout.rowLeft);
+        expect(layout.nameWidth).toBeGreaterThan(0);
+        expect(layout.countWidth).toBeGreaterThan(0);
+        expect(layout.percentageWidth).toBeGreaterThan(0);
+        expect(layout.percentageRight).toBeLessThanOrEqual(layout.rowRight);
+      }
       const heading = page.locator("main h2").first();
       if (await heading.count()) {
         const bounds = await heading.boundingBox();
