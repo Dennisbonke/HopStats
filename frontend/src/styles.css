@@ -1191,10 +1191,15 @@ section {
 .milestone-pace {
   display: grid;
   gap: 0.75rem;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 .milestone-pace h2 {
   margin: 0;
   font-size: 1.15rem;
+  color: #172033;
 }
 .milestone-notice {
   margin: 0;
@@ -1217,9 +1222,18 @@ section {
     background: #172033;
     color: #f8fafc;
   }
-  .milestone-page-heading p,
+  .milestone-page-heading p {
+    color: #526176;
+  }
+  .milestone-state.error-state {
+    color: #fecaca;
+  }
   .milestone-card-meta,
-  .milestone-card-deadline {
+  .milestone-card-deadline,
+  .milestone-detail .muted {
+    color: #cbd5e1;
+  }
+  .milestone-detail .milestone-page-heading p {
     color: #cbd5e1;
   }
   .milestone-filters button {
@@ -1231,6 +1245,9 @@ section {
   }
   .milestone-detail {
     background: #172033;
+    color: #f8fafc;
+  }
+  .milestone-pace h2 {
     color: #f8fafc;
   }
   .milestone-detail-progress p,

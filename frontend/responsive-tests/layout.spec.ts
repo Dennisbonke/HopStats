@@ -369,6 +369,116 @@ test("application pages fit mobile portrait, landscape, tablet and desktop", asy
   await expectNoDocumentOverflow(page);
 });
 
+test("milestone overview and detail text meet WCAG AA contrast in light and dark preferences", async ({
+  page,
+}) => {
+  const milestone = {
+    id: 8,
+    name: "Contrast goal",
+    metric: "discoveries",
+    goal_type: "incremental",
+    target: 10,
+    calendar_year: null,
+    start_date: "2026-01-01",
+    deadline_date: "2026-12-31",
+    timezone: "Europe/Amsterdam",
+    archived_at: null,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    current: 3,
+    remaining: 7,
+    progress_percent: 30,
+    status: "overdue",
+    deadline_outcome: "pending",
+    completed_at: null,
+    completed_before_deadline: null,
+    required_per_day: 0.1,
+    required_per_week: 0.7,
+    elapsed_per_day: 0.05,
+    elapsed_per_week: 0.35,
+    trajectory_difference: -1,
+  };
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const body = path.endsWith("/auth/me")
+      ? { id: 1, username: "test", created_at: "2026-01-01T00:00:00Z" }
+      : path.endsWith("/milestones/8")
+        ? milestone
+        : path.endsWith("/milestones")
+          ? { milestones: [milestone] }
+          : { status: "ok" };
+    await route.fulfill({ json: body });
+  });
+
+  async function expectContrast(selectors: string[]) {
+    const ratios = await page.evaluate((targetSelectors) => {
+      const channels = (color: string) =>
+        color
+          .match(/[\d.]+/g)
+          ?.slice(0, 3)
+          .map(Number) ?? [0, 0, 0];
+      const luminance = (color: string) => {
+        const values = channels(color).map((channel) => {
+          const normalized = channel / 255;
+          return normalized <= 0.04045
+            ? normalized / 12.92
+            : ((normalized + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * values[0] + 0.7152 * values[1] + 0.0722 * values[2];
+      };
+      return targetSelectors.map((selector) => {
+        const element = document.querySelector<HTMLElement>(selector);
+        if (!element) return { selector, ratio: 0 };
+        const foreground = getComputedStyle(element).color;
+        let ancestor: HTMLElement | null = element;
+        let background = getComputedStyle(
+          document.documentElement,
+        ).backgroundColor;
+        while (ancestor) {
+          const candidate = getComputedStyle(ancestor).backgroundColor;
+          if (!candidate.endsWith(", 0)")) {
+            background = candidate;
+            break;
+          }
+          ancestor = ancestor.parentElement;
+        }
+        const light = Math.max(luminance(foreground), luminance(background));
+        const dark = Math.min(luminance(foreground), luminance(background));
+        return { selector, ratio: (light + 0.05) / (dark + 0.05) };
+      });
+    }, selectors);
+    for (const { selector, ratio } of ratios) {
+      expect(ratio, `${selector} contrast ratio`).toBeGreaterThanOrEqual(4.5);
+    }
+  }
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.goto("/milestones");
+    await expect(
+      page.getByText(
+        "Set a personal target and track progress from your imported check-ins.",
+      ),
+    ).toBeVisible();
+    await expect(page.locator(".milestone-card-meta").first()).toBeVisible();
+    await expectContrast([
+      ".milestone-page-heading > div > p",
+      ".milestone-card-meta",
+      ".milestone-card-deadline",
+    ]);
+
+    await page.goto("/milestones/8");
+    await expect(page.getByRole("heading", { name: "Pace" })).toBeVisible();
+    await expect(page.getByText("Pending", { exact: true })).toBeVisible();
+    await expectContrast([
+      ".milestone-detail .milestone-page-heading p",
+      ".milestone-pace h2",
+      ".milestone-detail-list dt",
+      ".milestone-detail .muted",
+    ]);
+  }
+});
+
 // Recharts positions its tooltip from chart interaction coordinates. This test
 // covers stale tooltip state on resize; Playwright does not reproduce the
 // reported physical iOS Safari document overflow.

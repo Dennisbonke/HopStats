@@ -16,6 +16,7 @@ from .api.analytics import router as analytics_router
 from .api.auth import router as auth_router
 from .api.dashboard import router as dashboard_router
 from .api.imports import router as imports_router
+from .api.insights import router as insights_router
 from .api.inventory import router as inventory_router
 from .api.locations import router as locations_router
 from .api.milestones import router as milestones_router
@@ -93,6 +94,7 @@ app.include_router(dashboard_router)
 app.include_router(inventory_router)
 app.include_router(locations_router)
 app.include_router(milestones_router)
+app.include_router(insights_router)
 
 
 @app.get("/api/v1/health")
