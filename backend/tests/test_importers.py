@@ -69,6 +69,83 @@ def test_checkin_parser_accepts_native_naive_untappd_timestamp_as_utc():
     assert record.original_offset_minutes == 0
 
 
+def checkin_coordinate_csv(latitude: str = "", longitude: str = "") -> bytes:
+    output = StringIO()
+    writer = csv.DictWriter(output, fieldnames=CHECKIN_HEADER.split(","))
+    writer.writeheader()
+    writer.writerow(
+        {
+            "venue_name": "Fish!",
+            "venue_city": "London",
+            "venue_country": "United Kingdom",
+            "venue_lat": latitude,
+            "venue_lng": longitude,
+            "created_at": "2026-10-31T12:00:00Z",
+            "checkin_id": "1609954662",
+            "bid": "beer-1",
+            "brewery_id": "brew-1",
+            "beer_name": "Beer",
+            "brewery_name": "Brewery",
+        }
+    )
+    return output.getvalue().encode()
+
+
+@pytest.mark.parametrize(
+    "latitude, longitude, expected_latitude, expected_longitude",
+    [
+        ("51.5058", "-0.0902322", "51.505800", "-0.090232"),
+        (
+            "51.12345678901234567890123456789",
+            "-0.09023220000000000000000000001",
+            "51.123457",
+            "-0.090232",
+        ),
+        ("-51.5058009", "0.0902329", "-51.505801", "0.090233"),
+        ("90", "180", "90.000000", "180.000000"),
+        ("-90", "-180", "-90.000000", "-180.000000"),
+        ("0.0000005", "-0.0000005", "0.000001", "-0.000001"),
+    ],
+)
+def test_checkin_parser_normalizes_valid_coordinates_to_database_scale(
+    latitude, longitude, expected_latitude, expected_longitude
+):
+    record = (
+        UntappdCheckinsCsvImporter()
+        .parse(BytesIO(checkin_coordinate_csv(latitude, longitude)))
+        .records[0]
+    )
+    assert str(record.venue.latitude) == expected_latitude
+    assert str(record.venue.longitude) == expected_longitude
+
+
+@pytest.mark.parametrize(
+    "field, coordinate",
+    [
+        ("venue_lat", "90.0000001"),
+        ("venue_lat", "-90.0000001"),
+        ("venue_lng", "180.0000001"),
+        ("venue_lng", "-180.0000001"),
+        ("venue_lat", "not-a-number"),
+        ("venue_lng", "NaN"),
+        ("venue_lng", "Infinity"),
+    ],
+)
+def test_checkin_parser_rejects_invalid_coordinates(field, coordinate):
+    coordinates = {"venue_lat": "", "venue_lng": ""}
+    coordinates[field] = coordinate
+    with pytest.raises(ImportValidationError):
+        UntappdCheckinsCsvImporter().parse(
+            BytesIO(checkin_coordinate_csv(coordinates["venue_lat"], coordinates["venue_lng"]))
+        )
+
+
+def test_checkin_parser_preserves_missing_coordinates():
+    record = UntappdCheckinsCsvImporter().parse(BytesIO(checkin_coordinate_csv())).records[0]
+    assert record.venue.latitude is None
+    assert record.venue.longitude is None
+
+
 def test_stash_parser_handles_sentinels_and_suspicious_date():
     csv = (
         "item_id,beer_name,brewery_name,beer_type,beer_abv,beer_ibu,created_at,notes,quantity,container,"
