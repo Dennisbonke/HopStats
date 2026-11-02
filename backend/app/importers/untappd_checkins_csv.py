@@ -14,6 +14,7 @@ from ..schemas.imports import (
 from .base import ImportValidationError
 from .common import (
     bounded_metadata,
+    coordinate_value,
     decimal_value,
     ensure_range,
     iso_timestamp,
@@ -142,8 +143,8 @@ class UntappdCheckinsCsvImporter:
                         city=value(row, "venue_city"),
                         state=value(row, "venue_state"),
                         country=value(row, "venue_country"),
-                        latitude=decimal_value(row, "venue_lat", row_number, 9, 6),
-                        longitude=decimal_value(row, "venue_lng", row_number, 9, 6),
+                        latitude=coordinate_value(row, "venue_lat", row_number, -90, 90),
+                        longitude=coordinate_value(row, "venue_lng", row_number, -180, 180),
                     )
                 brewery = BreweryRecord(
                     source_system="untappd",

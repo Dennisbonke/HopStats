@@ -6,7 +6,7 @@ import re
 import unicodedata
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta, timezone
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation, localcontext
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -256,3 +256,22 @@ def ensure_range(
             (ValidationIssue(row_number, field, "value is out of range"),),
         )
     return number
+
+
+def coordinate_value(
+    row: dict[str, str], field: str, row_number: int, minimum: int, maximum: int
+) -> Decimal | None:
+    """Parse a geographic coordinate and normalize it to venue storage scale."""
+    number = decimal_value(row, field, row_number)
+    if number is None:
+        return None
+    if not Decimal(minimum) <= number <= Decimal(maximum):
+        raise ImportValidationError(
+            f"row {row_number}: {field} is outside the allowed range",
+            (ValidationIssue(row_number, field, "value is out of range"),),
+        )
+    # Venue latitude and longitude are NUMERIC(9, 6). Decimal quantization avoids
+    # a binary-float round trip and permits valid source data with finer precision.
+    with localcontext() as context:
+        context.prec = max(context.prec, len(number.as_tuple().digits) + 6)
+        return number.quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)

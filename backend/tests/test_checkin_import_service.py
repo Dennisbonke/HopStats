@@ -4,7 +4,7 @@ from io import StringIO
 from sqlalchemy import select
 
 from backend.app.db import SessionLocal
-from backend.app.models import Beer, Brewery, Checkin, ImportError, ImportRun, User
+from backend.app.models import Beer, Brewery, Checkin, ImportError, ImportRun, User, Venue
 from backend.app.services.import_service import ImportService
 
 
@@ -106,3 +106,49 @@ def test_invalid_checkin_import_does_not_partially_persist_and_is_audited(client
         assert stored.status == "failed"
         assert stored.rejected_count == 1
         assert session.query(ImportError).filter_by(import_run_id=invalid.id).count() == 1
+
+
+def test_high_precision_coordinates_reimport_idempotently_after_normalization(client):
+    service = ImportService()
+    original = row("1609954662", "beer-fish")
+    original.update(
+        {
+            "venue_name": "Fish!",
+            "venue_city": "London",
+            "venue_country": "United Kingdom",
+            "venue_lat": "51.5058",
+            "venue_lng": "-0.0902322",
+        }
+    )
+    first = service.import_checkins(local_user_id(), "checkins.csv", checkin_csv(original))
+    normalized_reimport = dict(original, venue_lng="-0.0902320")
+    second = service.import_checkins(
+        local_user_id(), "checkins.csv", checkin_csv(normalized_reimport)
+    )
+    assert first.status == second.status == "completed"
+    assert (first.inserted_count, second.updated_count, second.unchanged_count) == (1, 0, 1)
+    with SessionLocal() as session:
+        assert session.query(Checkin).count() == 1
+        assert session.query(Venue).count() == 1
+        venue = session.query(Venue).one()
+        assert str(venue.longitude) == "-0.090232"
+
+
+def test_genuinely_out_of_range_coordinate_fails_without_partial_persistence(client):
+    service = ImportService()
+    existing = row("check-existing", "beer-existing")
+    valid = row("check-valid", "beer-valid")
+    valid.update({"venue_name": "Pub", "venue_lat": "51.5", "venue_lng": "-0.1"})
+    invalid = row("check-invalid", "beer-invalid")
+    invalid.update({"venue_name": "Pub", "venue_lat": "91", "venue_lng": "0"})
+    service.import_checkins(local_user_id(), "existing.csv", checkin_csv(existing))
+    failed = service.import_checkins(local_user_id(), "invalid.csv", checkin_csv(valid, invalid))
+    assert failed.status == "failed"
+    assert "venue_lat is outside the allowed range" in failed.error_summary
+    with SessionLocal() as session:
+        assert [item.external_id for item in session.scalars(select(Checkin)).all()] == [
+            "check-existing"
+        ]
+        assert session.query(Venue).count() == 0
+        error = session.scalar(select(ImportError).where(ImportError.import_run_id == failed.id))
+        assert (error.row_number, error.field) == (3, "venue_lat")
