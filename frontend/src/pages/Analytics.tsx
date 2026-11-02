@@ -358,6 +358,10 @@ export default function Analytics() {
       // orientation/resize event burst has settled.
       tooltipDismissTimer.current = setTimeout(() => {
         tooltipDismissedByResize.current = false;
+        // A synthetic move during resize may have recorded the same coordinates
+        // as the user's next real hover. Treat that first post-resize move as
+        // fresh so it can reopen the tooltip.
+        lastChartPointer.current = null;
         tooltipDismissTimer.current = null;
       }, 250);
     };
@@ -817,14 +821,19 @@ export default function Analytics() {
     event: ReactPointerEvent<HTMLDivElement>,
   ) {
     const { clientX: x, clientY: y } = event;
-    // WebKit can synthesize pointer moves while a viewport is being resized.
-    // Do not let those stale hover coordinates immediately reopen the tooltip.
-    if (tooltipDismissedByResize.current) {
-      lastChartPointer.current = { x, y };
-      return;
-    }
     const previous = lastChartPointer.current;
     lastChartPointer.current = { x, y };
+    // WebKit can synthesize pointer moves while a viewport is being resized.
+    // Ignore stationary moves, but let an actual pointer movement immediately
+    // re-enable the tooltip instead of requiring the resize timer to expire.
+    if (tooltipDismissedByResize.current) {
+      if (!previous || (previous.x === x && previous.y === y)) return;
+      tooltipDismissedByResize.current = false;
+      if (tooltipDismissTimer.current) {
+        clearTimeout(tooltipDismissTimer.current);
+        tooltipDismissTimer.current = null;
+      }
+    }
     if (previous && previous.x === x && previous.y === y) return;
     setActiveTooltipChart(chart);
   }
