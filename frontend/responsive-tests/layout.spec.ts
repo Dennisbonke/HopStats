@@ -603,6 +603,207 @@ test("milestone overview and detail text meet WCAG AA contrast in light and dark
   }
 });
 
+test("dashboard text and links meet WCAG AA in light and dark preferences", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    let body: unknown = {};
+    if (path.endsWith("/auth/me")) {
+      body = { id: 1, username: "test", created_at: "2026-01-01T00:00:00Z" };
+    } else if (path.endsWith("/dashboard")) {
+      body = {
+        total_checkins: 1,
+        unique_beers: 1,
+        unique_breweries: 1,
+        unique_styles: 1,
+        average_personal_rating: null,
+        rated_checkins: 0,
+        inventory_units: 0,
+        unique_inventory_beers: 0,
+        not_confirmed_checked_in: 0,
+        match_coverage: {
+          external_id: 0,
+          exact: 0,
+          ambiguous: 0,
+          unmatched: 0,
+        },
+        freshness: {
+          checkins_last_imported_at: null,
+          inventory_last_imported_at: null,
+          checkins_source_exported_at: null,
+          inventory_source_exported_at: null,
+        },
+      };
+    } else if (path.endsWith("/milestones")) {
+      body = {
+        milestones: [
+          {
+            id: 1,
+            name: "Contrast milestone",
+            metric: "discoveries",
+            target: 10,
+            current: 3,
+            remaining: 7,
+            progress_percent: 30,
+            status: "active",
+            deadline_date: "2026-12-31",
+          },
+          {
+            id: 2,
+            name: "Compact milestone",
+            metric: "discoveries",
+            target: 20,
+            current: 5,
+            remaining: 15,
+            progress_percent: 25,
+            status: "active",
+            deadline_date: null,
+          },
+        ],
+      };
+    } else if (path.endsWith("/insights")) {
+      body = {
+        insights: [
+          {
+            id: "contrast-insight",
+            type: "checkin_trend",
+            category: "activity",
+            priority: 10,
+            title: "A useful observation",
+            description: "This insight description remains readable.",
+            href: "/analytics",
+            data: {},
+          },
+        ],
+      };
+    } else if (path.endsWith("/analytics/checkins")) {
+      body = {
+        start: "2026-01-01",
+        end: "2026-01-31",
+        timezone: "Europe/Amsterdam",
+        granularity: "month",
+        summary: {
+          total_checkins: 1,
+          new_discoveries: 1,
+          repeat_checkins: 0,
+          distinct_beers: 1,
+        },
+        cumulative_baseline_checkins: 0,
+        cumulative_baseline_discoveries: 0,
+        buckets: [
+          {
+            key: "2026-01",
+            label: "Jan 2026",
+            start: "2026-01-01",
+            end: "2026-01-31",
+            new_discoveries: 1,
+            repeat_checkins: 0,
+            total_checkins: 1,
+            cumulative_checkins: 1,
+            cumulative_discoveries: 1,
+          },
+        ],
+      };
+    }
+    await route.fulfill({ json: body });
+  });
+
+  const expectContrast = async (selectors: string[]) => {
+    const ratios = await page.evaluate((targetSelectors) => {
+      const luminance = (color: string) => {
+        const channels =
+          color
+            .match(/[\d.]+/g)
+            ?.slice(0, 3)
+            .map(Number) ?? [];
+        const [red, green, blue] = channels.map((channel) => {
+          const normalized = channel / 255;
+          return normalized <= 0.04045
+            ? normalized / 12.92
+            : ((normalized + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+      };
+      return targetSelectors.map((selector) => {
+        const element = document.querySelector<HTMLElement>(selector);
+        if (!element) return { selector, ratio: 0 };
+        const foreground = getComputedStyle(element).color;
+        let ancestor: HTMLElement | null = element;
+        let background = getComputedStyle(
+          document.documentElement,
+        ).backgroundColor;
+        while (ancestor) {
+          const candidate = getComputedStyle(ancestor).backgroundColor;
+          if (!candidate.endsWith(", 0)")) {
+            background = candidate;
+            break;
+          }
+          ancestor = ancestor.parentElement;
+        }
+        const light = Math.max(luminance(foreground), luminance(background));
+        const dark = Math.min(luminance(foreground), luminance(background));
+        return { selector, ratio: (light + 0.05) / (dark + 0.05) };
+      });
+    }, selectors);
+    for (const { selector, ratio } of ratios) {
+      expect(ratio, `${selector} contrast ratio`).toBeGreaterThanOrEqual(4.5);
+    }
+  };
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto("/");
+      await expect(page.getByText("HopStats", { exact: true })).toBeVisible();
+      await expect(
+        page.getByText("Discoveries, milestones, and the moments in between."),
+      ).toBeVisible();
+      await expect(page.locator(".dashboard-chart-caption")).toBeVisible();
+      await expect(
+        page.getByRole("link", { name: "View all milestones" }),
+      ).toBeVisible();
+      await expectContrast([
+        ".dashboard-heading .dashboard-eyebrow",
+        ".dashboard-heading > p:last-child",
+        ".dashboard-metric-card h2",
+        ".dashboard-metric-card p",
+        ".dashboard-eyebrow:not(.dashboard-heading .dashboard-eyebrow)",
+        ".featured-milestone-topline",
+        ".featured-milestone-bottomline",
+        ".dashboard-insight p",
+        ".dashboard-milestone-row",
+        ".dashboard-chart-caption",
+        ".dashboard-chart-footnote",
+        ".panel-explanation",
+        ".dashboard-section-heading > a",
+      ]);
+      const link = page.getByRole("link", { name: "View all milestones" });
+      const initialColor = await link.evaluate(
+        (element) => getComputedStyle(element).color,
+      );
+      await link.hover();
+      await expectContrast([".dashboard-section-heading > a"]);
+      await link.focus();
+      await expect(link).toBeFocused();
+      await expect(link).toHaveCSS("outline-style", "solid");
+      await page.mouse.move(0, 0);
+      await link.click();
+      await page.goBack();
+      await expect(link).toBeVisible();
+      await page.mouse.move(0, 0);
+      expect(
+        await link.evaluate((element) => getComputedStyle(element).color),
+      ).toBe(initialColor);
+      await expectContrast([".dashboard-section-heading > a"]);
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
+        .toBeLessThanOrEqual(width + 1);
+    }
+  }
+});
+
 // Recharts positions its tooltip from chart interaction coordinates. This test
 // covers stale tooltip state on resize; Playwright does not reproduce the
 // reported physical iOS Safari document overflow.

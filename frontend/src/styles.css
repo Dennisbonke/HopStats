@@ -2040,6 +2040,32 @@ section {
   outline: 3px solid #0b7a55;
   outline-offset: 3px;
 }
+.dashboard-page
+  a:not(.featured-milestone):not(.dashboard-milestone-row):not(
+    .dashboard-insight
+  ):not(.button-link) {
+  color: #176b4d;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+.dashboard-page
+  a:not(.featured-milestone):not(.dashboard-milestone-row):not(
+    .dashboard-insight
+  ):not(.button-link):visited {
+  color: #176b4d;
+}
+.dashboard-page
+  a:not(.featured-milestone):not(.dashboard-milestone-row):not(
+    .dashboard-insight
+  ):not(.button-link):hover {
+  color: #14532d;
+}
+.dashboard-page
+  a:not(.featured-milestone):not(.dashboard-milestone-row):not(
+    .dashboard-insight
+  ):not(.button-link):active {
+  color: #12432a;
+}
 @media (prefers-color-scheme: dark) {
   .dashboard-metric-card,
   .dashboard-panel,
@@ -2105,6 +2131,40 @@ section {
   }
   .dashboard-secondary-stats .dashboard-metric-card {
     background: #253247;
+  }
+  /* The dashboard heading sits on the unchanged light page background. */
+  .dashboard-heading > p:last-child,
+  .dashboard-heading .dashboard-eyebrow {
+    color: #526176;
+  }
+  .dashboard-panel
+    a:not(.featured-milestone):not(.dashboard-milestone-row):not(
+      .dashboard-insight
+    ):not(.button-link) {
+    color: #7dd3a7;
+  }
+  .dashboard-panel
+    a:not(.featured-milestone):not(.dashboard-milestone-row):not(
+      .dashboard-insight
+    ):not(.button-link):visited {
+    color: #7dd3a7;
+  }
+  .dashboard-panel
+    a:not(.featured-milestone):not(.dashboard-milestone-row):not(
+      .dashboard-insight
+    ):not(.button-link):hover {
+    color: #a7f3c7;
+  }
+  .dashboard-panel
+    a:not(.featured-milestone):not(.dashboard-milestone-row):not(
+      .dashboard-insight
+    ):not(.button-link):active {
+    color: #bbf7d0;
+  }
+  .dashboard-page a:focus-visible,
+  .dashboard-page button:focus-visible,
+  .dashboard-health summary:focus-visible {
+    outline-color: #86efac;
   }
 }
 .dashboard-state {
