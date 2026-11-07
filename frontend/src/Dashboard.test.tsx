@@ -37,6 +37,12 @@ const dashboard: DashboardData = {
     checkins_source_exported_at: null,
     inventory_source_exported_at: null,
   },
+  import_deltas: {
+    total_checkins: null,
+    unique_beers: null,
+    unique_breweries: null,
+    unique_styles: null,
+  },
 };
 
 function milestone(
@@ -322,6 +328,52 @@ test("shows lifetime statistics, featured milestones, insights, and chart data",
   expect(monthlyBuckets()).toHaveLength(6);
 });
 
+test("maps accessible import delta states to the four primary metric cards", async () => {
+  const withDeltas: DashboardData = {
+    ...dashboard,
+    import_deltas: {
+      unique_beers: 25,
+      total_checkins: -2,
+      unique_breweries: 0,
+      unique_styles: null,
+    },
+  };
+  renderDashboard(makeFetchMock({ dashboard: withDeltas }));
+  await screen.findByRole("heading", { name: "Your beer journey" });
+
+  const beers = screen.getByRole("heading", {
+    name: "Unique beers",
+  }).parentElement!;
+  await within(beers).findByText("+25 since last import");
+  expect(beers.querySelector('[aria-hidden="true"]')).toHaveTextContent("↗");
+  expect(within(beers).getByText("+25 since last import")).toHaveClass(
+    "dashboard-import-delta",
+    "increase",
+  );
+  expect(within(beers).getByText("Increase:")).toHaveClass("sr-only");
+
+  const checkins = screen.getByRole("heading", {
+    name: "Total check-ins",
+  }).parentElement!;
+  expect(within(checkins).getByText("−2 since last import")).toHaveClass(
+    "decrease",
+  );
+  expect(within(checkins).getByText("Decrease:")).toHaveClass("sr-only");
+
+  const breweries = screen.getByRole("heading", {
+    name: "Unique breweries",
+  }).parentElement!;
+  expect(
+    within(breweries).getByText("No change since last import"),
+  ).toHaveClass("unchanged");
+  expect(within(breweries).getByText("Unchanged:")).toHaveClass("sr-only");
+
+  const styles = screen.getByRole("heading", {
+    name: "Unique styles",
+  }).parentElement!;
+  expect(styles.querySelector(".dashboard-import-delta")).toBeNull();
+});
+
 test("featured milestone ordering is deterministic and excludes archived and ended goals", () => {
   const ranked = selectDashboardMilestones([
     milestone(20, "active", { progress_percent: 90 }),
@@ -409,6 +461,7 @@ test("does not imply zero values before importing and links to Imports", async (
   expect(
     await screen.findByText("Your dashboard is ready."),
   ).toBeInTheDocument();
+  expect(document.querySelectorAll(".dashboard-import-delta")).toHaveLength(0);
   const uniqueBeers = screen.getByRole("heading", {
     name: "Unique beers",
   }).parentElement;
