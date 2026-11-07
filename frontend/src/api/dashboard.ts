@@ -12,6 +12,13 @@ export type DashboardFreshness = {
   inventory_source_exported_at: string | null;
 };
 
+export type ImportDeltas = {
+  total_checkins: number | null;
+  unique_beers: number | null;
+  unique_breweries: number | null;
+  unique_styles: number | null;
+};
+
 export type DashboardData = {
   total_checkins: number;
   unique_beers: number;
@@ -24,6 +31,7 @@ export type DashboardData = {
   not_confirmed_checked_in: number;
   match_coverage: MatchCoverage;
   freshness: DashboardFreshness;
+  import_deltas?: ImportDeltas;
 };
 
 export async function fetchDashboard(): Promise<DashboardData> {

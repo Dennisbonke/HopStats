@@ -165,18 +165,55 @@ function MetricCard({
   title,
   value,
   detail,
+  delta,
   primary = false,
 }: {
   title: string;
   value: string;
   detail?: string;
+  delta?: number | null;
   primary?: boolean;
 }) {
+  const deltaState =
+    delta == null
+      ? null
+      : delta > 0
+        ? "increase"
+        : delta < 0
+          ? "decrease"
+          : "unchanged";
+  const deltaLabel =
+    deltaState === "increase" && delta != null
+      ? `+${countFormatter.format(delta)}`
+      : deltaState === "decrease" && delta != null
+        ? `−${countFormatter.format(Math.abs(delta))}`
+        : null;
   return (
     <article className={`dashboard-metric-card${primary ? " primary" : ""}`}>
       <h2>{title}</h2>
       <strong>{value}</strong>
       {detail && <p>{detail}</p>}
+      {deltaState && (
+        <p className={`dashboard-import-delta ${deltaState}`}>
+          <span aria-hidden="true">
+            {deltaState === "increase"
+              ? "↗"
+              : deltaState === "decrease"
+                ? "↘"
+                : "−"}
+          </span>
+          <span className="sr-only">
+            {deltaState === "increase"
+              ? "Increase: "
+              : deltaState === "decrease"
+                ? "Decrease: "
+                : "Unchanged: "}
+          </span>
+          {deltaState === "unchanged"
+            ? "No change since last import"
+            : `${deltaLabel} since last import`}
+        </p>
+      )}
     </article>
   );
 }
@@ -545,12 +582,14 @@ export default function Dashboard() {
           title="Unique beers"
           value={data ? count(data.unique_beers, hasCheckins === true) : "—"}
           detail="Distinct beers checked in"
+          delta={data?.import_deltas?.unique_beers}
           primary
         />
         <MetricCard
           title="Total check-ins"
           value={data ? count(data.total_checkins, hasCheckins === true) : "—"}
           detail="Your imported history"
+          delta={data?.import_deltas?.total_checkins}
           primary
         />
         <MetricCard
@@ -559,12 +598,14 @@ export default function Dashboard() {
             data ? count(data.unique_breweries, hasCheckins === true) : "—"
           }
           detail="Across your check-ins"
+          delta={data?.import_deltas?.unique_breweries}
           primary
         />
         <MetricCard
           title="Unique styles"
           value={data ? count(data.unique_styles, hasCheckins === true) : "—"}
           detail="Across your check-ins"
+          delta={data?.import_deltas?.unique_styles}
           primary
         />
       </section>

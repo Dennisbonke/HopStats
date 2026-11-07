@@ -324,6 +324,14 @@ class ImportRun(Base):
     rejected_count: Mapped[int] = mapped_column(Integer, default=0)
     error_summary: Mapped[str | None] = mapped_column(Text)
     error_code: Mapped[str | None] = mapped_column(String(40))
+    total_checkins_before: Mapped[int | None] = mapped_column(Integer)
+    total_checkins_after: Mapped[int | None] = mapped_column(Integer)
+    unique_beers_before: Mapped[int | None] = mapped_column(Integer)
+    unique_beers_after: Mapped[int | None] = mapped_column(Integer)
+    unique_breweries_before: Mapped[int | None] = mapped_column(Integer)
+    unique_breweries_after: Mapped[int | None] = mapped_column(Integer)
+    unique_styles_before: Mapped[int | None] = mapped_column(Integer)
+    unique_styles_after: Mapped[int | None] = mapped_column(Integer)
 
 
 class ImportError(Base):

@@ -8,6 +8,7 @@ from ..models import Beer, Brewery, Checkin, ImportRun, InventoryItem, Inventory
 from ..schemas.dashboard import (
     DashboardFreshnessResponse,
     DashboardResponse,
+    ImportDeltasResponse,
     MatchCoverageResponse,
 )
 
@@ -34,6 +35,45 @@ class DashboardService:
             not_confirmed_checked_in=inventory["not_confirmed"],
             match_coverage=MatchCoverageResponse(**inventory["coverage"]),
             freshness=DashboardFreshnessResponse(**freshness),
+            import_deltas=self._import_deltas(user_id),
+        )
+
+    def get_checkin_totals(self, user_id: int) -> dict[str, int]:
+        metrics = self._checkin_metrics(user_id)
+        return {
+            "total_checkins": int(metrics["total"]),
+            "unique_beers": int(metrics["beers"]),
+            "unique_breweries": int(metrics["breweries"]),
+            "unique_styles": int(metrics["styles"]),
+        }
+
+    def _import_deltas(self, user_id: int) -> ImportDeltasResponse:
+        imports = self.session.scalars(
+            select(ImportRun)
+            .where(
+                ImportRun.user_id == user_id,
+                ImportRun.source_type == "checkins",
+                ImportRun.status == "completed",
+            )
+            .order_by(ImportRun.completed_at.desc(), ImportRun.id.desc())
+            .limit(2)
+        ).all()
+        metrics = ("total_checkins", "unique_beers", "unique_breweries", "unique_styles")
+        if len(imports) < 2:
+            return ImportDeltasResponse(**{metric: None for metric in metrics})
+        latest, previous = imports
+        if any(
+            getattr(snapshot, f"{metric}_{edge}") is None
+            for snapshot in (latest, previous)
+            for metric in metrics
+            for edge in ("before", "after")
+        ):
+            return ImportDeltasResponse(**{metric: None for metric in metrics})
+        return ImportDeltasResponse(
+            **{
+                metric: getattr(latest, f"{metric}_after") - getattr(latest, f"{metric}_before")
+                for metric in metrics
+            }
         )
 
     def _checkin_metrics(self, user_id: int) -> dict[str, int | Decimal | None]:

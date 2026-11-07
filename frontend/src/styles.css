@@ -1787,6 +1787,25 @@ section {
   color: #526176;
   font-size: 0.82rem;
 }
+.dashboard-metric-card .dashboard-import-delta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  min-width: 0;
+  font-size: 0.76rem;
+  font-weight: 650;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.dashboard-import-delta.increase {
+  color: #166534;
+}
+.dashboard-import-delta.decrease {
+  color: #b91c1c;
+}
+.dashboard-import-delta.unchanged {
+  color: #475569;
+}
 .dashboard-feature-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
@@ -2088,6 +2107,15 @@ section {
   .dashboard-empty-compact,
   .dashboard-inline-state,
   .freshness-list dd {
+    color: #cbd5e1;
+  }
+  .dashboard-import-delta.increase {
+    color: #86efac;
+  }
+  .dashboard-import-delta.decrease {
+    color: #fca5a5;
+  }
+  .dashboard-import-delta.unchanged {
     color: #cbd5e1;
   }
   .featured-milestone {
