@@ -11,6 +11,13 @@ class MatchCoverageResponse(BaseModel):
     unmatched: int
 
 
+class ImportDeltasResponse(BaseModel):
+    total_checkins: int | None
+    unique_beers: int | None
+    unique_breweries: int | None
+    unique_styles: int | None
+
+
 class DashboardFreshnessResponse(BaseModel):
     checkins_last_imported_at: datetime | None
     inventory_last_imported_at: datetime | None
@@ -46,6 +53,7 @@ class DashboardResponse(BaseModel):
     not_confirmed_checked_in: int
     match_coverage: MatchCoverageResponse
     freshness: DashboardFreshnessResponse
+    import_deltas: ImportDeltasResponse
 
     @field_serializer("average_personal_rating", when_used="json")
     def serialize_rating(self, value: Decimal | None) -> float | None:

@@ -190,3 +190,13 @@ Import serialization uses process-local locks. The supported deployment is one
 Uvicorn process with one worker, as used by the Dockerfile and Compose setup;
 running multiple workers requires a future cross-process lock or database
 coordination change before it is safe for concurrent authoritative snapshots.
+
+The dashboard records the four lifetime check-in totals immediately before
+and after each successful check-in import in the same transaction as its data
+changes. Its import deltas are the net effect of the latest successful import;
+failed imports and older imports from before this feature do not create a
+comparison. Existing records are not backfilled. Direct database edits or
+other future write paths after an import can make the live totals differ from
+the recorded post-import totals; those later changes are not attributed to an
+import and appear in the delta only if included in a subsequent successful
+check-in import transaction.

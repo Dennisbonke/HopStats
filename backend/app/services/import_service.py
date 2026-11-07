@@ -15,6 +15,7 @@ from ..models import Checkin, ImportRun
 from ..models import ImportError as ImportErrorRecord
 from ..schemas.imports import NormalizedCheckin, ParsedImport, ValidationIssue
 from .catalog import CatalogService, metadata_json
+from .dashboard import DashboardService
 from .import_lock import import_lock
 from .inventory_snapshots import (
     OlderSnapshotRejected,
@@ -50,6 +51,7 @@ class ImportService:
         try:
             with self.session_factory() as session:
                 with session.begin():
+                    totals_before = DashboardService(session).get_checkin_totals(user_id)
                     inserted, updated, unchanged = self._persist_checkins(
                         session, user_id, parsed.records
                     )
@@ -57,7 +59,19 @@ class ImportService:
                     from .inventory_snapshots import reconcile_inventory_matches
 
                     reconcile_inventory_matches(session, user_id)
-            return self._complete_run(run.id, inserted, updated, unchanged, 0)
+                    session.flush()
+                    totals_after = DashboardService(session).get_checkin_totals(user_id)
+                    completed_run = session.get(ImportRun, run.id)
+                    completed_run.status = "completed"
+                    completed_run.completed_at = now_utc()
+                    completed_run.inserted_count = inserted
+                    completed_run.updated_count = updated
+                    completed_run.unchanged_count = unchanged
+                    completed_run.removed_count = 0
+                    for metric, value in totals_before.items():
+                        setattr(completed_run, f"{metric}_before", value)
+                        setattr(completed_run, f"{metric}_after", totals_after[metric])
+            return completed_run
         except Exception as exc:
             return self._fail_run(run.id, exc, ())
 
