@@ -4,8 +4,8 @@
   depth. Name tokens by purpose, not by hue, and add one only when it expresses
   a meaning that can be reused.
 - `components.css` holds shared React component styles. Use explicit component
-  classes for shared primitives; `.app :where(button)` remains a transitional
-  compatibility rule for unmigrated native buttons.
+  classes for shared primitives; `.app :where(button:not(.ui-button))` remains a
+  transitional compatibility rule for unmigrated native buttons.
 - `../styles.css` is the legacy application stylesheet. Keep its remaining
   element-level rules to resets and document-level defaults. Shared component
   rules need a component scope; route rules need a route scope. For example,
@@ -42,7 +42,8 @@
   opting it into dark colors.
 - Avoid broad element selectors for shared visuals. Component CSS belongs to
   `.ui-*` classes; route CSS should be scoped to that route. The remaining
-  `.app :where(button)` rule is transitional styling for unmigrated controls.
+  `.app :where(button:not(.ui-button))` rule is transitional styling for
+  unmigrated controls and deliberately excludes shared buttons.
 
 Stylesheets are imported once from `main.tsx`, in token, shared component, then
 legacy application order. Keep that order and avoid importing styles back into

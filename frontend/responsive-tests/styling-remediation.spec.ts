@@ -450,6 +450,232 @@ async function expectNoDocumentOverflow(page: Page) {
   expect(overflow).toBeLessThanOrEqual(1);
 }
 
+const buttonVariants = ["primary", "secondary", "danger", "ghost"] as const;
+
+type ButtonVariant = (typeof buttonVariants)[number];
+
+async function installButtonCascadeFixture(
+  page: Page,
+  surfaceSelector: string,
+) {
+  await page.locator(surfaceSelector).evaluate((surface) => {
+    const fixture = document.createElement("div");
+    fixture.id = "button-cascade-fixture";
+    fixture.style.cssText =
+      "display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1rem";
+
+    for (const variant of ["primary", "secondary", "danger", "ghost"]) {
+      const button = document.createElement("button");
+      button.id = `cascade-${variant}`;
+      button.className = `ui-button ui-button--${variant}`;
+      button.textContent = `${variant} action`;
+      fixture.append(button);
+
+      const disabledButton = document.createElement("button");
+      disabledButton.id = `cascade-disabled-${variant}`;
+      disabledButton.className = `ui-button ui-button--${variant}`;
+      disabledButton.textContent = `disabled ${variant} action`;
+      disabledButton.disabled = true;
+      fixture.append(disabledButton);
+    }
+
+    const legacyButton = document.createElement("button");
+    legacyButton.id = "cascade-legacy-native";
+    legacyButton.textContent = "Legacy native action";
+    fixture.append(legacyButton);
+
+    const disabledLegacyButton = document.createElement("button");
+    disabledLegacyButton.id = "cascade-disabled-legacy-native";
+    disabledLegacyButton.textContent = "Disabled legacy native action";
+    disabledLegacyButton.disabled = true;
+    fixture.append(disabledLegacyButton);
+
+    surface.append(fixture);
+  });
+}
+
+async function readButtonCascadeStyles(button: Locator) {
+  return button.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const resolveToken = (token: string) => {
+      const probe = document.createElement("span");
+      probe.style.color = style.getPropertyValue(token).trim();
+      (element.parentElement ?? document.body).append(probe);
+      const resolved = getComputedStyle(probe).color;
+      probe.remove();
+      return resolved;
+    };
+    const surfaceBackground = () => {
+      let parent = element.parentElement;
+      while (parent) {
+        const background = getComputedStyle(parent).backgroundColor;
+        const channels = background.match(/[\d.]+/g) ?? [];
+        if (channels.length !== 4 || Number(channels[3]) !== 0) {
+          return background;
+        }
+        parent = parent.parentElement;
+      }
+      return getComputedStyle(document.documentElement).backgroundColor;
+    };
+    const backgroundChannels = style.backgroundColor.match(/[\d.]+/g) ?? [];
+
+    return {
+      background: style.backgroundColor,
+      backgroundIsTransparent:
+        backgroundChannels.length === 4 && Number(backgroundChannels[3]) === 0,
+      foreground: style.color,
+      border: style.borderTopColor,
+      outline: style.outlineColor,
+      outlineStyle: style.outlineStyle,
+      outlineWidth: style.outlineWidth,
+      opacity: style.opacity,
+      surface: surfaceBackground(),
+      actionPrimary: resolveToken("--color-action-primary"),
+      actionPrimaryHover: resolveToken("--color-action-primary-hover"),
+      actionSecondary: resolveToken("--color-action-secondary"),
+      actionDanger: resolveToken("--color-action-danger"),
+      actionDangerHover: resolveToken("--color-action-danger-hover"),
+      actionDisabled: resolveToken("--color-action-disabled"),
+      textPrimary: resolveToken("--color-text-primary"),
+      textOnAccent: resolveToken("--color-text-on-accent"),
+      textOnDanger: resolveToken("--color-text-on-danger-action"),
+      textMuted: resolveToken("--color-text-muted"),
+      surfaceHover: resolveToken("--color-surface-hover"),
+      borderDisabled: resolveToken("--color-border-disabled"),
+      focus: resolveToken("--color-focus"),
+      borderStrong: resolveToken("--color-border-strong"),
+    };
+  });
+}
+
+async function expectButtonVariantStyles(
+  page: Page,
+  context: string,
+  variant: ButtonVariant,
+) {
+  const button = page.locator(`#cascade-${variant}`);
+  const expected = {
+    primary: {
+      background: "actionPrimary",
+      foreground: "textOnAccent",
+      hover: "actionPrimaryHover",
+    },
+    secondary: {
+      background: "actionSecondary",
+      foreground: "textPrimary",
+      hover: "surfaceHover",
+    },
+    danger: {
+      background: "actionDanger",
+      foreground: "textOnDanger",
+      hover: "actionDangerHover",
+    },
+    ghost: {
+      background: "transparent",
+      foreground: "textPrimary",
+      hover: "surfaceHover",
+    },
+  }[variant];
+
+  const normal = await readButtonCascadeStyles(button);
+  if (variant === "ghost") {
+    expect(
+      normal.backgroundIsTransparent,
+      `${context} ghost button background`,
+    ).toBe(true);
+  } else {
+    expect(normal.background, `${context} ${variant} button background`).toBe(
+      normal[expected.background],
+    );
+  }
+  expect(normal.foreground, `${context} ${variant} foreground`).toBe(
+    normal[expected.foreground],
+  );
+  await expectReadable(button, `${context} ${variant} button`);
+
+  if (variant === "secondary") {
+    expect(
+      contrastRatio(normal.border, normal.surface),
+      `${context} secondary button boundary`,
+    ).toBeGreaterThanOrEqual(3);
+  } else if (variant === "primary" || variant === "danger") {
+    expect(
+      contrastRatio(normal.background, normal.surface),
+      `${context} ${variant} button boundary`,
+    ).toBeGreaterThanOrEqual(3);
+  }
+
+  await button.hover();
+  const hover = await readButtonCascadeStyles(button);
+  expect(hover.background, `${context} ${variant} hover background`).toBe(
+    hover[expected.hover],
+  );
+  expect(hover.foreground, `${context} ${variant} hover foreground`).toBe(
+    normal[expected.foreground],
+  );
+  await expectReadable(button, `${context} ${variant} hovered button`);
+
+  if (variant === "secondary") {
+    expect(
+      contrastRatio(hover.border, hover.surface),
+      `${context} hovered secondary button boundary`,
+    ).toBeGreaterThanOrEqual(3);
+  } else if (variant === "primary" || variant === "danger") {
+    expect(
+      contrastRatio(hover.background, hover.surface),
+      `${context} hovered ${variant} button boundary`,
+    ).toBeGreaterThanOrEqual(3);
+  }
+
+  await button.focus();
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Shift+Tab");
+  await expect(button).toBeFocused();
+  const focused = await readButtonCascadeStyles(button);
+  expect(focused.outlineStyle, `${context} ${variant} focus outline`).toBe(
+    "solid",
+  );
+  expect(focused.outlineWidth, `${context} ${variant} focus width`).toBe("3px");
+  expect(focused.outline, `${context} ${variant} focus color`).toBe(
+    focused.focus,
+  );
+  expect(
+    contrastRatio(focused.outline, focused.surface),
+    `${context} ${variant} focus indicator contrast`,
+  ).toBeGreaterThanOrEqual(3);
+
+  const disabled = page.locator(`#cascade-disabled-${variant}`);
+  await expect(disabled).toBeDisabled();
+  const disabledStyles = await readButtonCascadeStyles(disabled);
+  expect(disabledStyles.background).toBe(disabledStyles.actionDisabled);
+  expect(disabledStyles.foreground).toBe(disabledStyles.textMuted);
+  expect(disabledStyles.border).toBe(disabledStyles.borderDisabled);
+  expect(disabledStyles.opacity).toBe("1");
+  expect(
+    contrastRatio(disabledStyles.foreground, disabledStyles.background),
+    `${context} disabled ${variant} label contrast`,
+  ).toBeGreaterThanOrEqual(3);
+}
+
+async function expectLegacyButtonCompatibility(page: Page, context: string) {
+  const nativeButton = page.locator("#cascade-legacy-native");
+  const nativeStyles = await readButtonCascadeStyles(nativeButton);
+  expect(nativeStyles.background, `${context} legacy button background`).toBe(
+    nativeStyles.actionPrimary,
+  );
+  expect(nativeStyles.foreground, `${context} legacy button foreground`).toBe(
+    nativeStyles.textOnAccent,
+  );
+  expect(nativeStyles.opacity, `${context} legacy button opacity`).toBe("1");
+
+  const disabledNative = page.locator("#cascade-disabled-legacy-native");
+  await expect(disabledNative).toBeDisabled();
+  const disabledStyles = await readButtonCascadeStyles(disabledNative);
+  expect(disabledStyles.background).toBe(disabledStyles.actionPrimary);
+  expect(disabledStyles.foreground).toBe(disabledStyles.textOnAccent);
+  expect(disabledStyles.opacity).toBe("0.5");
+}
+
 test("grouped Inventory stays readable and wraps at mobile and desktop widths", async ({
   page,
 }) => {
@@ -899,6 +1125,47 @@ test("shared primitives stay readable on the light compatibility route", async (
         `${colorScheme} Imports status at ${width}px`,
       );
     }
+  }
+});
+
+test("shared Button variants keep token colors across cascade and theme contexts", async ({
+  page,
+}) => {
+  await stubApplication(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.goto("/imports");
+    await expect(page.getByRole("heading", { name: "Imports" })).toBeVisible();
+    await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
+    await installButtonCascadeFixture(page, ".history-card");
+
+    const context = `Imports compatibility route with ${colorScheme} OS preference`;
+    await expectLegacyButtonCompatibility(page, context);
+    for (const variant of buttonVariants) {
+      await expectButtonVariantStyles(page, context, variant);
+    }
+    await expectNoDocumentOverflow(page);
+  }
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.goto("/explore/beers");
+    const explorer = page.locator(".explorer-page");
+    await expect(explorer).toBeVisible();
+    await expect(explorer).toHaveCSS(
+      "color-scheme",
+      colorScheme === "dark" ? "dark" : "light",
+    );
+    await installButtonCascadeFixture(page, ".explorer-catalogue");
+
+    const context = `Explorer theme-aware route with ${colorScheme} preference`;
+    await expectLegacyButtonCompatibility(page, context);
+    for (const variant of buttonVariants) {
+      await expectButtonVariantStyles(page, context, variant);
+    }
+    await expectNoDocumentOverflow(page);
   }
 });
 

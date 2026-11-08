@@ -91,8 +91,8 @@
 }
 
 /* Shared action styling, ready for gradual adoption by React primitives. */
-.app :where(button),
-.login-page :where(button) {
+.app :where(button:not(.ui-button)),
+.login-page :where(button:not(.ui-button)) {
   border: 0;
   border-radius: 0.4rem;
   padding: 0.65rem 0.9rem;
@@ -102,8 +102,8 @@
   font-weight: 600;
   cursor: pointer;
 }
-.app :where(button):disabled,
-.login-page :where(button):disabled {
+.app :where(button:not(.ui-button)):disabled,
+.login-page :where(button:not(.ui-button)):disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
