@@ -128,6 +128,250 @@ section {
   border-radius: 0.7rem;
   box-shadow: 0 1px 3px #0001;
 }
+.explorer-layout {
+  padding: 1.25rem;
+}
+.explorer-heading h2 {
+  margin: 0;
+}
+.explorer-heading p {
+  color: #526176;
+  margin: 0.4rem 0 1rem;
+}
+.explorer-tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid #dbe2ea;
+  margin-bottom: 1rem;
+}
+.explorer-tabs a {
+  color: #526176;
+  text-decoration: none;
+  padding: 0.65rem 0.8rem;
+  border-bottom: 2px solid transparent;
+}
+.explorer-tabs a.active {
+  color: #172033;
+  border-color: #2563eb;
+  font-weight: 650;
+}
+.explorer-tabs .upcoming-tab {
+  opacity: 0.75;
+}
+.explorer-catalogue {
+  padding: 0;
+  box-shadow: none;
+}
+.explorer-catalogue-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.explorer-catalogue-heading h3 {
+  margin: 0;
+}
+.explorer-catalogue-heading p {
+  color: #526176;
+  margin: 0.35rem 0 0;
+}
+.explorer-controls {
+  display: flex;
+  align-items: end;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.explorer-controls label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  min-width: 0;
+}
+.explorer-search-control {
+  flex: 1;
+}
+.explorer-controls input,
+.explorer-controls select {
+  min-height: 2.6rem;
+  min-width: 0;
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.4rem;
+  padding: 0.45rem 0.6rem;
+  font: inherit;
+  background: white;
+  color: inherit;
+}
+.explorer-controls button {
+  min-height: 2.6rem;
+}
+.explorer-state {
+  padding: 1rem;
+  border-radius: 0.5rem;
+  background: #f5f7fb;
+}
+.explorer-state p {
+  margin: 0.35rem 0 0;
+}
+.explorer-state.error-state {
+  color: #a32920;
+  background: #fff1f0;
+}
+.explorer-beer-table-wrap {
+  overflow-x: auto;
+}
+.explorer-beer-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.9rem;
+}
+.explorer-beer-table th,
+.explorer-beer-table td {
+  padding: 0.65rem 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: middle;
+}
+.explorer-beer-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 12rem;
+}
+.explorer-beer-artwork,
+.explorer-beer-artwork-fallback {
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 2.5rem;
+  border-radius: 0.35rem;
+  object-fit: cover;
+  background: #e2e8f0;
+}
+.explorer-beer-artwork-fallback {
+  display: grid;
+  place-items: center;
+  font-size: 0.6rem;
+  color: #526176;
+}
+.explorer-beer-cards {
+  display: none;
+}
+.explorer-beer-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.55rem;
+}
+.explorer-beer-card-content {
+  min-width: 0;
+  flex: 1;
+}
+.explorer-beer-card h4 {
+  margin: 0 0 0.25rem;
+  overflow-wrap: anywhere;
+}
+.explorer-beer-card p {
+  margin: 0.2rem 0;
+  color: #526176;
+  overflow-wrap: anywhere;
+}
+.explorer-beer-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem 0.75rem;
+  margin: 0.6rem 0 0;
+}
+.explorer-beer-card dl div {
+  min-width: 0;
+}
+.explorer-beer-card dt {
+  color: #526176;
+  font-size: 0.75rem;
+}
+.explorer-beer-card dd {
+  margin: 0.1rem 0 0;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.explorer-upcoming {
+  padding: 1rem;
+  background: #f5f7fb;
+  border-radius: 0.5rem;
+}
+@media (prefers-color-scheme: dark) {
+  .explorer-heading p,
+  .explorer-catalogue-heading p,
+  .explorer-beer-card p,
+  .explorer-beer-card dt {
+    color: #cbd5e1;
+  }
+  .explorer-tabs {
+    border-color: #475569;
+  }
+  .explorer-tabs a {
+    color: #cbd5e1;
+  }
+  .explorer-tabs a.active {
+    color: #f8fafc;
+  }
+  .explorer-controls input,
+  .explorer-controls select {
+    border-color: #64748b;
+    background: #253247;
+    color: #f8fafc;
+  }
+  .explorer-state,
+  .explorer-upcoming {
+    background: #253247;
+  }
+  .explorer-state.error-state {
+    background: #422c32;
+    color: #fecaca;
+  }
+  .explorer-beer-table th,
+  .explorer-beer-table td {
+    border-color: #475569;
+  }
+  .explorer-beer-card {
+    border-color: #475569;
+  }
+  .explorer-beer-artwork-fallback {
+    background: #334155;
+    color: #cbd5e1;
+  }
+}
+@media (max-width: 700px) {
+  .explorer-layout {
+    padding: 1rem;
+  }
+  .explorer-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .explorer-controls button {
+    width: 100%;
+  }
+  .explorer-beer-table-wrap {
+    display: none;
+  }
+  .explorer-beer-cards {
+    display: grid;
+    gap: 0.65rem;
+  }
+  .explorer-catalogue-heading {
+    align-items: flex-start;
+  }
+  .explorer-tabs {
+    gap: 0.1rem;
+  }
+  .explorer-tabs a {
+    padding: 0.6rem 0.5rem;
+  }
+}
 .page-heading {
   margin-bottom: 1rem;
 }

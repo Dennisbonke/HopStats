@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from .api.analytics import router as analytics_router
 from .api.auth import router as auth_router
 from .api.dashboard import router as dashboard_router
+from .api.explore import router as explore_router
 from .api.imports import router as imports_router
 from .api.insights import router as insights_router
 from .api.inventory import router as inventory_router
@@ -91,6 +92,7 @@ app.include_router(auth_router)
 app.include_router(analytics_router)
 app.include_router(imports_router)
 app.include_router(dashboard_router)
+app.include_router(explore_router)
 app.include_router(inventory_router)
 app.include_router(locations_router)
 app.include_router(milestones_router)

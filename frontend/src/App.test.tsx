@@ -56,6 +56,17 @@ beforeEach(() => {
           ok: true,
           json: async () => ({ insights: [] }),
         });
+      if (String(url).startsWith("/api/v1/explore/beers"))
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            items: [],
+            page: 1,
+            page_size: 25,
+            total: 0,
+            total_pages: 0,
+          }),
+        });
       return Promise.resolve({
         ok: true,
         json: async () => ({ buckets: [] }),
@@ -72,6 +83,7 @@ test("renders shell and navigation", async () => {
   );
   expect(await screen.findByText("🍺 HopStats")).toBeInTheDocument();
   expect(screen.getByText("Inventory")).toBeInTheDocument();
+  expect(screen.getByText("Explorer")).toBeInTheDocument();
   expect(await screen.findByText("Backend: connected")).toBeInTheDocument();
 });
 test("shows connection failure", async () => {
@@ -97,4 +109,24 @@ test("shows connection failure", async () => {
     </MemoryRouter>,
   );
   expect(await screen.findByText("Backend: unavailable")).toBeInTheDocument();
+});
+
+test("opens Explorer beers and marks the other catalogues as upcoming", async () => {
+  render(
+    <MemoryRouter initialEntries={["/explore"]}>
+      <App />
+    </MemoryRouter>,
+  );
+  expect(
+    await screen.findByRole("heading", { name: "Beers" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("navigation", { name: "Explorer sections" }),
+  ).toHaveTextContent("Breweries Upcoming");
+  expect(
+    screen.getByRole("navigation", { name: "Explorer sections" }),
+  ).toHaveTextContent("Styles Upcoming");
+  expect(
+    await screen.findByText("No checked-in beers match your search."),
+  ).toBeInTheDocument();
 });

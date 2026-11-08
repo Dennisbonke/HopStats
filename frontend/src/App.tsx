@@ -1,5 +1,11 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { NavLink, Route, Routes, useNavigate } from "react-router-dom";
+import {
+  Navigate,
+  NavLink,
+  Route,
+  Routes,
+  useNavigate,
+} from "react-router-dom";
 import { fetchCurrentUser, logout, CurrentUser } from "./api/auth";
 import { checkBackend } from "./api/health";
 import Imports from "./pages/Imports";
@@ -9,6 +15,13 @@ import Locations from "./pages/Locations";
 import Milestones from "./pages/Milestones";
 import MilestoneDetail from "./pages/MilestoneDetail";
 const Analytics = lazy(() => import("./pages/Analytics"));
+const ExplorerLayout = lazy(() => import("./pages/ExplorerLayout"));
+const ExplorerBeers = lazy(() => import("./pages/ExplorerBeers"));
+const ExplorerUpcoming = lazy(() =>
+  import("./pages/ExplorerLayout").then((module) => ({
+    default: module.ExplorerUpcoming,
+  })),
+);
 import Login from "./pages/Login";
 
 const links = [
@@ -17,6 +30,7 @@ const links = [
   ["/locations", "Locations"],
   ["/milestones", "Milestones"],
   ["/analytics", "Analytics"],
+  ["/explore/beers", "Explorer"],
   ["/imports", "Imports"],
 ];
 
@@ -160,6 +174,25 @@ export default function App() {
               </Suspense>
             }
           />
+          <Route
+            path="/explore"
+            element={
+              <Suspense fallback={<p role="status">Loading Explorer…</p>}>
+                <ExplorerLayout />
+              </Suspense>
+            }
+          >
+            <Route index element={<Navigate to="beers" replace />} />
+            <Route path="beers" element={<ExplorerBeers />} />
+            <Route
+              path="breweries"
+              element={<ExplorerUpcoming title="Breweries" />}
+            />
+            <Route
+              path="styles"
+              element={<ExplorerUpcoming title="Styles" />}
+            />
+          </Route>
           <Route path="/imports" element={<Imports />} />
           <Route path="*" element={<Placeholder title="Page not found" />} />
         </Routes>
