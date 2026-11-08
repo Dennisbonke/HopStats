@@ -215,12 +215,16 @@ test("upcoming Explorer sections remain unavailable in the tab strip", async ({
     await expect(unavailable).toContainText("Upcoming");
     await expect(unavailable).toHaveAttribute("aria-disabled", "true");
     await expect(unavailable).not.toHaveAttribute("href", /./);
+    expect(
+      await contrastRatio(unavailable.locator(".upcoming-label"), "html"),
+    ).toBeGreaterThanOrEqual(4.5);
   }
 });
 
 test("Brewery and Style placeholders remain readable in both themes", async ({
   page,
 }) => {
+  await stubExplorer(page);
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
     for (const [route, heading] of [

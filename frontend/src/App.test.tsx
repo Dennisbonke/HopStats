@@ -163,3 +163,16 @@ test("opens Explorer beers and marks the other catalogues as upcoming", async ()
     await screen.findByText("No checked-in beers match your search."),
   ).toBeInTheDocument();
 });
+
+test("unfinished Explorer routes still render their explanatory placeholder", async () => {
+  render(
+    <MemoryRouter initialEntries={["/explore/breweries"]}>
+      <App />
+    </MemoryRouter>,
+  );
+  expect(
+    await screen.findByRole("heading", {
+      name: "Breweries catalogue coming later",
+    }),
+  ).toBeInTheDocument();
+});
