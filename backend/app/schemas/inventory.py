@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 
 class LocationPathResponse(BaseModel):
@@ -55,12 +55,19 @@ class InventoryItemResponse(BaseModel):
         return value.isoformat() if value is not None else None
 
 
+class InventoryStyleGroupCount(BaseModel):
+    style_id: int | None
+    style_name: str
+    total: int
+
+
 class InventoryListResponse(BaseModel):
     items: list[InventoryItemResponse]
     page: int
     page_size: int
     total: int
     total_pages: int
+    style_groups: list[InventoryStyleGroupCount] = Field(default_factory=list)
 
 
 class InventoryStyleResponse(BaseModel):

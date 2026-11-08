@@ -1337,6 +1337,40 @@ section {
   border: 1px solid #e5eaf1;
   border-radius: 0.55rem;
 }
+.inventory-style-groups {
+  display: grid;
+  gap: 0.85rem;
+}
+.inventory-style-group {
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid #dce5e2;
+  border-radius: 0.55rem;
+  background: #fbfdfc;
+}
+.inventory-style-group h3 {
+  margin: 0 0 0.5rem;
+  color: #176b4d;
+  font-size: 1rem;
+}
+.inventory-style-group h3 span {
+  color: #526176;
+  font-weight: 500;
+}
+.inventory-group-page-count {
+  margin: 0 0 0.5rem;
+  color: #526176;
+  font-size: 0.8rem;
+}
+.inventory-style-group .inventory-cards {
+  gap: 0.5rem;
+}
+@media (prefers-color-scheme: dark) {
+  .inventory-style-group {
+    border-color: #3c4b49;
+    background: #172320;
+  }
+}
 .inventory-card h3 {
   margin: 0;
   font-size: 1.05rem;
@@ -2528,6 +2562,9 @@ h2 {
   .inventory-cards {
     display: grid;
     gap: 0.75rem;
+  }
+  .inventory-style-group .inventory-cards {
+    display: grid;
   }
   .location-node,
   .unresolved-panel {

@@ -44,6 +44,11 @@ export type InventoryResponse = {
   page_size: number;
   total: number;
   total_pages: number;
+  style_groups?: Array<{
+    style_id: number | null;
+    style_name: string;
+    total: number;
+  }>;
 };
 
 export type InventoryStyle = { id: number; name: string };
