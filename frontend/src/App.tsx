@@ -36,7 +36,7 @@ const links = [
 
 function Placeholder({ title }: { title: string }) {
   return (
-    <section>
+    <section className="placeholder-panel">
       <h2>{title}</h2>
       <p>This M1 foundation placeholder is not implemented yet.</p>
     </section>

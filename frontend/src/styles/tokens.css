@@ -1,0 +1,109 @@
+/*
+ * Semantic color tokens for HopStats.
+ * Add tokens here only when they have a reusable meaning across components.
+ */
+:root {
+  color-scheme: light;
+
+  /* Main canvas and reusable surfaces. */
+  --color-canvas: #f5f7fb;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-muted: #eef2f7;
+  --color-surface-hover: #e8eef8;
+  --color-surface-error: #fff1f0;
+  --color-surface-warning: #fffbeb;
+  --color-surface-success: #e8f6ed;
+
+  /* Foreground colors, including text placed on colored status surfaces. */
+  --color-text-primary: #172033;
+  --color-text-secondary: #475569;
+  --color-text-muted: #64748b;
+  --color-text-on-error-surface: #a32920;
+  --color-text-on-warning-surface: #805500;
+  --color-text-on-success-surface: #155b35;
+
+  /* Boundaries and keyboard focus. */
+  --color-border: #cbd5e1;
+  --color-border-strong: #94a3b8;
+  --color-border-disabled: #e2e8f0;
+  --color-focus: #fbbf24;
+
+  /* Action backgrounds and their readable foregrounds. */
+  --color-action-primary: #176b4d;
+  --color-action-primary-hover: #14583f;
+  --color-action-secondary: #e8eef8;
+  --color-action-danger: #a32920;
+  --color-action-disabled: #e2e8f0;
+  --color-text-on-accent: #ffffff;
+  --color-text-on-danger-action: #ffffff;
+
+  /* Foreground colors for status indicators. */
+  --color-status-success: #16803c;
+  --color-status-warning: #946200;
+  --color-status-error: #b42318;
+  --color-status-info: #1d4ed8;
+
+  /* Chart marks, axes, grid, and tooltip surfaces. */
+  --color-chart-primary: #176b4d;
+  --color-chart-secondary: #2563eb;
+  --color-chart-grid: #dce5e2;
+  --color-chart-axis: #526176;
+  --color-chart-tooltip-surface: #172033;
+  --color-chart-tooltip-text: #ffffff;
+}
+
+/*
+ * Dark values are opt-in. Keep the document root light until each route is
+ * migrated as a complete foreground/background surface.
+ */
+.theme-aware {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  .theme-aware {
+    color-scheme: dark;
+
+    --color-canvas: #101923;
+    --color-surface: #172533;
+    --color-surface-raised: #1d2c3a;
+    --color-surface-muted: #253747;
+    --color-surface-hover: #33485a;
+    --color-surface-error: #422c32;
+    --color-surface-warning: #3d3525;
+    --color-surface-success: #17372a;
+
+    --color-text-primary: #f1f5f9;
+    --color-text-secondary: #c1ccd8;
+    --color-text-muted: #9aa9b8;
+    --color-text-on-error-surface: #fecaca;
+    --color-text-on-warning-surface: #fef3c7;
+    --color-text-on-success-surface: #bbf7d0;
+
+    --color-border: #526476;
+    --color-border-strong: #718096;
+    --color-border-disabled: #3b4b5b;
+    --color-focus: #fbbf24;
+
+    --color-action-primary: #55bd8d;
+    --color-action-primary-hover: #6ed5a4;
+    --color-action-secondary: #334155;
+    --color-action-danger: #dc2626;
+    --color-action-disabled: #334155;
+    --color-text-on-accent: #10251b;
+    --color-text-on-danger-action: #ffffff;
+
+    --color-status-success: #55bd8d;
+    --color-status-warning: #fcd34d;
+    --color-status-error: #fca5a5;
+    --color-status-info: #93c5fd;
+
+    --color-chart-primary: #55bd8d;
+    --color-chart-secondary: #60a5fa;
+    --color-chart-grid: #3c4b49;
+    --color-chart-axis: #c1ccd8;
+    --color-chart-tooltip-surface: #0b121a;
+    --color-chart-tooltip-text: #f1f5f9;
+  }
+}
