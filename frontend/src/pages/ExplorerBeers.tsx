@@ -107,16 +107,24 @@ export default function ExplorerBeers() {
   const querySearch = searchParams.get("search") ?? "";
   const sort = selectedSort(searchParams.get("sort"));
   const page = selectedPage(searchParams.get("page"));
+  const urlStateKey = searchParams.toString();
   const [searchDraft, setSearchDraft] = useState(querySearch);
   const [data, setData] = useState<ExploreBeersResponse | null>(null);
+  const [dataKey, setDataKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [errorKey, setErrorKey] = useState<string | null>(null);
   const requestGeneration = useRef(0);
+  const latestUrlState = useRef(urlStateKey);
+  latestUrlState.current = urlStateKey;
 
   useEffect(() => setSearchDraft(querySearch), [querySearch]);
 
   useEffect(() => {
     const generation = ++requestGeneration.current;
+    const requestedUrlState = urlStateKey;
+    const isCurrentRequest = () =>
+      generation === requestGeneration.current &&
+      latestUrlState.current === requestedUrlState;
     const params = new URLSearchParams({
       page: String(page),
       page_size: "25",
@@ -124,18 +132,44 @@ export default function ExplorerBeers() {
     });
     if (querySearch.trim()) params.set("search", querySearch.trim());
     setLoading(true);
-    setError(false);
+    setErrorKey(null);
     fetchExploreBeers(params)
       .then((result) => {
-        if (generation === requestGeneration.current) setData(result);
+        if (!isCurrentRequest()) return;
+        const normalizedPage =
+          result.total_pages === 0
+            ? page === 1
+              ? null
+              : 1
+            : page > result.total_pages
+              ? result.total_pages
+              : null;
+        if (normalizedPage !== null) {
+          setSearchParams(
+            (currentParams) => {
+              if (!isCurrentRequest()) return currentParams;
+              const nextParams = new URLSearchParams(currentParams);
+              nextParams.set("page", String(normalizedPage));
+              return nextParams;
+            },
+            { replace: true },
+          );
+          return;
+        }
+        setData(result);
+        setDataKey(requestedUrlState);
       })
       .catch(() => {
-        if (generation === requestGeneration.current) setError(true);
+        if (isCurrentRequest()) setErrorKey(requestedUrlState);
       })
       .finally(() => {
-        if (generation === requestGeneration.current) setLoading(false);
+        if (isCurrentRequest()) setLoading(false);
       });
-  }, [page, querySearch, sort]);
+  }, [page, querySearch, setSearchParams, sort, urlStateKey]);
+
+  const currentData = dataKey === urlStateKey ? data : null;
+  const currentError = errorKey === urlStateKey;
+  const showLoading = loading || (!currentData && !currentError);
 
   function updateUrl(search: string, nextSort: ExploreSort, nextPage: number) {
     const params = new URLSearchParams();
@@ -160,8 +194,8 @@ export default function ExplorerBeers() {
           <h3 id="explore-beers-title">Beers</h3>
           <p>Beers you have checked in, with your personal history.</p>
         </div>
-        {data && !loading && !error && (
-          <span>{data.total.toLocaleString()} beers</span>
+        {currentData && !showLoading && !currentError && (
+          <span>{currentData.total.toLocaleString()} beers</span>
         )}
       </div>
       <form className="explorer-controls" onSubmit={submitSearch}>
@@ -194,86 +228,89 @@ export default function ExplorerBeers() {
         <button type="submit">Search</button>
       </form>
 
-      {loading && (
+      {showLoading && (
         <div className="explorer-state" role="status">
           Loading beers…
         </div>
       )}
-      {error && !loading && (
+      {currentError && !showLoading && (
         <div className="explorer-state error-state" role="alert">
           <strong>Beer catalogue is temporarily unavailable.</strong>
           <p>Check the backend connection and try again.</p>
         </div>
       )}
-      {!loading && !error && data?.total === 0 && (
+      {!showLoading && !currentError && currentData?.total === 0 && (
         <div className="explorer-state">
           <strong>No checked-in beers match your search.</strong>
           <p>Try another name or brewery.</p>
         </div>
       )}
-      {!loading && !error && data && data.total > 0 && (
-        <>
-          <div className="explorer-beer-table-wrap">
-            <table className="explorer-beer-table">
-              <thead>
-                <tr>
-                  <th>Beer</th>
-                  <th>Brewery</th>
-                  <th>Style</th>
-                  <th>ABV</th>
-                  <th>Personal rating</th>
-                  <th>Check-ins</th>
-                  <th>Last tried</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.items.map((beer) => (
-                  <tr key={beer.id}>
-                    <td>
-                      <div className="explorer-beer-name-cell">
-                        <BeerArtwork beer={beer} />
-                        <strong>{beer.name}</strong>
-                      </div>
-                    </td>
-                    <td>{beer.brewery?.name ?? "Unavailable"}</td>
-                    <td>{beer.style?.name ?? "Unavailable"}</td>
-                    <td>{beer.abv === null ? "—" : `${beer.abv}%`}</td>
-                    <td>{ratingLabel(beer)}</td>
-                    <td>{beer.checkin_count}</td>
-                    <td>{dateLabel(beer.last_checked_in_at)}</td>
+      {!showLoading &&
+        !currentError &&
+        currentData &&
+        currentData.total > 0 && (
+          <>
+            <div className="explorer-beer-table-wrap">
+              <table className="explorer-beer-table">
+                <thead>
+                  <tr>
+                    <th>Beer</th>
+                    <th>Brewery</th>
+                    <th>Style</th>
+                    <th>ABV</th>
+                    <th>Personal rating</th>
+                    <th>Check-ins</th>
+                    <th>Last tried</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="explorer-beer-cards">
-            {data.items.map((beer) => (
-              <BeerCard key={beer.id} beer={beer} />
-            ))}
-          </div>
-          <div className="pagination" aria-label="Beer catalogue pagination">
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={page <= 1}
-              onClick={() => updateUrl(querySearch, sort, page - 1)}
-            >
-              Previous
-            </button>
-            <span>
-              Page {data.page} of {data.total_pages}
-            </span>
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={page >= data.total_pages}
-              onClick={() => updateUrl(querySearch, sort, page + 1)}
-            >
-              Next
-            </button>
-          </div>
-        </>
-      )}
+                </thead>
+                <tbody>
+                  {currentData.items.map((beer) => (
+                    <tr key={beer.id}>
+                      <td>
+                        <div className="explorer-beer-name-cell">
+                          <BeerArtwork beer={beer} />
+                          <strong>{beer.name}</strong>
+                        </div>
+                      </td>
+                      <td>{beer.brewery?.name ?? "Unavailable"}</td>
+                      <td>{beer.style?.name ?? "Unavailable"}</td>
+                      <td>{beer.abv === null ? "—" : `${beer.abv}%`}</td>
+                      <td>{ratingLabel(beer)}</td>
+                      <td>{beer.checkin_count}</td>
+                      <td>{dateLabel(beer.last_checked_in_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="explorer-beer-cards">
+              {currentData.items.map((beer) => (
+                <BeerCard key={beer.id} beer={beer} />
+              ))}
+            </div>
+            <div className="pagination" aria-label="Beer catalogue pagination">
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={page <= 1}
+                onClick={() => updateUrl(querySearch, sort, page - 1)}
+              >
+                Previous
+              </button>
+              <span>
+                Page {currentData.page} of {currentData.total_pages}
+              </span>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={page >= currentData.total_pages}
+                onClick={() => updateUrl(querySearch, sort, page + 1)}
+              >
+                Next
+              </button>
+            </div>
+          </>
+        )}
     </section>
   );
 }
