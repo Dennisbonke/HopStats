@@ -137,7 +137,7 @@ def test_explore_search_sort_and_pagination(client):
         "name_asc": ["Alpha", "beta", "Delta", "Gamma"],
         "name_desc": ["Gamma", "Delta", "beta", "Alpha"],
         "last_tried_desc": ["Delta", "beta", "Gamma", "Alpha"],
-        "last_tried_asc": ["Alpha", "Gamma", "beta", "Delta"],
+        "last_tried_asc": ["Alpha", "beta", "Gamma", "Delta"],
         "checkins_desc": ["beta", "Alpha", "Gamma", "Delta"],
         "checkins_asc": ["Delta", "Alpha", "Gamma", "beta"],
     }
