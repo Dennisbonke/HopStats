@@ -1334,9 +1334,6 @@ test("Analytics charts keep controls, labels, and legends usable across viewport
         width,
         height: width === 1280 ? 800 : 844,
       });
-      await expectNoDocumentOverflow(page);
-      await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
-
       const overview = page.locator("#analytics-overview-panel");
       const breakdown = overview
         .locator(".analytics-chart-panel")
@@ -1344,6 +1341,15 @@ test("Analytics charts keep controls, labels, and legends usable across viewport
       const trend = overview
         .locator(".analytics-chart-panel")
         .filter({ hasText: "Check-in Trends" });
+      await expect
+        .poll(async () =>
+          breakdown
+            .locator(".recharts-wrapper")
+            .evaluate((element) => element.getBoundingClientRect().width),
+        )
+        .toBeLessThanOrEqual(width);
+      await expectNoDocumentOverflow(page);
+      await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
       await expect(breakdown.locator(".recharts-legend-wrapper")).toBeVisible();
       await expect(
         breakdown.locator(".recharts-legend-item-text").nth(0),
@@ -1404,9 +1410,9 @@ test("Analytics charts keep controls, labels, and legends usable across viewport
       expect(heatmapCell?.width).toBeGreaterThanOrEqual(44);
       expect(heatmapCell?.height).toBeGreaterThanOrEqual(44);
       await hourly.locator("svg.recharts-surface").focus();
-      const keyboardTooltip = page.locator(
-        "body > .recharts-tooltip-wrapper:visible .analytics-tooltip",
-      );
+      const keyboardTooltip = page
+        .locator("body > .recharts-tooltip-wrapper:visible .analytics-tooltip")
+        .filter({ hasText: /\d{2}:00/ });
       await expect(keyboardTooltip).toBeVisible();
       await expect(keyboardTooltip).toContainText(/\d{2}:00/);
       await expect(keyboardTooltip).toContainText("Total:");
@@ -1450,6 +1456,12 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
     context: string,
     edge?: "top" | "bottom",
   ) => {
+    await expect
+      .poll(async () => {
+        const bounds = await bar.boundingBox();
+        return !!bounds && bounds.width > 0 && bounds.height > 0;
+      })
+      .toBe(true);
     let barBox = await bar.boundingBox();
     expect(barBox).not.toBeNull();
     if (edge) {
@@ -1466,9 +1478,9 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
       y: barBox!.y + barBox!.height / 2,
     };
     await page.mouse.move(pointer.x, pointer.y);
-    const tooltip = page.locator(
-      "body > .recharts-tooltip-wrapper:visible .analytics-tooltip",
-    );
+    const tooltip = page
+      .locator("body > .recharts-tooltip-wrapper:visible .analytics-tooltip")
+      .filter({ hasText: expectedText });
     await expect(tooltip).toBeVisible();
     await expect(tooltip).toContainText(expectedText);
     const geometry = await tooltip.evaluate((element) => {
@@ -1527,6 +1539,13 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
       const breakdown = page
         .locator(".analytics-chart-panel")
         .filter({ hasText: "Check-in Breakdown" });
+      await expect
+        .poll(async () =>
+          breakdown
+            .locator(".recharts-wrapper")
+            .evaluate((element) => element.getBoundingClientRect().width),
+        )
+        .toBeLessThanOrEqual(width);
       const bars = breakdown.locator(".recharts-bar-rectangle");
       await expect(bars).toHaveCount(24);
       await breakdown.scrollIntoViewIfNeeded();
@@ -1605,7 +1624,7 @@ test("month drilldown controls wrap and remain keyboard reachable at 320px", asy
       .filter({ hasText: "Check-in Breakdown" });
     const buttons = breakdown.locator(".bucket-actions .ui-button");
     await expect(buttons).toHaveCount(12);
-    const parent = await page.locator(".bucket-actions").boundingBox();
+    const parent = await breakdown.locator(".bucket-actions").boundingBox();
     expect(parent).not.toBeNull();
     for (const button of await buttons.all()) {
       const box = await button.boundingBox();
