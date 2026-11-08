@@ -1,0 +1,128 @@
+/* Shared application header and navigation. Keep these rules under .app-header. */
+.app-header .logout-button {
+  padding: 0.5rem 0.7rem;
+  background: transparent;
+  color: #cbd5e1;
+}
+.app-header .logout-button:hover {
+  background: #334155;
+  color: white;
+}
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem max(1rem, calc((100% - 80rem) / 2));
+  background: #172033;
+  color: white;
+  gap: 1rem;
+  flex-wrap: wrap;
+  position: relative;
+}
+.app-header .mobile-menu-toggle {
+  display: none;
+}
+.brand {
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+.app-header nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.app-header nav a {
+  color: #cbd5e1;
+  text-decoration: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.4rem;
+}
+.app-header nav a.active,
+.app-header nav a:hover {
+  background: #334155;
+  color: white;
+}
+
+@media (max-width: 700px) {
+  .app-header {
+    min-height: 4rem;
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    padding: 0.6rem 1rem;
+  }
+  .app-header .mobile-menu-toggle {
+    display: inline-grid;
+    place-items: center;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    border: 1px solid #64748b;
+    border-radius: 0.4rem;
+    background: transparent;
+    color: white;
+    font-size: 1.35rem;
+  }
+  .app-header nav {
+    display: none;
+    position: absolute;
+    z-index: 20;
+    top: 100%;
+    left: 0;
+    right: 0;
+    padding: 0.65rem 1rem 1rem;
+    background: #172033;
+    border-top: 1px solid #334155;
+    box-shadow: 0 8px 16px #0003;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.15rem;
+    max-height: calc(100svh - 4rem);
+    overflow-y: auto;
+  }
+  .app-header nav.is-open {
+    display: flex;
+  }
+  .app-header nav a,
+  .app-header nav .logout-button {
+    text-align: left;
+    min-height: 2.75rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .app-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .app-header nav {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .app-header nav a {
+    flex: 1;
+    text-align: center;
+  }
+}
+
+/* Shared action styling, ready for gradual adoption by React primitives. */
+.app :where(button),
+.login-page :where(button) {
+  border: 0;
+  border-radius: 0.4rem;
+  padding: 0.65rem 0.9rem;
+  background: var(--color-action-primary);
+  color: var(--color-text-on-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.app :where(button):disabled,
+.login-page :where(button):disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.secondary-button {
+  background: var(--color-action-secondary);
+  color: var(--color-text-primary);
+}

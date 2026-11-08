@@ -234,6 +234,28 @@ async function stubApplication(page: Page) {
         locations: [],
         unresolved: { record_count: 0, total_units: 0 },
       },
+      "/api/v1/explore/beers": {
+        items: [
+          {
+            id: 101,
+            name: "A Long Seasonal IPA with a Name That Wraps on Narrow Screens",
+            brewery: { id: 1, name: "North Storage Brewing Company" },
+            style: { id: 2, name: "West Coast IPA" },
+            abv: 7.2,
+            ibu: 55,
+            photo_url: null,
+            checkin_count: 4,
+            rated_checkin_count: 2,
+            personal_average_rating: 4.1,
+            first_checked_in_at: "2026-01-01T00:00:00Z",
+            last_checked_in_at: "2026-02-01T00:00:00Z",
+          },
+        ],
+        page: 1,
+        page_size: 25,
+        total: 1,
+        total_pages: 1,
+      },
       "/api/v1/analytics/checkins": checkins,
       "/api/v1/analytics/drinking-trends": drinkingTrends,
     };
@@ -335,6 +357,27 @@ async function renderedContrast(text: Locator) {
   });
 }
 
+function contrastRatio(foreground: string, background: string) {
+  const luminance = (value: string) => {
+    const channels =
+      value
+        .match(/[\d.]+/g)
+        ?.slice(0, 3)
+        .map(Number) ?? [];
+    const linear = channels.map((channel) => {
+      const normalized = channel / 255;
+      return normalized <= 0.04045
+        ? normalized / 12.92
+        : ((normalized + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+  };
+  const values = [luminance(foreground), luminance(background)].sort(
+    (left, right) => right - left,
+  );
+  return (values[0] + 0.05) / (values[1] + 0.05);
+}
+
 async function expectReadable(text: Locator, label: string) {
   const result = await renderedContrast(text);
   expect(result.nonOpaqueAncestors, `${label} ancestor opacity`).toEqual([]);
@@ -372,7 +415,7 @@ test("grouped Inventory stays readable and wraps at mobile and desktop widths", 
 
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
-    for (const width of [320, 390, 1280]) {
+    for (const width of [320, 390, 768, 1280]) {
       await page.setViewportSize({ width, height: width === 1280 ? 800 : 844 });
       const group = longStyleGroup;
       const groupHeading = group.locator(":scope > h3");
@@ -429,6 +472,178 @@ test("grouped Inventory stays readable and wraps at mobile and desktop widths", 
             `${colorScheme} ${width}px text overflow: ${element.text}`,
           ).toBeLessThanOrEqual(element.client + 1);
         }
+      }
+    }
+  }
+});
+
+test("semantic themes stay scoped while Explorer uses the shared palette", async ({
+  page,
+}) => {
+  await stubApplication(page);
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.goto("/explore/beers");
+
+  const explorer = page.locator(".explorer-page");
+  const catalogue = page.locator(".explorer-catalogue");
+  const longBeerName =
+    "A Long Seasonal IPA with a Name That Wraps on Narrow Screens";
+  await expect(page.locator(".explorer-beer-card h4")).toHaveText(longBeerName);
+  await expect(page.locator(".explorer-beer-card")).toHaveCount(1);
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    const expected =
+      colorScheme === "light"
+        ? {
+            canvas: "rgb(245, 247, 251)",
+            surface: "rgb(255, 255, 255)",
+            text: "rgb(23, 32, 51)",
+            secondary: "rgb(71, 85, 105)",
+            controlScheme: "light",
+            actionBackground: "rgb(23, 107, 77)",
+            actionText: "rgb(255, 255, 255)",
+          }
+        : {
+            canvas: "rgb(16, 25, 35)",
+            surface: "rgb(23, 37, 51)",
+            text: "rgb(241, 245, 249)",
+            secondary: "rgb(193, 204, 216)",
+            controlScheme: "dark",
+            actionBackground: "rgb(85, 189, 141)",
+            actionText: "rgb(16, 37, 27)",
+          };
+
+    await expect(explorer).toHaveCSS("color-scheme", expected.controlScheme);
+    await expect(explorer).toHaveCSS("background-color", expected.canvas);
+    await expect(catalogue).toHaveCSS("background-color", expected.surface);
+    await expect(explorer).toHaveCSS("color", expected.text);
+    await expect(explorer.locator(".page-heading p")).toHaveCSS(
+      "color",
+      expected.secondary,
+    );
+    const scopedPalette = await explorer.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        primaryAction: style.getPropertyValue("--color-action-primary").trim(),
+        errorSurfaceText: style
+          .getPropertyValue("--color-text-on-error-surface")
+          .trim(),
+        dangerActionText: style
+          .getPropertyValue("--color-text-on-danger-action")
+          .trim(),
+        border: style.getPropertyValue("--color-border").trim(),
+        focus: style.getPropertyValue("--color-focus").trim(),
+        statusSuccess: style.getPropertyValue("--color-status-success").trim(),
+        chartPrimary: style.getPropertyValue("--color-chart-primary").trim(),
+        chartTooltip: style
+          .getPropertyValue("--color-chart-tooltip-surface")
+          .trim(),
+      };
+    });
+    expect(scopedPalette).toEqual(
+      colorScheme === "light"
+        ? {
+            primaryAction: "#176b4d",
+            errorSurfaceText: "#a32920",
+            dangerActionText: "#ffffff",
+            border: "#cbd5e1",
+            focus: "#fbbf24",
+            statusSuccess: "#16803c",
+            chartPrimary: "#176b4d",
+            chartTooltip: "#172033",
+          }
+        : {
+            primaryAction: "#55bd8d",
+            errorSurfaceText: "#fecaca",
+            dangerActionText: "#ffffff",
+            border: "#526476",
+            focus: "#fbbf24",
+            statusSuccess: "#55bd8d",
+            chartPrimary: "#55bd8d",
+            chartTooltip: "#0b121a",
+          },
+    );
+
+    const rootPalette = await page.locator("html").evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        colorScheme: style.colorScheme,
+        canvas: style.backgroundColor,
+        foreground: style.color,
+        surfaceToken: style.getPropertyValue("--color-surface").trim(),
+      };
+    });
+    expect(rootPalette).toEqual({
+      colorScheme: "light",
+      canvas: "rgb(245, 247, 251)",
+      foreground: "rgb(23, 32, 51)",
+      surfaceToken: "#ffffff",
+    });
+
+    for (const width of [320, 390, 768, 1280]) {
+      await page.setViewportSize({ width, height: width === 1280 ? 800 : 844 });
+      await expectNoDocumentOverflow(page);
+      await expectReadable(
+        explorer.locator(".page-heading h2"),
+        `${colorScheme} Explorer title at ${width}px`,
+      );
+      await expectReadable(
+        explorer.locator(".page-heading p"),
+        `${colorScheme} Explorer description at ${width}px`,
+      );
+      await expectReadable(
+        explorer.locator(".explorer-catalogue-heading p"),
+        `${colorScheme} catalogue description at ${width}px`,
+      );
+      await expectReadable(
+        page.getByRole("searchbox", { name: "Search beers or breweries" }),
+        `${colorScheme} search control at ${width}px`,
+      );
+      await expectReadable(
+        page.getByRole("button", { name: "Search" }),
+        `${colorScheme} search action at ${width}px`,
+      );
+      const searchAction = page.getByRole("button", { name: "Search" });
+      await expect(searchAction).toHaveCSS(
+        "background-color",
+        expected.actionBackground,
+      );
+      await expect(searchAction).toHaveCSS("color", expected.actionText);
+      const actionAndSurface = await searchAction.evaluate((element) => {
+        const surface = element.closest(".explorer-catalogue");
+        if (!surface)
+          throw new Error("Search action lost its catalogue surface");
+        return {
+          action: getComputedStyle(element).backgroundColor,
+          surface: getComputedStyle(surface).backgroundColor,
+        };
+      });
+      expect(
+        contrastRatio(actionAndSurface.action, actionAndSurface.surface),
+        `${colorScheme} search action boundary at ${width}px`,
+      ).toBeGreaterThanOrEqual(3);
+
+      if (width <= 700) {
+        await expect(page.locator(".explorer-beer-cards")).toBeVisible();
+        await expectReadable(
+          page.locator(".explorer-beer-card h4"),
+          `${colorScheme} beer name at ${width}px`,
+        );
+        await expectReadable(
+          page.locator(".explorer-beer-card p").first(),
+          `${colorScheme} brewery name at ${width}px`,
+        );
+      } else {
+        await expect(page.locator(".explorer-beer-table-wrap")).toBeVisible();
+        await expectReadable(
+          page.locator(".explorer-beer-table tbody strong"),
+          `${colorScheme} beer name at ${width}px`,
+        );
+        await expect(page.locator(".explorer-beer-table td").first()).toHaveCSS(
+          "white-space",
+          "nowrap",
+        );
       }
     }
   }

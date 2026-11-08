@@ -1,7 +1,7 @@
 :root {
   font-family: system-ui, sans-serif;
-  color: #172033;
-  background: #f5f7fb;
+  color: var(--color-text-primary);
+  background: var(--color-canvas);
 }
 * {
   box-sizing: border-box;
@@ -17,12 +17,18 @@ body {
 }
 .auth-loading {
   min-height: 100vh;
+  width: min(100%, 80rem);
+  min-width: 0;
+  margin: 0 auto;
   display: grid;
   place-items: center;
   padding: 1rem;
 }
 .login-page {
   min-height: 100vh;
+  width: min(100%, 80rem);
+  min-width: 0;
+  margin: 0 auto;
   display: grid;
   place-items: center;
   padding: 1rem;
@@ -66,15 +72,6 @@ body {
   margin: 0;
   color: #a32920;
 }
-.app-header .logout-button {
-  padding: 0.5rem 0.7rem;
-  background: transparent;
-  color: #cbd5e1;
-}
-.app-header .logout-button:hover {
-  background: #334155;
-  color: white;
-}
 .logout-error {
   margin: 0 0 1rem;
   padding: 0.75rem 1rem;
@@ -84,22 +81,6 @@ body {
 }
 .app {
   min-height: 100vh;
-}
-.app-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem max(1rem, calc((100% - 80rem) / 2));
-  background: #172033;
-  color: white;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-.app-header {
-  position: relative;
-}
-.mobile-menu-toggle {
-  display: none;
 }
 .visually-hidden {
   position: absolute;
@@ -113,37 +94,16 @@ body {
   border: 0;
 }
 :focus-visible {
-  outline: 3px solid #fbbf24;
+  outline: 3px solid var(--color-focus);
   outline-offset: 2px;
 }
-.brand {
-  font-size: 1.35rem;
-  font-weight: 700;
-}
-.app-header nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  min-width: 0;
-}
-.app-header nav a {
-  color: #cbd5e1;
-  text-decoration: none;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.4rem;
-}
-.app-header nav a.active,
-.app-header nav a:hover {
-  background: #334155;
-  color: white;
-}
-main {
+.app > main {
   width: min(100%, 80rem);
   min-width: 0;
   margin: 0 auto;
   padding: 2rem 1rem;
 }
-section {
+.placeholder-panel {
   background: white;
   padding: 2rem;
   border-radius: 0.7rem;
@@ -153,62 +113,37 @@ section {
   padding: 1.25rem;
 }
 .explorer-page {
-  color-scheme: light;
-  --page-bg: #f5f7fb;
-  --surface: #ffffff;
-  --surface-muted: #eef2f7;
-  --surface-danger: #fff1f0;
-  --text-primary: #172033;
-  --text-secondary: #475569;
-  --border: #cbd5e1;
-  --accent: #176b4d;
-  --danger: #a32920;
-  background: var(--page-bg);
-  color: var(--text-primary);
-}
-@media (prefers-color-scheme: dark) {
-  .explorer-page {
-    color-scheme: dark;
-    --page-bg: #101923;
-    --surface: #172533;
-    --surface-muted: #253747;
-    --surface-danger: #422c32;
-    --text-primary: #f1f5f9;
-    --text-secondary: #c1ccd8;
-    --border: #526476;
-    --accent: #55bd8d;
-    --accent-contrast: #10251b;
-    --danger: #fecaca;
-  }
+  background: var(--color-canvas);
+  color: var(--color-text-primary);
 }
 .explorer-heading h2 {
   margin: 0;
-  color: var(--text-primary);
+  color: var(--color-text-primary);
 }
 .explorer-heading p {
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   margin: 0.4rem 0 1rem;
 }
 .explorer-tabs {
   display: flex;
   gap: 0.5rem;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--color-border);
   margin-bottom: 1rem;
 }
 .explorer-tabs a {
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   text-decoration: none;
   padding: 0.65rem 0.8rem;
   border-bottom: 2px solid transparent;
 }
 .explorer-tabs a.active {
-  color: var(--text-primary);
-  border-color: var(--accent);
+  color: var(--color-text-primary);
+  border-color: var(--color-action-primary);
   font-weight: 650;
   background: transparent;
 }
 .explorer-tabs a:hover {
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   background: transparent;
 }
 .explorer-tabs .explorer-tab-unavailable {
@@ -216,14 +151,14 @@ section {
   align-items: center;
   gap: 0.4rem;
   padding: 0.65rem 0.8rem;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   cursor: default;
 }
 .upcoming-label {
   font-size: 0.68rem;
   line-height: 1;
   padding: 0.22rem 0.35rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border);
   border-radius: 999px;
   white-space: nowrap;
 }
@@ -232,9 +167,10 @@ section {
 }
 .explorer-catalogue {
   padding: 0;
+  border-radius: 0.7rem;
   box-shadow: none;
-  background: var(--surface);
-  color: var(--text-primary);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
 }
 .explorer-catalogue-heading {
   display: flex;
@@ -247,7 +183,7 @@ section {
   margin: 0;
 }
 .explorer-catalogue-heading p {
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   margin: 0.35rem 0 0;
 }
 .explorer-controls {
@@ -261,7 +197,7 @@ section {
   gap: 0.3rem;
   font-size: 0.88rem;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   min-width: 0;
 }
 .explorer-search-control {
@@ -272,12 +208,12 @@ section {
   min-height: 2.6rem;
   min-width: 0;
   width: 100%;
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border);
   border-radius: 0.4rem;
   padding: 0.45rem 0.6rem;
   font: inherit;
-  background: var(--surface);
-  color: var(--text-primary);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
 }
 .explorer-controls button {
   min-height: 2.6rem;
@@ -285,15 +221,15 @@ section {
 .explorer-state {
   padding: 1rem;
   border-radius: 0.5rem;
-  background: var(--surface-muted);
-  color: var(--text-primary);
+  background: var(--color-surface-muted);
+  color: var(--color-text-primary);
 }
 .explorer-state p {
   margin: 0.35rem 0 0;
 }
 .explorer-state.error-state {
-  color: var(--danger);
-  background: var(--surface-danger);
+  color: var(--color-text-on-error-surface);
+  background: var(--color-surface-error);
 }
 .explorer-beer-table-wrap {
   overflow-x: auto;
@@ -307,8 +243,10 @@ section {
 .explorer-beer-table th,
 .explorer-beer-table td {
   padding: 0.65rem 0.5rem;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-primary);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  text-align: left;
+  white-space: nowrap;
   vertical-align: middle;
 }
 .explorer-beer-name-cell {
@@ -324,13 +262,13 @@ section {
   flex: 0 0 2.5rem;
   border-radius: 0.35rem;
   object-fit: cover;
-  background: var(--surface-muted);
+  background: var(--color-surface-muted);
 }
 .explorer-beer-artwork-fallback {
   display: grid;
   place-items: center;
   font-size: 0.6rem;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
 }
 .explorer-beer-cards {
   display: none;
@@ -340,7 +278,7 @@ section {
   align-items: flex-start;
   gap: 0.75rem;
   padding: 0.85rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border);
   border-radius: 0.55rem;
 }
 .explorer-beer-card-content {
@@ -348,8 +286,8 @@ section {
   flex: 1;
 }
 .explorer-beer-card {
-  background: var(--surface);
-  color: var(--text-primary);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
 }
 .explorer-beer-card h4 {
   margin: 0 0 0.25rem;
@@ -357,7 +295,7 @@ section {
 }
 .explorer-beer-card p {
   margin: 0.2rem 0;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   overflow-wrap: anywhere;
 }
 .explorer-beer-card dl {
@@ -370,7 +308,7 @@ section {
   min-width: 0;
 }
 .explorer-beer-card dt {
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   font-size: 0.75rem;
 }
 .explorer-beer-card dd {
@@ -380,64 +318,22 @@ section {
 }
 .explorer-upcoming {
   padding: 1rem;
-  background: var(--surface-muted);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
+  background: var(--color-surface-muted);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
   border-radius: 0.5rem;
+  box-shadow: 0 1px 3px #0001;
 }
 .explorer-upcoming p {
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
 }
 .explorer-pagination .secondary-button {
   min-height: 2.75rem;
-  border: 1px solid var(--border);
-  background: var(--surface-muted);
-  color: var(--text-primary);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+  color: var(--color-text-primary);
 }
 @media (max-width: 700px) {
-  header.app-header {
-    min-height: 4rem;
-    align-items: center;
-    flex-direction: row;
-    flex-wrap: nowrap;
-    padding: 0.6rem 1rem;
-  }
-  .mobile-menu-toggle {
-    display: inline-grid;
-    place-items: center;
-    min-width: 2.75rem;
-    min-height: 2.75rem;
-    border: 1px solid #64748b;
-    border-radius: 0.4rem;
-    background: transparent;
-    color: white;
-    font-size: 1.35rem;
-  }
-  header.app-header nav {
-    display: none;
-    position: absolute;
-    z-index: 20;
-    top: 100%;
-    left: 0;
-    right: 0;
-    padding: 0.65rem 1rem 1rem;
-    background: #172033;
-    border-top: 1px solid #334155;
-    box-shadow: 0 8px 16px #0003;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.15rem;
-    max-height: calc(100svh - 4rem);
-    overflow-y: auto;
-  }
-  header.app-header nav.is-open {
-    display: flex;
-  }
-  header.app-header nav a,
-  header.app-header nav .logout-button {
-    text-align: left;
-    min-height: 2.75rem;
-  }
   .explorer-layout {
     padding: 1rem;
   }
@@ -864,12 +760,14 @@ section {
 .weekday-hour-table {
   width: 100%;
   border-collapse: collapse;
+  font-size: 0.9rem;
 }
 .weekday-hour-table th,
 .weekday-hour-table td {
   padding: 0.45rem;
   border: 1px solid #cbd5e1;
   text-align: left;
+  white-space: nowrap;
 }
 .weekday-hour-table caption {
   padding: 0.5rem;
@@ -1685,6 +1583,7 @@ section {
   border: 1px solid #cbd5e1;
   border-radius: 0.55rem;
   background: #f5f7fb;
+  box-shadow: 0 1px 3px #0001;
 }
 .inventory-style-group h3 {
   margin: 0 0 0.5rem;
@@ -1835,9 +1734,9 @@ section {
   background: #eef2f7;
   color: #526176;
 }
-.primary-button,
-.secondary-button,
-.danger-button {
+.locations-page .primary-button,
+.locations-page .secondary-button,
+.locations-page .danger-button {
   min-height: 2.35rem;
   padding: 0.45rem 0.7rem;
   border: 0;
@@ -1846,21 +1745,17 @@ section {
   font-weight: 600;
   cursor: pointer;
 }
-.primary-button {
+.locations-page .primary-button {
   background: #176b4d;
   color: white;
 }
-.secondary-button {
-  background: #e8edf3;
-  color: #172033;
-}
-.danger-button {
+.locations-page .danger-button {
   background: #fff1f0;
   color: #a32920;
 }
-.primary-button:disabled,
-.secondary-button:disabled,
-.danger-button:disabled {
+.locations-page .primary-button:disabled,
+.locations-page .secondary-button:disabled,
+.locations-page .danger-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
@@ -2149,6 +2044,10 @@ section {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.9rem;
+  padding: 2rem;
+  background: white;
+  border-radius: 0.7rem;
+  box-shadow: 0 1px 3px #0001;
 }
 .dashboard-metric-card {
   display: grid;
@@ -2749,24 +2648,6 @@ section {
 .warning-confirmation {
   color: #805500;
 }
-button {
-  border: 0;
-  border-radius: 0.4rem;
-  padding: 0.65rem 0.9rem;
-  background: #176b4d;
-  color: white;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-.secondary-button {
-  background: #e8eef8;
-  color: #172033;
-}
 .import-result {
   margin-top: 1rem;
   padding: 0.75rem;
@@ -2809,13 +2690,16 @@ button:disabled {
 .history-table-wrap {
   overflow-x: auto;
 }
-table {
+.inventory-table,
+.history-card table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
 }
-th,
-td {
+.inventory-table th,
+.inventory-table td,
+.history-card th,
+.history-card td {
   padding: 0.7rem 0.5rem;
   text-align: left;
   border-bottom: 1px solid #e5eaf1;
@@ -2836,7 +2720,8 @@ td {
   background: #fff0ef;
   color: #a32920;
 }
-h2 {
+.app :where(h2),
+.login-page :where(h2) {
   margin-top: 0;
 }
 .status {
@@ -2853,18 +2738,6 @@ h2 {
   color: #946200;
 }
 @media (max-width: 520px) {
-  .app-header {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .app-header nav {
-    width: 100%;
-    justify-content: space-between;
-  }
-  .app-header nav a {
-    flex: 1;
-    text-align: center;
-  }
   .import-grid {
     grid-template-columns: 1fr;
   }
@@ -2876,7 +2749,7 @@ h2 {
   .history-card {
     padding: 1rem;
   }
-  main {
+  .app > main {
     padding: 1rem 0.65rem;
   }
   .metric-card {
