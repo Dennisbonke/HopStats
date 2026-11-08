@@ -288,7 +288,10 @@ export default function ExplorerBeers() {
                 <BeerCard key={beer.id} beer={beer} />
               ))}
             </div>
-            <div className="pagination" aria-label="Beer catalogue pagination">
+            <div
+              className="pagination explorer-pagination"
+              aria-label="Beer catalogue pagination"
+            >
               <button
                 type="button"
                 className="secondary-button"
