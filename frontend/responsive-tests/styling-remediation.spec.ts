@@ -183,6 +183,50 @@ const checkins = {
   ],
 };
 
+const analyticsResponsiveCheckins = {
+  ...checkins,
+  start: "2026-01-01",
+  end: "2026-12-31",
+  summary: {
+    total_checkins: 69,
+    new_discoveries: 24,
+    repeat_checkins: 45,
+    distinct_beers: 32,
+  },
+  buckets: Array.from({ length: 12 }, (_, index) => {
+    const start = new Date(Date.UTC(2026, index, 1)).toISOString().slice(0, 10);
+    const end = new Date(Date.UTC(2026, index + 1, 0))
+      .toISOString()
+      .slice(0, 10);
+    const label = new Date(Date.UTC(2026, index, 1)).toLocaleString("en-US", {
+      month: "short",
+      timeZone: "UTC",
+    });
+    const newDiscoveries = (index % 3) + 1;
+    const repeatCheckins = (index % 5) + 2;
+    const previousDiscoveries = Array.from(
+      { length: index },
+      (_, previousIndex) => (previousIndex % 3) + 1,
+    ).reduce((total, value) => total + value, 0);
+    const previousCheckins = Array.from(
+      { length: index },
+      (_, previousIndex) => (previousIndex % 3) + 1 + (previousIndex % 5) + 2,
+    ).reduce((total, value) => total + value, 0);
+    return {
+      key: `2026-${String(index + 1).padStart(2, "0")}`,
+      label: `${label} 2026`,
+      start,
+      end,
+      new_discoveries: newDiscoveries,
+      repeat_checkins: repeatCheckins,
+      total_checkins: newDiscoveries + repeatCheckins,
+      cumulative_checkins:
+        12 + previousCheckins + newDiscoveries + repeatCheckins,
+      cumulative_discoveries: 8 + previousDiscoveries + newDiscoveries,
+    };
+  }),
+};
+
 const drinkingTrends = {
   start: "2026-01-01",
   end: "2026-12-31",
@@ -215,7 +259,20 @@ const drinkingTrends = {
   })),
 };
 
-async function stubApplication(page: Page) {
+const analyticsResponsiveTrends = {
+  ...drinkingTrends,
+  hourly: drinkingTrends.hourly.map((row) => ({
+    ...row,
+    total: row.total + 1,
+    discoveries: row.discoveries + 1,
+  })),
+};
+
+async function stubApplication(
+  page: Page,
+  checkinsFixture = checkins,
+  drinkingTrendsFixture = drinkingTrends,
+) {
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const body: Record<string, unknown> = {
@@ -309,8 +366,8 @@ async function stubApplication(page: Page) {
         total: 1,
         total_pages: 1,
       },
-      "/api/v1/analytics/checkins": checkins,
-      "/api/v1/analytics/drinking-trends": drinkingTrends,
+      "/api/v1/analytics/checkins": checkinsFixture,
+      "/api/v1/analytics/drinking-trends": drinkingTrendsFixture,
     };
     if (path === "/api/v1/inventory") {
       await route.fulfill({
@@ -1223,4 +1280,337 @@ test("application header styling stays scoped away from Analytics headings", asy
       `${colorScheme} weekday/hour explanation`,
     );
   }
+});
+
+test("Analytics charts keep controls, labels, and legends usable across viewports", async ({
+  page,
+}) => {
+  await stubApplication(
+    page,
+    analyticsResponsiveCheckins,
+    analyticsResponsiveTrends,
+  );
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.goto(
+      "/analytics?period=custom&start=2026-01-01&end=2026-12-31&granularity=month",
+    );
+    await expect(page.getByText("Check-in Breakdown")).toBeVisible();
+
+    for (const width of [320, 390, 768, 1280]) {
+      await page.setViewportSize({
+        width,
+        height: width === 1280 ? 800 : 844,
+      });
+      await expectNoDocumentOverflow(page);
+      await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
+
+      const overview = page.locator("#analytics-overview-panel");
+      const breakdown = overview
+        .locator(".analytics-chart-panel")
+        .filter({ hasText: "Check-in Breakdown" });
+      const trend = overview
+        .locator(".analytics-chart-panel")
+        .filter({ hasText: "Check-in Trends" });
+      await expect(breakdown.locator(".recharts-legend-wrapper")).toBeVisible();
+      await expect(
+        breakdown.locator(".recharts-legend-item-text").nth(0),
+      ).toContainText("New discoveries");
+      await expect(
+        breakdown.locator(".recharts-legend-item-text").nth(1),
+      ).toContainText("Repeat check-ins");
+      await expect(trend.locator(".recharts-legend-wrapper")).toBeVisible();
+      const overviewChartBox = await trend
+        .locator(".chart-canvas.analytics-overview-chart")
+        .boundingBox();
+      expect(overviewChartBox?.height).toBeGreaterThanOrEqual(288);
+      for (const description of await overview
+        .locator(".panel-explanation")
+        .all()) {
+        await expectReadable(
+          description,
+          `${colorScheme} Analytics description at ${width}px`,
+        );
+      }
+
+      const controlBox = await trend.locator(".chart-controls").boundingBox();
+      const titleBox = await trend.getByRole("heading").boundingBox();
+      expect(controlBox).not.toBeNull();
+      expect(titleBox).not.toBeNull();
+      expect(controlBox!.y).toBeGreaterThanOrEqual(
+        titleBox!.y + titleBox!.height,
+      );
+      for (const checkboxLabel of await trend
+        .locator(".chart-controls label")
+        .all()) {
+        const box = await checkboxLabel.boundingBox();
+        expect(box?.height).toBeGreaterThanOrEqual(44);
+      }
+
+      await page.getByRole("tab", { name: "Drinking Trends" }).click();
+      const hourly = page
+        .locator(".distribution-chart")
+        .filter({ hasText: "Check-ins by Hour of Day" });
+      await expect(hourly).toBeVisible();
+      const plotBox = await hourly
+        .locator(".distribution-canvas")
+        .boundingBox();
+      expect(plotBox?.width).toBeGreaterThan(0);
+      expect(plotBox?.height).toBeGreaterThanOrEqual(260);
+      await expectReadable(
+        hourly.getByRole("heading", { name: "Check-ins by Hour of Day" }),
+        `${colorScheme} hourly chart title at ${width}px`,
+      );
+      await expectReadable(
+        page.locator("#weekday-hour-instructions"),
+        `${colorScheme} heatmap explanation at ${width}px`,
+      );
+      const heatmapCell = await page
+        .locator(".weekday-hour-cell")
+        .first()
+        .boundingBox();
+      expect(heatmapCell?.width).toBeGreaterThanOrEqual(44);
+      expect(heatmapCell?.height).toBeGreaterThanOrEqual(44);
+      await hourly.locator("svg.recharts-surface").focus();
+      const keyboardTooltip = page.locator(
+        "body > .recharts-tooltip-wrapper:visible .analytics-tooltip",
+      );
+      await expect(keyboardTooltip).toBeVisible();
+      await expect(keyboardTooltip).toContainText("00:00");
+
+      if (width <= 390) {
+        const tickRects = await hourly
+          .locator(".recharts-xAxis .recharts-cartesian-axis-tick-value")
+          .evaluateAll((nodes) =>
+            nodes
+              .map((node) => {
+                const rect = node.getBoundingClientRect();
+                return { left: rect.left, right: rect.right };
+              })
+              .sort((a, b) => a.left - b.left),
+          );
+        for (let index = 1; index < tickRects.length; index += 1) {
+          expect(tickRects[index - 1].right).toBeLessThanOrEqual(
+            tickRects[index].left + 1,
+          );
+        }
+      }
+      await expectNoDocumentOverflow(page);
+      await page.getByRole("tab", { name: "Overview" }).click();
+    }
+  }
+});
+
+test("Analytics tooltips stay readable and inside the viewport at chart edges", async ({
+  page,
+}) => {
+  await stubApplication(
+    page,
+    analyticsResponsiveCheckins,
+    analyticsResponsiveTrends,
+  );
+
+  const inspectEdgeBar = async (
+    bar: Locator,
+    expectedText: string,
+    viewport: { width: number; height: number },
+    context: string,
+    edge?: "top" | "bottom",
+  ) => {
+    let barBox = await bar.boundingBox();
+    expect(barBox).not.toBeNull();
+    if (edge) {
+      const targetY = edge === "top" ? 18 : viewport.height - 18;
+      await page.evaluate(
+        ({ currentY, targetY }) => window.scrollBy(0, currentY - targetY),
+        { currentY: barBox!.y + barBox!.height / 2, targetY },
+      );
+      barBox = await bar.boundingBox();
+      expect(barBox).not.toBeNull();
+    }
+    const pointer = {
+      x: barBox!.x + barBox!.width / 2,
+      y: barBox!.y + barBox!.height / 2,
+    };
+    await page.mouse.move(pointer.x, pointer.y);
+    const tooltip = page.locator(
+      "body > .recharts-tooltip-wrapper:visible .analytics-tooltip",
+    );
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toContainText(expectedText);
+    const geometry = await tooltip.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        contentWidth: element.clientWidth,
+        contentHeight: element.clientHeight,
+        scrollWidth: element.scrollWidth,
+        scrollHeight: element.scrollHeight,
+        background: getComputedStyle(element).backgroundColor,
+        foreground: getComputedStyle(element).color,
+        portalTarget: element.parentElement?.parentElement === document.body,
+        insideClippedCard: element.closest(".distribution-chart") !== null,
+      };
+    });
+    expect(geometry.left, context).toBeGreaterThanOrEqual(0);
+    expect(geometry.top, context).toBeGreaterThanOrEqual(0);
+    expect(geometry.right, context).toBeLessThanOrEqual(viewport.width + 1);
+    expect(geometry.bottom, context).toBeLessThanOrEqual(viewport.height + 1);
+    expect(geometry.width, context).toBeLessThanOrEqual(viewport.width - 15);
+    expect(geometry.contentWidth, context).toBeGreaterThan(0);
+    expect(geometry.scrollWidth, context).toBeLessThanOrEqual(
+      geometry.contentWidth + 1,
+    );
+    expect(geometry.scrollHeight, context).toBeLessThanOrEqual(
+      geometry.contentHeight + 1,
+    );
+    expect(geometry.background, context).toBe("rgb(23, 32, 51)");
+    expect(geometry.foreground, context).toBe("rgb(255, 255, 255)");
+    expect(geometry.portalTarget, context).toBe(true);
+    expect(geometry.insideClippedCard, context).toBe(false);
+    expect(
+      pointer.x < geometry.left ||
+        pointer.x > geometry.right ||
+        pointer.y < geometry.top ||
+        pointer.y > geometry.bottom,
+      `${context} tooltip should leave the pointer visible`,
+    ).toBe(true);
+    await expectReadable(tooltip, context);
+    await expectNoDocumentOverflow(page);
+  };
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.goto(
+      "/analytics?period=custom&start=2026-01-01&end=2026-12-31&granularity=month",
+    );
+    for (const width of [320, 390, 768, 1280]) {
+      const viewport = { width, height: width === 1280 ? 800 : 844 };
+      await page.setViewportSize(viewport);
+      const breakdown = page
+        .locator(".analytics-chart-panel")
+        .filter({ hasText: "Check-in Breakdown" });
+      const bars = breakdown.locator(".recharts-rectangle");
+      await expect(bars).toHaveCount(24);
+      await breakdown.scrollIntoViewIfNeeded();
+      await inspectEdgeBar(
+        bars.first(),
+        "Jan 2026",
+        viewport,
+        `${colorScheme} ${width}px first breakdown bucket`,
+      );
+      await inspectEdgeBar(
+        bars.last(),
+        "Dec 2026",
+        viewport,
+        `${colorScheme} ${width}px last breakdown bucket`,
+      );
+
+      await page.getByRole("tab", { name: "Drinking Trends" }).click();
+      const hourly = page
+        .locator(".distribution-chart")
+        .filter({ hasText: "Check-ins by Hour of Day" });
+      const hourlyBars = hourly.locator(".recharts-rectangle");
+      await expect(hourlyBars).toHaveCount(24);
+      await hourly.scrollIntoViewIfNeeded();
+      await inspectEdgeBar(
+        hourlyBars.first(),
+        "00:00",
+        viewport,
+        `${colorScheme} ${width}px first hourly bucket`,
+      );
+      await inspectEdgeBar(
+        hourlyBars.last(),
+        "23:00",
+        viewport,
+        `${colorScheme} ${width}px last hourly bucket`,
+      );
+      if (width === 320 && colorScheme === "light") {
+        const shortViewport = { width, height: 360 };
+        await page.setViewportSize(shortViewport);
+        await hourly.scrollIntoViewIfNeeded();
+        await inspectEdgeBar(
+          hourlyBars.first(),
+          "00:00",
+          shortViewport,
+          "320px tooltip near the viewport bottom",
+          "bottom",
+        );
+        await inspectEdgeBar(
+          hourlyBars.last(),
+          "23:00",
+          shortViewport,
+          "320px tooltip near the viewport top",
+          "top",
+        );
+        await page.setViewportSize(viewport);
+      }
+      await page.getByRole("tab", { name: "Overview" }).click();
+    }
+  }
+});
+
+test("month drilldown controls wrap and remain keyboard reachable at 320px", async ({
+  page,
+}) => {
+  await stubApplication(page, analyticsResponsiveCheckins);
+  await page.goto(
+    "/analytics?period=custom&start=2026-01-01&end=2026-12-31&granularity=month",
+  );
+
+  for (const width of [320, 390, 768, 1280]) {
+    await page.setViewportSize({
+      width,
+      height: width === 1280 ? 800 : 844,
+    });
+    const buttons = page.locator(".bucket-actions .ui-button");
+    await expect(buttons).toHaveCount(12);
+    const parent = await page.locator(".bucket-actions").boundingBox();
+    expect(parent).not.toBeNull();
+    for (const button of await buttons.all()) {
+      const box = await button.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.x).toBeGreaterThanOrEqual(parent!.x);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(
+        parent!.x + parent!.width + 1,
+      );
+      expect(box!.height).toBeGreaterThanOrEqual(44);
+      const textSize = await button.evaluate((element) => ({
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+        clientHeight: element.clientHeight,
+        scrollHeight: element.scrollHeight,
+      }));
+      expect(textSize.scrollWidth).toBeLessThanOrEqual(
+        textSize.clientWidth + 1,
+      );
+      expect(textSize.scrollHeight).toBeLessThanOrEqual(
+        textSize.clientHeight + 1,
+      );
+    }
+    await expectNoDocumentOverflow(page);
+  }
+
+  await page.setViewportSize({ width: 320, height: 844 });
+  const june = page.getByRole("button", { name: "Open Jun 2026" });
+  await june.focus();
+  await expect(june).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("zoom"))
+    .toBe("month:2026-06");
+  const currentMonth = page.locator(
+    ".analytics-breadcrumb [aria-current='page']",
+  );
+  await expect(currentMonth).toHaveText("June");
+  await currentMonth.scrollIntoViewIfNeeded();
+  const monthBox = await currentMonth.boundingBox();
+  expect(monthBox?.y).toBeGreaterThanOrEqual(0);
+  expect(monthBox!.y + monthBox!.height).toBeLessThanOrEqual(844);
+  await expectNoDocumentOverflow(page);
 });

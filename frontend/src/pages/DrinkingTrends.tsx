@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -7,8 +7,13 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  type Coordinate,
 } from "recharts";
+import type { RefObject } from "react";
 import ActivityMetricSelector from "../components/ActivityMetricSelector";
+import AnalyticsChartTooltip, {
+  ANALYTICS_TOOLTIP_WRAPPER_STYLE,
+} from "../components/AnalyticsChartTooltip";
 import { fetchDrinkingTrends } from "../api/analytics";
 import CalendarHeatmap from "./CalendarHeatmap";
 import WeekdayHourHeatmap from "./WeekdayHourHeatmap";
@@ -356,6 +361,55 @@ type DistributionRow = {
   denominator: number;
 };
 
+type DistributionDatum = DistributionRow & {
+  count: number;
+  average: number | null;
+  value: number;
+};
+
+function DistributionTooltip({
+  active,
+  coordinate,
+  payload,
+  chartRef,
+  mode,
+  isHourly,
+}: {
+  active?: boolean;
+  coordinate?: Coordinate;
+  payload?: Array<{ payload?: DistributionDatum }>;
+  chartRef: RefObject<HTMLElement | null>;
+  mode: "total" | "average";
+  isHourly: boolean;
+}) {
+  const row = payload?.[0]?.payload;
+  if (!active || !row) return null;
+
+  return (
+    <AnalyticsChartTooltip
+      active={active}
+      coordinate={coordinate}
+      chartRef={chartRef}
+    >
+      <strong>{row.label}</strong>
+      <div>
+        {mode === "total" ? "Total" : "Average"}:{" "}
+        {mode === "total"
+          ? row.count
+          : (row.average?.toFixed(2) ?? "Unavailable")}
+      </div>
+      <div>Selected count: {row.count}</div>
+      <div>
+        Denominator: {row.denominator}
+        {isHourly ? " calendar days" : " occurrences of this weekday"}
+      </div>
+      <div>
+        Average: {row.average?.toFixed(2) ?? "Unavailable (no occurrences)"}
+      </div>
+    </AnalyticsChartTooltip>
+  );
+}
+
 function inclusiveDays(start: string, end: string) {
   return (
     Math.round(
@@ -404,6 +458,7 @@ function DistributionChart({
   });
   const descriptionId = `${title.replaceAll(" ", "-").toLowerCase()}-description`;
   const isHourly = rows.length > 7;
+  const chartRef = useRef<HTMLDivElement>(null);
   return (
     <article className="distribution-chart">
       <h3>{title}</h3>
@@ -413,63 +468,47 @@ function DistributionChart({
       </p>
       <div
         className="distribution-canvas"
-        role="img"
+        ref={chartRef}
+        role="group"
         aria-label={`${title}. ${description} Reporting period: ${reportingPeriod}. ${metricName}, ${mode === "total" ? "totals" : "averages"}.`}
         aria-describedby={descriptionId}
       >
-        <ResponsiveContainer width="100%" height={280}>
+        <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={data}
+            accessibilityLayer
             margin={{ top: 8, right: 12, left: 0, bottom: 8 }}
           >
-            <CartesianGrid strokeDasharray="3 3" />
+            <CartesianGrid
+              stroke="var(--color-chart-grid)"
+              strokeDasharray="3 3"
+            />
             <XAxis
               dataKey={
                 rows.some((row) => row.axisLabel) ? "axisLabel" : "label"
               }
               interval={isHourly ? 2 : 0}
-              tick={{ fontSize: isHourly ? 10 : 12 }}
+              tick={{ fontSize: 12 }}
+              tickFormatter={
+                isHourly ? (value: string) => value.slice(0, 2) : undefined
+              }
             />
-            <YAxis allowDecimals={mode === "average"} />
+            <YAxis allowDecimals={mode === "average"} tick={{ fontSize: 12 }} />
             <Tooltip
-              content={({ active, payload }) => {
-                const row = payload?.[0]?.payload as
-                  | (DistributionRow & {
-                      count: number;
-                      average: number | null;
-                      value: number;
-                    })
-                  | undefined;
-                if (!active || !row) return null;
-                return (
-                  <div className="analytics-tooltip">
-                    <strong>{row.label}</strong>
-                    <div>
-                      {mode === "total" ? "Total" : "Average"}:{" "}
-                      {mode === "total"
-                        ? row.count
-                        : (row.average?.toFixed(2) ?? "Unavailable")}
-                    </div>
-                    <div>Selected count: {row.count}</div>
-                    <div>
-                      Denominator: {row.denominator}
-                      {isHourly
-                        ? " calendar days"
-                        : " occurrences of this weekday"}
-                    </div>
-                    <div>
-                      Average:{" "}
-                      {row.average?.toFixed(2) ??
-                        "Unavailable (no occurrences)"}
-                    </div>
-                  </div>
-                );
-              }}
+              content={
+                <DistributionTooltip
+                  chartRef={chartRef}
+                  mode={mode}
+                  isHourly={isHourly}
+                />
+              }
+              portal={document.body}
+              wrapperStyle={ANALYTICS_TOOLTIP_WRAPPER_STYLE}
             />
             <Bar
               dataKey="value"
               name={mode === "total" ? "Check-ins" : "Average"}
-              fill="#2f855a"
+              fill="var(--color-chart-primary)"
               isAnimationActive={false}
             />
           </BarChart>
