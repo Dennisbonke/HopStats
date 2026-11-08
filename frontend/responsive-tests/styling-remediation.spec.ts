@@ -1611,7 +1611,7 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
   }
 });
 
-test("Analytics breakdown tooltips open from touch at 320px", async ({
+test("Analytics breakdown tooltips follow touch movement at 320px", async ({
   browser,
 }) => {
   const context = await browser.newContext({
@@ -1644,9 +1644,34 @@ test("Analytics breakdown tooltips open from touch at 320px", async ({
       .toBe(true);
     expect(barBox).not.toBeNull();
 
-    await page.touchscreen.tap(
-      barBox!.x + barBox!.width / 2,
-      barBox!.y + barBox!.height / 2,
+    await page.evaluate(
+      ({ x, y }) => {
+        const target = document.elementFromPoint(x, y);
+        if (!(target instanceof Element)) {
+          throw new Error("Touch point did not hit the chart");
+        }
+        const touch = new Touch({
+          identifier: 1,
+          target,
+          clientX: x,
+          clientY: y,
+        });
+        for (const type of ["touchstart", "touchmove"]) {
+          target.dispatchEvent(
+            new TouchEvent(type, {
+              bubbles: true,
+              cancelable: true,
+              touches: [touch],
+              targetTouches: [touch],
+              changedTouches: [touch],
+            }),
+          );
+        }
+      },
+      {
+        x: barBox!.x + barBox!.width / 2,
+        y: barBox!.y + barBox!.height / 2,
+      },
     );
     const tooltip = page
       .locator("body > .recharts-tooltip-wrapper:visible .analytics-tooltip")
