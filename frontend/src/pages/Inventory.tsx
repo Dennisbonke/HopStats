@@ -297,6 +297,123 @@ function InventoryRows({
   );
 }
 
+function GroupedInventoryRows({
+  data,
+  onSelect,
+}: {
+  data: InventoryResponse;
+  onSelect: (item: InventoryItem) => void;
+}) {
+  const groups = new Map<
+    string,
+    { name: string; styleId: number | null; items: InventoryItem[] }
+  >();
+  for (const item of data.items) {
+    const key =
+      item.style_id === null ? "missing-style" : `style-${item.style_id}`;
+    const existing = groups.get(key) ?? {
+      name: item.style_name ?? "Unknown style",
+      styleId: item.style_id,
+      items: [],
+    };
+    existing.items.push(item);
+    groups.set(key, existing);
+  }
+  const orderedGroups = [...groups.entries()].sort(([, left], [, right]) => {
+    if (left.styleId === null) return 1;
+    if (right.styleId === null) return -1;
+    return left.name.localeCompare(right.name, undefined, {
+      sensitivity: "base",
+    });
+  });
+  return (
+    <div className="inventory-style-groups">
+      {orderedGroups.map(([key, group]) => {
+        const total =
+          (data.style_groups ?? []).find(
+            (entry) => entry.style_id === group.styleId,
+          )?.total ?? group.items.length;
+        return (
+          <section className="inventory-style-group" key={key}>
+            <h3>
+              {group.name} <span>({numberFormatter.format(total)} total)</span>
+            </h3>
+            <p className="inventory-group-page-count">
+              Showing {numberFormatter.format(group.items.length)} of{" "}
+              {numberFormatter.format(total)} matching entries on this page.
+            </p>
+            <div className="inventory-table-wrap">
+              <table className="inventory-table">
+                <thead>
+                  <tr>
+                    <th>Beer</th>
+                    <th>Style</th>
+                    <th>Units</th>
+                    <th>ABV</th>
+                    <th>Best before</th>
+                    <th>Location</th>
+                    <th>Match</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {group.items.map((item) => (
+                    <tr key={item.id}>
+                      <td>
+                        <strong>{item.beer_name}</strong>
+                        <br />
+                        <span className="muted">
+                          {value(item.brewery_name)}
+                        </span>
+                      </td>
+                      <td>{value(item.style_name)}</td>
+                      <td>{numberFormatter.format(item.quantity)}</td>
+                      <td>{item.abv === null ? "Missing" : `${item.abv}%`}</td>
+                      <td>
+                        {dateValue(item.best_before)}
+                        {item.best_before_suspicious && " ⚠"}
+                      </td>
+                      <td>{item.location?.path ?? "Unresolved"}</td>
+                      <td>
+                        <span className={`status-pill ${item.match_status}`}>
+                          {matchLabel(item.match_status)}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => onSelect(item)}
+                        >
+                          Details
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="inventory-cards">
+              {group.items.map((item) => (
+                <article className="inventory-card" key={item.id}>
+                  <Summary item={item} />
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => onSelect(item)}
+                  >
+                    View record details
+                  </button>
+                </article>
+              ))}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Inventory() {
   const [searchParams] = useSearchParams();
   const initialLocation =
@@ -308,6 +425,8 @@ export default function Inventory() {
   const [style, setStyle] = useState("");
   const [match, setMatch] = useState("");
   const [sort, setSort] = useState("beer_name_asc");
+  const [groupByStyle, setGroupByStyle] = useState(false);
+  const [groupSort, setGroupSort] = useState("beer_name_asc");
   const [includeDescendants, setIncludeDescendants] = useState(true);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<InventoryResponse | null>(null);
@@ -332,8 +451,9 @@ export default function Inventory() {
     const params = new URLSearchParams({
       page: String(page),
       page_size: "25",
-      sort,
+      sort: groupByStyle ? groupSort : sort,
     });
+    if (groupByStyle) params.set("group_by", "style");
     if (appliedSearch) params.set("search", appliedSearch);
     if (style) params.set("style_id", style);
     if (match) params.set("match_status", match);
@@ -357,7 +477,17 @@ export default function Inventory() {
         if (generation === inventoryRequestGeneration.current)
           setLoading(false);
       });
-  }, [appliedSearch, includeDescendants, location, match, page, sort, style]);
+  }, [
+    appliedSearch,
+    groupByStyle,
+    groupSort,
+    includeDescendants,
+    location,
+    match,
+    page,
+    sort,
+    style,
+  ]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -428,20 +558,62 @@ export default function Inventory() {
             <option value="unmatched">Not confirmed checked in</option>
           </select>
         </label>
-        <label className="filter-control">
-          Sort order
-          <select
-            value={sort}
-            onChange={(event) => changeFilter(setSort, event.target.value)}
-          >
-            <option value="beer_name_asc">Beer name A–Z</option>
-            <option value="beer_name_desc">Beer name Z–A</option>
-            <option value="brewery_asc">Brewery A–Z</option>
-            <option value="quantity_desc">Quantity high–low</option>
-            <option value="best_before_asc">Best-before soonest</option>
-            <option value="location_asc">Location A–Z</option>
-          </select>
+        {!groupByStyle && (
+          <label className="filter-control">
+            Sort order
+            <select
+              value={sort}
+              onChange={(event) => changeFilter(setSort, event.target.value)}
+            >
+              <option value="beer_name_asc">Beer name A–Z</option>
+              <option value="beer_name_desc">Beer name Z–A</option>
+              <option value="brewery_asc">Brewery A–Z</option>
+              <option value="brewery_desc">Brewery Z–A</option>
+              <option value="abv_asc">ABV low to high</option>
+              <option value="abv_desc">ABV high to low</option>
+              <option value="quantity_desc">Quantity high–low</option>
+              <option value="best_before_asc">Best-before soonest</option>
+              <option value="best_before_desc">Best-before furthest</option>
+              <option value="style_asc">Style A–Z</option>
+              <option value="style_desc">Style Z–A</option>
+              <option value="location_asc">Location A–Z</option>
+              <option value="location_desc">Location Z–A</option>
+            </select>
+          </label>
+        )}
+        <label className="checkbox-filter">
+          <input
+            type="checkbox"
+            checked={groupByStyle}
+            onChange={(event) => {
+              setGroupByStyle(event.target.checked);
+              setPage(1);
+            }}
+          />
+          Group by beer style
         </label>
+        {groupByStyle && (
+          <label className="filter-control">
+            Sort within styles
+            <select
+              aria-label="Sort within styles"
+              value={groupSort}
+              onChange={(event) => {
+                setGroupSort(event.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="beer_name_asc">Beer name A–Z</option>
+              <option value="beer_name_desc">Beer name Z–A</option>
+              <option value="brewery_asc">Brewery A–Z</option>
+              <option value="brewery_desc">Brewery Z–A</option>
+              <option value="abv_asc">ABV low to high</option>
+              <option value="abv_desc">ABV high to low</option>
+              <option value="best_before_asc">Best-by soonest first</option>
+              <option value="best_before_desc">Best-by furthest first</option>
+            </select>
+          </label>
+        )}
         {location && location !== "__unresolved__" && (
           <label className="checkbox-filter">
             <input
@@ -485,10 +657,17 @@ export default function Inventory() {
               Page {data.page} of {data.total_pages}
             </span>
           </div>
-          <InventoryRows
-            data={data}
-            onSelect={(item) => void selectDetail(item)}
-          />
+          {groupByStyle ? (
+            <GroupedInventoryRows
+              data={data}
+              onSelect={(item) => void selectDetail(item)}
+            />
+          ) : (
+            <InventoryRows
+              data={data}
+              onSelect={(item) => void selectDetail(item)}
+            />
+          )}
           <div className="pagination">
             <button
               type="button"

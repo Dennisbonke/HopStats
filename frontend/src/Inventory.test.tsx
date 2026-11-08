@@ -120,6 +120,147 @@ test("loads inventory, applies search, and opens record details", async () => {
   ).toBeInTheDocument();
 });
 
+test("offers inventory sorts and optional style grouping without clearing search", async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={["/inventory"]}>
+      <App />
+    </MemoryRouter>,
+  );
+  expect(await screen.findAllByText("Example IPA")).toHaveLength(2);
+  const sort = screen.getByLabelText("Sort order");
+  expect(sort).toHaveDisplayValue("Beer name A–Z");
+  for (const label of [
+    "ABV high to low",
+    "Best-before furthest",
+    "Style Z–A",
+    "Brewery Z–A",
+    "Location Z–A",
+  ]) {
+    expect(screen.getByRole("option", { name: label })).toBeInTheDocument();
+  }
+  const search = screen.getByPlaceholderText("Search inventory…");
+  await user.type(search, "Example");
+  await user.click(screen.getByRole("button", { name: "Search" }));
+  await user.click(screen.getByLabelText("Group by beer style"));
+  expect(screen.getByPlaceholderText("Search inventory…")).toHaveValue(
+    "Example",
+  );
+  expect(screen.getByLabelText("Sort within styles")).toBeInTheDocument();
+  expect(
+    await screen.findByRole("heading", { name: "IPA (1 total)" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText("Showing 1 of 1 matching entries on this page."),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+  expect(screen.queryByLabelText("Sort order")).not.toBeInTheDocument();
+  expect(
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.some(
+      ([url]) =>
+        String(url).includes("group_by=style") &&
+        String(url).includes("search=Example"),
+    ),
+  ).toBe(true);
+  await user.selectOptions(
+    screen.getByLabelText("Sort within styles"),
+    "abv_desc",
+  );
+  await user.click(screen.getByLabelText("Group by beer style"));
+  expect(screen.queryByLabelText("Sort within styles")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Sort order")).toBeInTheDocument();
+  expect(
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.some(
+      ([url]) =>
+        String(url).includes("sort=beer_name_asc") &&
+        String(url).includes("search=Example"),
+    ),
+  ).toBe(true);
+});
+
+test("paginates grouped inventory and resets the page when switching modes", async () => {
+  const user = userEvent.setup();
+  const secondItem = {
+    ...item,
+    id: 2,
+    source_item_id: "stash-2",
+    beer_name: "Second page Lager",
+    style_name: "Lager",
+  };
+  const inventoryRequests: URL[] = [];
+  const response = (body: unknown) => ({
+    ok: true,
+    status: 200,
+    json: async () => body,
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockImplementation((input: string) => {
+      if (input === "/api/v1/health")
+        return Promise.resolve(response({ ok: true }));
+      if (input === "/api/v1/auth/me")
+        return Promise.resolve(
+          response({
+            id: 1,
+            username: "local",
+            created_at: "2026-10-14T00:00:00Z",
+          }),
+        );
+      if (input.startsWith("/api/v1/inventory/styles"))
+        return Promise.resolve(response([{ id: 3, name: "IPA" }]));
+      if (input.startsWith("/api/v1/inventory?")) {
+        const url = new URL(input, "http://localhost");
+        inventoryRequests.push(url);
+        const isSecondPage = url.searchParams.get("page") === "2";
+        return Promise.resolve(
+          response({
+            items: [isSecondPage ? secondItem : item],
+            page: isSecondPage ? 2 : 1,
+            page_size: 25,
+            total: 26,
+            total_pages: 2,
+            style_groups: [{ style_id: 3, style_name: "IPA", total: 26 }],
+          }),
+        );
+      }
+      return Promise.resolve(response(locations));
+    }),
+  );
+
+  render(
+    <MemoryRouter initialEntries={["/inventory"]}>
+      <App />
+    </MemoryRouter>,
+  );
+  expect(await screen.findAllByText("Example IPA")).not.toHaveLength(0);
+  await user.click(screen.getByLabelText("Group by beer style"));
+  expect(
+    await screen.findByText("Showing 1 of 26 matching entries on this page."),
+  ).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Next" }));
+
+  expect(await screen.findAllByText("Second page Lager")).not.toHaveLength(0);
+  expect(
+    inventoryRequests.some(
+      (url) =>
+        url.searchParams.get("group_by") === "style" &&
+        url.searchParams.get("page") === "2",
+    ),
+  ).toBe(true);
+
+  await user.click(screen.getByLabelText("Group by beer style"));
+  await waitFor(() =>
+    expect(
+      inventoryRequests.some(
+        (url) =>
+          !url.searchParams.has("group_by") &&
+          url.searchParams.get("page") === "1",
+      ),
+    ).toBe(true),
+  );
+  expect(await screen.findAllByText("Example IPA")).not.toHaveLength(0);
+});
+
 test("shows a useful empty inventory state", async () => {
   vi.stubGlobal(
     "fetch",

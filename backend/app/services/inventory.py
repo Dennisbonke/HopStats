@@ -2,13 +2,14 @@ import json
 from math import ceil
 from typing import Any
 
-from sqlalchemy import Select, asc, desc, func, or_, select
+from sqlalchemy import Select, String, asc, desc, func, literal, or_, select
 from sqlalchemy.orm import Session
 
 from ..models import Beer, BeerStyle, Brewery, InventoryItem, InventorySource, Location
 from ..schemas.inventory import (
     InventoryItemResponse,
     InventoryListResponse,
+    InventoryStyleGroupCount,
     InventoryStyleResponse,
     LocationPathResponse,
 )
@@ -26,6 +27,7 @@ SORT_COLUMNS = {
     "beer_name": Beer.name,
     "brewery": Brewery.name,
     "style": BeerStyle.name,
+    "abv": Beer.abv,
     "quantity": InventoryItem.quantity,
     "best_before": InventoryItem.best_before,
     "match_status": InventoryItem.match_status,
@@ -53,7 +55,10 @@ class InventoryService:
         page: int = 1,
         page_size: int = 25,
         sort: str = "beer_name_asc",
+        group_by: str | None = None,
     ) -> InventoryListResponse:
+        if group_by not in {None, "style"}:
+            raise InventoryFilterError("unsupported inventory grouping")
         if location_id is not None and unresolved:
             raise InventoryFilterError("location_id and unresolved cannot be combined")
 
@@ -70,12 +75,44 @@ class InventoryService:
             style_id=style_id,
         )
         total = self.session.scalar(select(func.count()).select_from(query.subquery())) or 0
-        order_column, descending = self._sort(sort)
-        query = query.order_by(
-            (desc(order_column) if descending else asc(order_column)),
-            asc(InventoryItem.id),
-        )
-        rows = self.session.execute(query.offset((page - 1) * page_size).limit(page_size)).all()
+        orderings = self._sort(sort, user_id=user_id)
+        style_groups: list[InventoryStyleGroupCount] = []
+        if group_by == "style":
+            filtered = (
+                query.with_only_columns(
+                    Beer.style_id.label("style_id"),
+                    BeerStyle.name.label("style_name"),
+                    maintain_column_froms=True,
+                )
+                .order_by(None)
+                .subquery()
+            )
+            group_rows = self.session.execute(
+                select(filtered.c.style_id, filtered.c.style_name, func.count())
+                .group_by(filtered.c.style_id, filtered.c.style_name)
+                .order_by(
+                    filtered.c.style_id.is_(None),
+                    func.lower(filtered.c.style_name),
+                    filtered.c.style_id,
+                )
+            ).all()
+            style_groups = [
+                InventoryStyleGroupCount(
+                    style_id=row.style_id,
+                    style_name=row.style_name or "Unknown style",
+                    total=int(row[2]),
+                )
+                for row in group_rows
+            ]
+            orderings = [
+                BeerStyle.id.is_(None),
+                asc(func.lower(BeerStyle.name)),
+                asc(BeerStyle.id),
+                *orderings,
+            ]
+        query = query.order_by(*orderings)
+        rows_query = query.offset((page - 1) * page_size).limit(page_size)
+        rows = self.session.execute(rows_query).all()
         locations = self._location_paths(user_id)
         items = [self._response(row, locations, include_metadata=False) for row in rows]
         return InventoryListResponse(
@@ -84,6 +121,7 @@ class InventoryService:
             page_size=page_size,
             total=int(total),
             total_pages=ceil(total / page_size) if total else 0,
+            style_groups=style_groups,
         )
 
     def get_inventory(self, user_id: int, item_id: int) -> InventoryItemResponse | None:
@@ -196,7 +234,7 @@ class InventoryService:
             query = query.where(Beer.style_id == style_id)
         return query
 
-    def _sort(self, sort: str):
+    def _sort(self, sort: str, *, user_id: int):
         if sort.startswith("-"):
             descending = True
             key = sort[1:]
@@ -211,7 +249,45 @@ class InventoryService:
             key = sort
         if key not in SORT_COLUMNS:
             raise InventoryFilterError("unsupported inventory sort")
-        return SORT_COLUMNS[key], descending
+        column = SORT_COLUMNS[key]
+        primary = desc(column) if descending else asc(column)
+        if key in {"abv", "best_before", "brewery", "style", "location", "quantity", "imported"}:
+            primary = primary.nulls_last()
+        if key in {"brewery", "style", "location", "beer_name", "match_status"}:
+            primary = desc(func.lower(column)) if descending else asc(func.lower(column))
+            if key in {"brewery", "style", "location"}:
+                primary = primary.nulls_last()
+        if key == "location":
+            # Build the displayed hierarchy in SQL without loading all locations in Python.
+            paths = (
+                select(
+                    Location.id.label("id"),
+                    Location.parent_id.label("parent_id"),
+                    Location.name.cast(String).label("path"),
+                )
+                .where(
+                    Location.user_id == user_id,
+                    Location.parent_id.is_(None),
+                )
+                .cte("inventory_location_paths", recursive=True)
+            )
+            child = Location.__table__.alias("child_location")
+            paths = paths.union_all(
+                select(
+                    child.c.id,
+                    child.c.parent_id,
+                    paths.c.path + literal(" → ") + child.c.name,
+                )
+                .join(paths, child.c.parent_id == paths.c.id)
+                .where(child.c.user_id == user_id)
+            )
+            path_expression = (
+                select(paths.c.path).where(paths.c.id == Location.id).scalar_subquery()
+            )
+            lowered_path = func.lower(path_expression)
+            ordered_path = desc(lowered_path) if descending else asc(lowered_path)
+            primary = ordered_path.nulls_last()
+        return [primary, asc(func.lower(Beer.name)), asc(InventoryItem.id)]
 
     def _location_paths(self, user_id: int) -> dict[int, LocationPathResponse]:
         locations = self.session.scalars(select(Location).where(Location.user_id == user_id)).all()

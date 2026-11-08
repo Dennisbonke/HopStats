@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -31,6 +31,7 @@ def inventory_list(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 25,
     sort: str = "beer_name_asc",
+    group_by: Literal["style"] | None = None,
 ):
     try:
         return InventoryService(session).list_inventory(
@@ -44,6 +45,7 @@ def inventory_list(
             page=page,
             page_size=page_size,
             sort=sort,
+            group_by=group_by,
         )
     except (InventoryFilterError, InventoryLocationNotFound) as exc:
         raise service_error(exc) from exc
