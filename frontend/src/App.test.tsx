@@ -1,4 +1,5 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, vi, test, expect } from "vitest";
 import App from "./App";
@@ -111,6 +112,28 @@ test("shows connection failure", async () => {
   expect(await screen.findByText("Backend: unavailable")).toBeInTheDocument();
 });
 
+test("mobile menu opens, closes on Escape and navigation, and marks the active route", async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={["/"]}>
+      <App />
+    </MemoryRouter>,
+  );
+  const toggle = await screen.findByRole("button", { name: "Main menu" });
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await user.click(toggle);
+  expect(toggle).toHaveAttribute("aria-expanded", "true");
+  expect(screen.getByRole("link", { name: "Dashboard" })).toHaveClass("active");
+  await user.keyboard("{Escape}");
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await user.click(toggle);
+  await user.click(screen.getByRole("link", { name: "Explorer" }));
+  await waitFor(() => expect(toggle).toHaveAttribute("aria-expanded", "false"));
+  expect(
+    await screen.findByRole("heading", { name: "Explorer" }),
+  ).toBeInTheDocument();
+});
+
 test("opens Explorer beers and marks the other catalogues as upcoming", async () => {
   render(
     <MemoryRouter initialEntries={["/explore"]}>
@@ -126,6 +149,16 @@ test("opens Explorer beers and marks the other catalogues as upcoming", async ()
   expect(
     screen.getByRole("navigation", { name: "Explorer sections" }),
   ).toHaveTextContent("Styles Upcoming");
+  expect(screen.getByRole("link", { name: "Beers" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  expect(
+    screen.getByText("Breweries", { selector: ".explorer-tab-unavailable" }),
+  ).toHaveAttribute("aria-disabled", "true");
+  expect(
+    screen.queryByRole("link", { name: /Breweries/ }),
+  ).not.toBeInTheDocument();
   expect(
     await screen.findByText("No checked-in beers match your search."),
   ).toBeInTheDocument();
