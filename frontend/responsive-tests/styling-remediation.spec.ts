@@ -1633,7 +1633,9 @@ test("Analytics breakdown tooltips follow touch movement at 320px", async ({
     const breakdown = page
       .locator(".analytics-chart-panel")
       .filter({ hasText: "Check-in Breakdown" });
+    await breakdown.scrollIntoViewIfNeeded();
     const firstBar = breakdown.locator(".recharts-bar-rectangle").first();
+    await firstBar.scrollIntoViewIfNeeded();
     await expect(firstBar).toBeAttached();
     let barBox = await firstBar.boundingBox();
     await expect
