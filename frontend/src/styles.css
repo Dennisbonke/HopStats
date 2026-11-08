@@ -66,12 +66,12 @@ body {
   margin: 0;
   color: #a32920;
 }
-.logout-button {
+.app-header .logout-button {
   padding: 0.5rem 0.7rem;
   background: transparent;
   color: #cbd5e1;
 }
-.logout-button:hover {
+.app-header .logout-button:hover {
   background: #334155;
   color: white;
 }
@@ -85,7 +85,7 @@ body {
 .app {
   min-height: 100vh;
 }
-header {
+.app-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -120,13 +120,13 @@ header {
   font-size: 1.35rem;
   font-weight: 700;
 }
-nav {
+.app-header nav {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
   min-width: 0;
 }
-nav a {
+.app-header nav a {
   color: #cbd5e1;
   text-decoration: none;
   padding: 0.5rem 0.75rem;
@@ -1682,9 +1682,9 @@ section {
 .inventory-style-group {
   min-width: 0;
   padding: 0.75rem;
-  border: 1px solid #dce5e2;
+  border: 1px solid #cbd5e1;
   border-radius: 0.55rem;
-  background: #fbfdfc;
+  background: #f5f7fb;
 }
 .inventory-style-group h3 {
   margin: 0 0 0.5rem;
@@ -1703,11 +1703,34 @@ section {
 .inventory-style-group .inventory-cards {
   gap: 0.5rem;
 }
-@media (prefers-color-scheme: dark) {
-  .inventory-style-group {
-    border-color: #3c4b49;
-    background: #172320;
-  }
+.inventory-style-group .inventory-card {
+  min-width: 0;
+  padding: 0.75rem;
+  background: white;
+}
+.inventory-style-group .inventory-table td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.inventory-style-group .inventory-card-title > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.inventory-style-group .inventory-card-title {
+  min-width: 0;
+}
+.inventory-style-group .inventory-card-title h3,
+.inventory-style-group .inventory-card-title p,
+.inventory-style-group .inventory-card-title > strong {
+  overflow-wrap: anywhere;
+}
+.inventory-style-group .inventory-card-title > strong {
+  white-space: normal;
+}
+.inventory-style-group .inventory-card-meta > span,
+.inventory-style-group .location-line {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .inventory-card h3 {
   margin: 0;
@@ -2473,7 +2496,7 @@ section {
   .dashboard-eyebrow,
   .dashboard-metric-card h2,
   .dashboard-metric-card p,
-  .panel-explanation,
+  .dashboard-panel .panel-explanation,
   .dashboard-chart-caption,
   .dashboard-chart-footnote,
   .dashboard-empty-compact,
@@ -2830,15 +2853,15 @@ h2 {
   color: #946200;
 }
 @media (max-width: 520px) {
-  header {
+  .app-header {
     align-items: flex-start;
     flex-direction: column;
   }
-  nav {
+  .app-header nav {
     width: 100%;
     justify-content: space-between;
   }
-  nav a {
+  .app-header nav a {
     flex: 1;
     text-align: center;
   }
