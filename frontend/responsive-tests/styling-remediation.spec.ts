@@ -1456,13 +1456,13 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
     context: string,
     edge?: "top" | "bottom",
   ) => {
+    let barBox = await bar.boundingBox();
     await expect
       .poll(async () => {
-        const bounds = await bar.boundingBox();
-        return !!bounds && bounds.width > 0 && bounds.height > 0;
+        barBox = await bar.boundingBox();
+        return !!barBox && barBox.width > 0 && barBox.height > 0;
       })
       .toBe(true);
-    let barBox = await bar.boundingBox();
     expect(barBox).not.toBeNull();
     if (edge) {
       const targetY = edge === "top" ? 18 : viewport.height - 18;
@@ -1470,7 +1470,12 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
         ({ currentY, targetY }) => window.scrollBy(0, currentY - targetY),
         { currentY: barBox!.y + barBox!.height / 2, targetY },
       );
-      barBox = await bar.boundingBox();
+      await expect
+        .poll(async () => {
+          barBox = await bar.boundingBox();
+          return !!barBox && barBox.width > 0 && barBox.height > 0;
+        })
+        .toBe(true);
       expect(barBox).not.toBeNull();
     }
     const pointer = {
