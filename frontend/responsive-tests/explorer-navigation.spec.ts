@@ -96,6 +96,9 @@ test("Explorer colors and active tab stay distinct in light and dark themes", as
     const themeIsolation = await page.evaluate(() => ({
       pageBackground: getComputedStyle(document.documentElement)
         .backgroundColor,
+      explorerBackground: getComputedStyle(
+        document.querySelector(".explorer-page") as HTMLElement,
+      ).backgroundColor,
       explorerScheme: getComputedStyle(
         document.querySelector(".explorer-page") as HTMLElement,
       ).colorScheme,
@@ -106,6 +109,9 @@ test("Explorer colors and active tab stay distinct in light and dark themes", as
         .trim(),
     }));
     expect(themeIsolation.pageBackground).toBe("rgb(245, 247, 251)");
+    expect(themeIsolation.explorerBackground).toBe(
+      colorScheme === "dark" ? "rgb(16, 25, 35)" : "rgb(245, 247, 251)",
+    );
     expect(themeIsolation.explorerScheme).toBe(colorScheme);
     expect(themeIsolation.explorerSurface).toBe(
       colorScheme === "dark" ? "#172533" : "#ffffff",
@@ -126,7 +132,7 @@ test("Explorer colors and active tab stay distinct in light and dark themes", as
     expect(
       await contrastRatio(
         page.getByRole("heading", { name: "Explorer" }),
-        "html",
+        ".explorer-page",
       ),
     ).toBeGreaterThanOrEqual(4.5);
     expect(
@@ -234,7 +240,10 @@ test("upcoming Explorer sections remain unavailable in the tab strip", async ({
     await expect(unavailable).toHaveAttribute("aria-disabled", "true");
     await expect(unavailable).not.toHaveAttribute("href", /./);
     expect(
-      await contrastRatio(unavailable.locator(".upcoming-label"), "html"),
+      await contrastRatio(
+        unavailable.locator(".upcoming-label"),
+        ".explorer-page",
+      ),
     ).toBeGreaterThanOrEqual(4.5);
   }
 });

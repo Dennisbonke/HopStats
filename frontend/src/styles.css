@@ -154,6 +154,7 @@ section {
 }
 .explorer-page {
   color-scheme: light;
+  --page-bg: #f5f7fb;
   --surface: #ffffff;
   --surface-muted: #eef2f7;
   --surface-danger: #fff1f0;
@@ -162,11 +163,13 @@ section {
   --border: #cbd5e1;
   --accent: #176b4d;
   --danger: #a32920;
+  background: var(--page-bg);
   color: var(--text-primary);
 }
 @media (prefers-color-scheme: dark) {
   .explorer-page {
     color-scheme: dark;
+    --page-bg: #101923;
     --surface: #172533;
     --surface-muted: #253747;
     --surface-danger: #422c32;
