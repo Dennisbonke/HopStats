@@ -910,7 +910,8 @@ test("weekly chart tooltips stay within the document after orientation changes",
         visualViewportOffsetLeft: window.visualViewport?.offsetLeft ?? null,
         chartContainer: bounds(".chart-canvas .recharts-responsive-container"),
         chartSvg: bounds(".chart-canvas .recharts-wrapper"),
-        tooltip: bounds(".chart-canvas .recharts-tooltip-wrapper"),
+        // Analytics tooltips use a body portal to escape clipped chart cards.
+        tooltip: bounds("body > .recharts-tooltip-wrapper"),
       };
     });
   const before = await measureLayout();

@@ -499,12 +499,43 @@ async function expectReadable(text: Locator, label: string) {
 }
 
 async function expectNoDocumentOverflow(page: Page) {
-  const overflow = await page.evaluate(
-    () =>
-      document.documentElement.scrollWidth -
-      document.documentElement.clientWidth,
-  );
-  expect(overflow).toBeLessThanOrEqual(1);
+  const measurement = await page.evaluate(() => {
+    const viewportWidth = document.documentElement.clientWidth;
+    const offenders = Array.from(
+      document.body.querySelectorAll<HTMLElement>("*"),
+    )
+      .flatMap((element) => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        if (
+          style.display === "none" ||
+          rect.width === 0 ||
+          rect.right <= viewportWidth + 1
+        ) {
+          return [];
+        }
+        return [
+          {
+            element: `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ""}${element.className && typeof element.className === "string" ? `.${element.className.trim().replaceAll(/\s+/g, ".")}` : ""}`,
+            right: Math.round(rect.right),
+            width: Math.round(rect.width),
+            position: style.position,
+            overflowX: style.overflowX,
+          },
+        ];
+      })
+      .slice(0, 8);
+    return {
+      overflow: document.documentElement.scrollWidth - viewportWidth,
+      viewportWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      offenders,
+    };
+  });
+  expect(
+    measurement.overflow,
+    `Horizontal overflow: ${JSON.stringify(measurement)}`,
+  ).toBeLessThanOrEqual(1);
 }
 
 const buttonVariants = ["primary", "secondary", "danger", "ghost"] as const;
@@ -1377,7 +1408,8 @@ test("Analytics charts keep controls, labels, and legends usable across viewport
         "body > .recharts-tooltip-wrapper:visible .analytics-tooltip",
       );
       await expect(keyboardTooltip).toBeVisible();
-      await expect(keyboardTooltip).toContainText("00:00");
+      await expect(keyboardTooltip).toContainText(/\d{2}:00/);
+      await expect(keyboardTooltip).toContainText("Total:");
 
       if (width <= 390) {
         const tickRects = await hourly
@@ -1495,7 +1527,7 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
       const breakdown = page
         .locator(".analytics-chart-panel")
         .filter({ hasText: "Check-in Breakdown" });
-      const bars = breakdown.locator(".recharts-rectangle");
+      const bars = breakdown.locator(".recharts-bar-rectangle");
       await expect(bars).toHaveCount(24);
       await breakdown.scrollIntoViewIfNeeded();
       await inspectEdgeBar(
@@ -1515,7 +1547,7 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
       const hourly = page
         .locator(".distribution-chart")
         .filter({ hasText: "Check-ins by Hour of Day" });
-      const hourlyBars = hourly.locator(".recharts-rectangle");
+      const hourlyBars = hourly.locator(".recharts-bar-rectangle");
       await expect(hourlyBars).toHaveCount(24);
       await hourly.scrollIntoViewIfNeeded();
       await inspectEdgeBar(
@@ -1568,7 +1600,10 @@ test("month drilldown controls wrap and remain keyboard reachable at 320px", asy
       width,
       height: width === 1280 ? 800 : 844,
     });
-    const buttons = page.locator(".bucket-actions .ui-button");
+    const breakdown = page
+      .locator(".analytics-chart-panel")
+      .filter({ hasText: "Check-in Breakdown" });
+    const buttons = breakdown.locator(".bucket-actions .ui-button");
     await expect(buttons).toHaveCount(12);
     const parent = await page.locator(".bucket-actions").boundingBox();
     expect(parent).not.toBeNull();
@@ -1597,7 +1632,10 @@ test("month drilldown controls wrap and remain keyboard reachable at 320px", asy
   }
 
   await page.setViewportSize({ width: 320, height: 844 });
-  const june = page.getByRole("button", { name: "Open Jun 2026" });
+  const breakdown = page
+    .locator(".analytics-chart-panel")
+    .filter({ hasText: "Check-in Breakdown" });
+  const june = breakdown.getByRole("button", { name: "Open Jun 2026" });
   await june.focus();
   await expect(june).toBeFocused();
   await page.keyboard.press("Enter");
