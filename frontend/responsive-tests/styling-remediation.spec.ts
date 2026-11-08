@@ -362,16 +362,19 @@ test("grouped Inventory stays readable and wraps at mobile and desktop widths", 
   const groupToggle = page.getByLabel("Group by beer style");
   await expect(groupToggle).toBeVisible();
   await groupToggle.check();
-  await expect(
-    page.locator(".inventory-style-group").first().locator(":scope > h3"),
-  ).toContainText("(2 total)");
+  const longStyleGroup = page
+    .locator(".inventory-style-group")
+    .filter({ hasText: longStyleName });
+  await expect(longStyleGroup.locator(":scope > h3")).toContainText(
+    "(2 total)",
+  );
   await expect(page.locator(".inventory-style-group")).toHaveCount(3);
 
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
     for (const width of [320, 390, 1280]) {
       await page.setViewportSize({ width, height: width === 1280 ? 800 : 844 });
-      const group = page.locator(".inventory-style-group").first();
+      const group = longStyleGroup;
       const groupHeading = group.locator(":scope > h3");
       const groupCount = groupHeading.locator("span");
       const isMobile = width <= 520;
