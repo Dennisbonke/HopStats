@@ -116,11 +116,11 @@ body {
   background: var(--color-canvas);
   color: var(--color-text-primary);
 }
-.explorer-heading h2 {
+.explorer-page .page-heading h2 {
   margin: 0;
   color: var(--color-text-primary);
 }
-.explorer-heading p {
+.explorer-page .page-heading p {
   color: var(--color-text-secondary);
   margin: 0.4rem 0 1rem;
 }

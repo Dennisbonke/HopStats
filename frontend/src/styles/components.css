@@ -90,21 +90,6 @@
   }
 }
 
-@media (max-width: 520px) {
-  .app-header {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .app-header nav {
-    width: 100%;
-    justify-content: space-between;
-  }
-  .app-header nav a {
-    flex: 1;
-    text-align: center;
-  }
-}
-
 /* Shared action styling, ready for gradual adoption by React primitives. */
 .app :where(button),
 .login-page :where(button) {

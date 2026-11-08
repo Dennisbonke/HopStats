@@ -105,7 +105,7 @@ test("Explorer colors and active tab stay distinct in light and dark themes", as
       explorerSurface: getComputedStyle(
         document.querySelector(".explorer-page") as HTMLElement,
       )
-        .getPropertyValue("--surface")
+        .getPropertyValue("--color-surface")
         .trim(),
     }));
     expect(themeIsolation.pageBackground).toBe("rgb(245, 247, 251)");
