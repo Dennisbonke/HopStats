@@ -356,6 +356,7 @@ body {
   }
   .explorer-tabs {
     gap: 0.1rem;
+    flex-wrap: wrap;
   }
   .explorer-tabs a,
   .explorer-tabs .explorer-tab-unavailable {
