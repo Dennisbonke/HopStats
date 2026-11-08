@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 export function ExplorerUpcoming({ title }: { title: string }) {
   return (
@@ -13,6 +13,7 @@ export function ExplorerUpcoming({ title }: { title: string }) {
 }
 
 export default function ExplorerLayout() {
+  const location = useLocation();
   return (
     <div className="explorer-page">
       <div className="page-heading">
@@ -20,13 +21,21 @@ export default function ExplorerLayout() {
         <p>Browse beers from your personal check-in history.</p>
       </div>
       <nav className="explorer-tabs" aria-label="Explorer sections">
-        <NavLink to="/explore/beers">Beers</NavLink>
-        <NavLink to="/explore/breweries">
-          Breweries <span>Upcoming</span>
+        <NavLink
+          to="/explore/beers"
+          end
+          aria-current={
+            location.pathname === "/explore/beers" ? "page" : undefined
+          }
+        >
+          Beers
         </NavLink>
-        <NavLink to="/explore/styles">
-          Styles <span>Upcoming</span>
-        </NavLink>
+        <span className="explorer-tab-unavailable" aria-disabled="true">
+          Breweries <span className="upcoming-label">Upcoming</span>
+        </span>
+        <span className="explorer-tab-unavailable" aria-disabled="true">
+          Styles <span className="upcoming-label">Upcoming</span>
+        </span>
       </nav>
       <Outlet />
     </div>

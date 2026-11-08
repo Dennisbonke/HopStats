@@ -54,6 +54,15 @@ export default function App() {
   );
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const [logoutLoading, setLogoutLoading] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mobileMenuOpen]);
   useEffect(() => {
     let mounted = true;
     fetchCurrentUser()
@@ -126,18 +135,40 @@ export default function App() {
 
   return (
     <div className="app">
-      <header>
+      <header className="app-header">
         <div className="brand">🍺 HopStats</div>
-        <nav>
+        <button
+          type="button"
+          className="mobile-menu-toggle"
+          aria-expanded={mobileMenuOpen}
+          aria-controls="main-navigation"
+          onClick={() => setMobileMenuOpen((open) => !open)}
+        >
+          <span className="visually-hidden">Main menu</span>
+          <span aria-hidden="true">{mobileMenuOpen ? "×" : "☰"}</span>
+        </button>
+        <nav
+          id="main-navigation"
+          className={mobileMenuOpen ? "is-open" : ""}
+          aria-label="Main navigation"
+        >
           {links.map(([to, label]) => (
-            <NavLink key={to} to={to} end={to === "/"}>
+            <NavLink
+              key={to}
+              to={to}
+              end={to === "/"}
+              onClick={() => setMobileMenuOpen(false)}
+            >
               {label}
             </NavLink>
           ))}
           <button
             type="button"
             className="logout-button"
-            onClick={() => void signOut()}
+            onClick={() => {
+              setMobileMenuOpen(false);
+              void signOut();
+            }}
             disabled={logoutLoading}
           >
             {logoutLoading
