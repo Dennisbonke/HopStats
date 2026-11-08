@@ -363,7 +363,7 @@ test("grouped Inventory stays readable and wraps at mobile and desktop widths", 
   await expect(groupToggle).toBeVisible();
   await groupToggle.check();
   await expect(
-    page.locator(".inventory-style-group").first().locator("h3"),
+    page.locator(".inventory-style-group").first().locator(":scope > h3"),
   ).toContainText("(2 total)");
   await expect(page.locator(".inventory-style-group")).toHaveCount(3);
 
@@ -372,8 +372,8 @@ test("grouped Inventory stays readable and wraps at mobile and desktop widths", 
     for (const width of [320, 390, 1280]) {
       await page.setViewportSize({ width, height: width === 1280 ? 800 : 844 });
       const group = page.locator(".inventory-style-group").first();
-      const groupHeading = group.locator("h3");
-      const groupCount = group.locator("h3 span");
+      const groupHeading = group.locator(":scope > h3");
+      const groupCount = groupHeading.locator("span");
       const isMobile = width <= 520;
       const beerName = isMobile
         ? group.locator(".inventory-card h3").first()
