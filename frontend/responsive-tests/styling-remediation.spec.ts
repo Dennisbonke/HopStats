@@ -1611,6 +1611,61 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
   }
 });
 
+test("Analytics breakdown tooltips open from touch at 320px", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    viewport: { width: 320, height: 844 },
+    hasTouch: true,
+  });
+  const page = await context.newPage();
+
+  try {
+    await stubApplication(
+      page,
+      analyticsResponsiveCheckins,
+      analyticsResponsiveTrends,
+    );
+    await page.goto(
+      "/analytics?period=custom&start=2026-01-01&end=2026-12-31&granularity=month",
+    );
+
+    const breakdown = page
+      .locator(".analytics-chart-panel")
+      .filter({ hasText: "Check-in Breakdown" });
+    const firstBar = breakdown.locator(".recharts-bar-rectangle").first();
+    await expect(firstBar).toBeAttached();
+    let barBox = await firstBar.boundingBox();
+    await expect
+      .poll(async () => {
+        barBox = await firstBar.boundingBox();
+        return !!barBox && barBox.width > 0 && barBox.height > 0;
+      })
+      .toBe(true);
+    expect(barBox).not.toBeNull();
+
+    await page.touchscreen.tap(
+      barBox!.x + barBox!.width / 2,
+      barBox!.y + barBox!.height / 2,
+    );
+    const tooltip = page
+      .locator("body > .recharts-tooltip-wrapper:visible .analytics-tooltip")
+      .filter({ hasText: "Jan 2026" });
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toContainText("New discoveries:");
+
+    const tooltipBox = await tooltip.boundingBox();
+    expect(tooltipBox).not.toBeNull();
+    expect(tooltipBox!.x).toBeGreaterThanOrEqual(0);
+    expect(tooltipBox!.y).toBeGreaterThanOrEqual(0);
+    expect(tooltipBox!.x + tooltipBox!.width).toBeLessThanOrEqual(321);
+    expect(tooltipBox!.y + tooltipBox!.height).toBeLessThanOrEqual(845);
+    await expectNoDocumentOverflow(page);
+  } finally {
+    await context.close();
+  }
+});
+
 test("month drilldown controls wrap and remain keyboard reachable at 320px", async ({
   page,
 }) => {
