@@ -1,0 +1,491 @@
+import { expect, test, type Locator, type Page } from "@playwright/test";
+
+const longBeerName =
+  "Imperial Double Dry Hopped Pale Ale with a Remarkably Long Seasonal Release Name That Should Wrap on Narrow Screens";
+const longBreweryName =
+  "The Independent Brewery with an Exceptionally Long Regional Name and Brewing Company";
+const longLocationPath =
+  "Cellar → North Storage Room → Top Shelf → Long Term Bottle Conditioning Area";
+const longStyleName =
+  "Imperial IPA with an Exceptionally Long Dry-Hopped Seasonal Release Name";
+
+const inventoryItems = [
+  {
+    id: 1,
+    source_item_id: "inventory-1",
+    source_system: "untappd_stash",
+    source_name: "Test stash",
+    beer_id: 1,
+    beer_name: longBeerName,
+    brewery_name: longBreweryName,
+    style_id: 1,
+    style_name: longStyleName,
+    abv: 8.2,
+    ibu: 72,
+    photo_url: null,
+    quantity: 2,
+    container: "Bottle",
+    notes: null,
+    purchase_date: null,
+    bottled_date: null,
+    best_before: "2027-06-01",
+    raw_best_before: null,
+    best_before_suspicious: false,
+    purchase_location: null,
+    purchase_price: null,
+    created_at_source: null,
+    imported_at: "2026-01-01T00:00:00Z",
+    location: { id: 1, name: "Top Shelf", path: longLocationPath },
+    location_resolution_status: "resolved",
+    location_resolution_source: "exact",
+    location_resolution_detail: null,
+    match_status: "exact",
+    matched_checkin_beer_id: 11,
+    source_metadata: null,
+  },
+  {
+    id: 2,
+    source_item_id: "inventory-2",
+    source_system: "untappd_stash",
+    source_name: "Test stash",
+    beer_id: 2,
+    beer_name: "A Second Imperial IPA with a Long Name",
+    brewery_name: "Another Long Named Brewery",
+    style_id: 1,
+    style_name: longStyleName,
+    abv: 7.8,
+    ibu: 65,
+    photo_url: null,
+    quantity: 1,
+    container: "Can",
+    notes: null,
+    purchase_date: null,
+    bottled_date: null,
+    best_before: null,
+    raw_best_before: null,
+    best_before_suspicious: false,
+    purchase_location: null,
+    purchase_price: null,
+    created_at_source: null,
+    imported_at: "2026-01-01T00:00:00Z",
+    location: { id: 1, name: "Top Shelf", path: longLocationPath },
+    location_resolution_status: "resolved",
+    location_resolution_source: "exact",
+    location_resolution_detail: null,
+    match_status: "ambiguous",
+    matched_checkin_beer_id: null,
+    source_metadata: null,
+  },
+  {
+    id: 3,
+    source_item_id: "inventory-3",
+    source_system: "untappd_stash",
+    source_name: "Test stash",
+    beer_id: 3,
+    beer_name: "Unresolved Pilsner",
+    brewery_name: null,
+    style_id: 2,
+    style_name: "Pilsner",
+    abv: null,
+    ibu: null,
+    photo_url: null,
+    quantity: 4,
+    container: null,
+    notes: null,
+    purchase_date: null,
+    bottled_date: null,
+    best_before: null,
+    raw_best_before: null,
+    best_before_suspicious: false,
+    purchase_location: null,
+    purchase_price: null,
+    created_at_source: null,
+    imported_at: "2026-01-01T00:00:00Z",
+    location: null,
+    location_resolution_status: "unresolved",
+    location_resolution_source: null,
+    location_resolution_detail: null,
+    match_status: "external_id",
+    matched_checkin_beer_id: 13,
+    source_metadata: null,
+  },
+  {
+    id: 4,
+    source_item_id: "inventory-4",
+    source_system: "untappd_stash",
+    source_name: "Test stash",
+    beer_id: 4,
+    beer_name: "Seasonal Sour",
+    brewery_name: "Orchard Brewery",
+    style_id: 3,
+    style_name: "Fruited Sour Ale",
+    abv: 5.1,
+    ibu: 12,
+    photo_url: null,
+    quantity: 1,
+    container: "Bottle",
+    notes: null,
+    purchase_date: null,
+    bottled_date: null,
+    best_before: null,
+    raw_best_before: null,
+    best_before_suspicious: false,
+    purchase_location: null,
+    purchase_price: null,
+    created_at_source: null,
+    imported_at: "2026-01-01T00:00:00Z",
+    location: { id: 2, name: "Fridge", path: "Kitchen → Fridge" },
+    location_resolution_status: "resolved",
+    location_resolution_source: "exact",
+    location_resolution_detail: null,
+    match_status: "unmatched",
+    matched_checkin_beer_id: null,
+    source_metadata: null,
+  },
+];
+
+const checkins = {
+  start: "2026-01-01",
+  end: "2026-02-28",
+  timezone: "Europe/Amsterdam",
+  granularity: "month",
+  summary: {
+    total_checkins: 7,
+    new_discoveries: 3,
+    repeat_checkins: 4,
+    distinct_beers: 5,
+  },
+  cumulative_baseline_checkins: 12,
+  cumulative_baseline_discoveries: 8,
+  buckets: [
+    {
+      key: "2026-01",
+      label: "Jan 2026",
+      start: "2026-01-01",
+      end: "2026-01-31",
+      new_discoveries: 2,
+      repeat_checkins: 3,
+      total_checkins: 5,
+      cumulative_checkins: 17,
+      cumulative_discoveries: 10,
+    },
+    {
+      key: "2026-02",
+      label: "Feb 2026",
+      start: "2026-02-01",
+      end: "2026-02-28",
+      new_discoveries: 1,
+      repeat_checkins: 1,
+      total_checkins: 2,
+      cumulative_checkins: 19,
+      cumulative_discoveries: 11,
+    },
+  ],
+};
+
+const drinkingTrends = {
+  start: "2026-01-01",
+  end: "2026-12-31",
+  timezone: "Europe/Amsterdam",
+  daily: Array.from({ length: 365 }, (_, index) => ({
+    date: new Date(Date.UTC(2026, 0, index + 1)).toISOString().slice(0, 10),
+    total: index % 3,
+    discoveries: index % 2,
+    repeats: index % 2,
+  })),
+  weekday: Array.from({ length: 7 }, (_, weekday) => ({
+    weekday,
+    total: weekday + 1,
+    discoveries: weekday % 2,
+    repeats: weekday,
+    days_in_period: 52,
+  })),
+  hourly: Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    total: hour % 4,
+    discoveries: hour % 2,
+    repeats: hour % 3,
+  })),
+  weekday_hour: Array.from({ length: 168 }, (_, index) => ({
+    weekday: Math.floor(index / 24),
+    hour: index % 24,
+    total: (index % 6) + 1,
+    discoveries: index % 2,
+    repeats: index % 3,
+  })),
+};
+
+async function stubApplication(page: Page) {
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const body: Record<string, unknown> = {
+      "/api/v1/auth/me": {
+        id: 1,
+        username: "styling-test",
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      "/api/v1/health": { status: "ok" },
+      "/api/v1/inventory/styles": [
+        { id: 1, name: longStyleName },
+        { id: 2, name: "Pilsner" },
+        { id: 3, name: "Fruited Sour Ale" },
+      ],
+      "/api/v1/locations": {
+        locations: [],
+        unresolved: { record_count: 0, total_units: 0 },
+      },
+      "/api/v1/analytics/checkins": checkins,
+      "/api/v1/analytics/drinking-trends": drinkingTrends,
+    };
+    if (path === "/api/v1/inventory") {
+      await route.fulfill({
+        json: {
+          items: inventoryItems,
+          page: 1,
+          page_size: 25,
+          total: inventoryItems.length,
+          total_pages: 1,
+          style_groups: [
+            { style_id: 1, style_name: longStyleName, total: 2 },
+            { style_id: 2, style_name: "Pilsner", total: 1 },
+            { style_id: 3, style_name: "Fruited Sour Ale", total: 1 },
+          ],
+        },
+      });
+      return;
+    }
+    await route.fulfill({
+      status: path in body ? 200 : 404,
+      json: body[path] ?? { detail: "Not found" },
+    });
+  });
+}
+
+async function renderedContrast(text: Locator) {
+  return text.evaluate((node) => {
+    type Color = { red: number; green: number; blue: number; alpha: number };
+    const parse = (value: string): Color => {
+      const channels = value.match(/[\d.]+/g)?.map(Number) ?? [];
+      return {
+        red: channels[0] ?? 0,
+        green: channels[1] ?? 0,
+        blue: channels[2] ?? 0,
+        alpha: channels[3] ?? 1,
+      };
+    };
+    const composite = (foreground: Color, background: Color): Color => {
+      const alpha =
+        foreground.alpha + background.alpha * (1 - foreground.alpha);
+      if (alpha === 0) return { red: 255, green: 255, blue: 255, alpha: 1 };
+      return {
+        red:
+          (foreground.red * foreground.alpha +
+            background.red * background.alpha * (1 - foreground.alpha)) /
+          alpha,
+        green:
+          (foreground.green * foreground.alpha +
+            background.green * background.alpha * (1 - foreground.alpha)) /
+          alpha,
+        blue:
+          (foreground.blue * foreground.alpha +
+            background.blue * background.alpha * (1 - foreground.alpha)) /
+          alpha,
+        alpha,
+      };
+    };
+    const chain: HTMLElement[] = [];
+    let current: HTMLElement | null = node as HTMLElement;
+    while (current) {
+      chain.push(current);
+      current = current.parentElement;
+    }
+    let background: Color = { red: 255, green: 255, blue: 255, alpha: 1 };
+    let opacity = 1;
+    const filters: string[] = [];
+    const nonOpaqueAncestors: string[] = [];
+    for (const element of chain.reverse()) {
+      const style = getComputedStyle(element);
+      background = composite(parse(style.backgroundColor), background);
+      opacity *= Number(style.opacity);
+      if (style.opacity !== "1") nonOpaqueAncestors.push(style.opacity);
+      if (style.filter !== "none") filters.push(style.filter);
+    }
+    const foreground = parse(getComputedStyle(node).color);
+    foreground.alpha *= opacity;
+    const visibleForeground = composite(foreground, background);
+    const luminance = (color: Color) => {
+      const linear = [color.red, color.green, color.blue].map((channel) => {
+        const value = channel / 255;
+        return value <= 0.04045
+          ? value / 12.92
+          : ((value + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+    };
+    const values = [luminance(visibleForeground), luminance(background)].sort(
+      (left, right) => right - left,
+    );
+    return {
+      ratio: (values[0] + 0.05) / (values[1] + 0.05),
+      foreground: getComputedStyle(node).color,
+      background: `rgb(${Math.round(background.red)}, ${Math.round(background.green)}, ${Math.round(background.blue)})`,
+      nonOpaqueAncestors,
+      filters,
+    };
+  });
+}
+
+async function expectReadable(text: Locator, label: string) {
+  const result = await renderedContrast(text);
+  expect(result.nonOpaqueAncestors, `${label} ancestor opacity`).toEqual([]);
+  expect(result.filters, `${label} ancestor filters`).toEqual([]);
+  expect(
+    result.ratio,
+    `${label}: ${JSON.stringify(result)}`,
+  ).toBeGreaterThanOrEqual(4.5);
+}
+
+async function expectNoDocumentOverflow(page: Page) {
+  const overflow = await page.evaluate(
+    () =>
+      document.documentElement.scrollWidth -
+      document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+}
+
+test("grouped Inventory stays readable and wraps at mobile and desktop widths", async ({
+  page,
+}) => {
+  await stubApplication(page);
+  await page.goto("/inventory");
+  const groupToggle = page.getByLabel("Group by beer style");
+  await expect(groupToggle).toBeVisible();
+  await groupToggle.check();
+  const longStyleGroup = page
+    .locator(".inventory-style-group")
+    .filter({ hasText: longStyleName });
+  await expect(longStyleGroup.locator(":scope > h3")).toContainText(
+    "(2 total)",
+  );
+  await expect(page.locator(".inventory-style-group")).toHaveCount(3);
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: width === 1280 ? 800 : 844 });
+      const group = longStyleGroup;
+      const groupHeading = group.locator(":scope > h3");
+      const groupCount = groupHeading.locator("span");
+      const isMobile = width <= 520;
+      const beerName = isMobile
+        ? group.locator(".inventory-card h3").first()
+        : group.locator(".inventory-table td:first-child strong").first();
+      const metadata = isMobile
+        ? group.locator(".inventory-card-meta span").first()
+        : group.locator(".inventory-table td:first-child .muted").first();
+      await expectReadable(groupHeading, `${colorScheme} group heading`);
+      await expectReadable(groupCount, `${colorScheme} group count`);
+      await expectReadable(beerName, `${colorScheme} beer name`);
+      await expectReadable(metadata, `${colorScheme} brewery metadata`);
+      for (const status of await page
+        .locator(".inventory-style-group .status-pill")
+        .all()) {
+        await expectReadable(status, `${colorScheme} status label`);
+      }
+
+      const surfaces = await group.evaluate((element) => {
+        const groupStyle = getComputedStyle(element);
+        const card = element.querySelector<HTMLElement>(".inventory-card");
+        return {
+          group: groupStyle.backgroundColor,
+          card: card ? getComputedStyle(card).backgroundColor : null,
+          groupBorder: groupStyle.borderTopColor,
+          cardBorder: card ? getComputedStyle(card).borderTopColor : null,
+        };
+      });
+      expect(surfaces.card).not.toBe(surfaces.group);
+      expect(surfaces.cardBorder).not.toBe(surfaces.groupBorder);
+      await expectNoDocumentOverflow(page);
+
+      if (isMobile) {
+        await expect(
+          page.locator(".inventory-style-group .inventory-cards").first(),
+        ).toBeVisible();
+        const longText = await group
+          .locator(
+            ".inventory-card-title, .inventory-card-title h3, .inventory-card-title p, .inventory-card-meta, .location-line",
+          )
+          .evaluateAll((elements) =>
+            elements.map((element) => ({
+              text: element.textContent,
+              client: element.clientWidth,
+              scroll: element.scrollWidth,
+            })),
+          );
+        for (const element of longText) {
+          expect(
+            element.scroll,
+            `${colorScheme} ${width}px text overflow: ${element.text}`,
+          ).toBeLessThanOrEqual(element.client + 1);
+        }
+      }
+    }
+  }
+});
+
+test("application header styling stays scoped away from Analytics headings", async ({
+  page,
+}) => {
+  await stubApplication(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.goto("/analytics");
+    await expect(page.getByText("Check-in Breakdown")).toBeVisible();
+    const appHeader = page.locator(".app-header");
+    await expect(appHeader).toHaveCSS("background-color", "rgb(23, 32, 51)");
+    await expect(appHeader).toHaveCSS("color", "rgb(255, 255, 255)");
+    for (const description of await page
+      .locator(".analytics-chart-panel .panel-explanation")
+      .all()) {
+      await expectReadable(description, `${colorScheme} Analytics description`);
+    }
+
+    const menuButton = page.getByRole("button", { name: "Main menu" });
+    await expect(menuButton).toHaveAttribute("aria-expanded", "false");
+    await menuButton.click();
+    await expect(menuButton).toHaveAttribute("aria-expanded", "true");
+    const navigation = page.getByRole("navigation", {
+      name: "Main navigation",
+    });
+    await expect(navigation).toBeVisible();
+    await navigation.getByRole("link", { name: "Dashboard" }).click();
+    await expect(menuButton).toHaveAttribute("aria-expanded", "false");
+    await page.goto("/analytics");
+    await page.getByRole("tab", { name: "Drinking Trends" }).click();
+
+    const trendsHeader = page.locator(".drinking-trends-view > header");
+    await expect(trendsHeader).toBeVisible();
+    await expect(trendsHeader).toHaveCSS(
+      "background-color",
+      "rgba(0, 0, 0, 0)",
+    );
+    await expectReadable(
+      trendsHeader.getByRole("heading", { name: "Drinking Trends" }),
+      `${colorScheme} Drinking Trends heading`,
+    );
+
+    const heatmapHeader = page.locator(".weekday-hour-heatmap > header");
+    await expect(heatmapHeader).toBeVisible();
+    await expect(heatmapHeader).toHaveCSS(
+      "background-color",
+      "rgba(0, 0, 0, 0)",
+    );
+    await expectReadable(
+      heatmapHeader.locator("#weekday-hour-instructions"),
+      `${colorScheme} weekday/hour explanation`,
+    );
+  }
+});
