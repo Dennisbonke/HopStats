@@ -192,31 +192,12 @@ body {
   gap: 0.75rem;
   margin-bottom: 1rem;
 }
-.explorer-controls label {
-  display: grid;
-  gap: 0.3rem;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
+.explorer-controls .ui-form-field {
   min-width: 0;
+  font-size: 0.88rem;
 }
 .explorer-search-control {
   flex: 1;
-}
-.explorer-controls input,
-.explorer-controls select {
-  min-height: 2.6rem;
-  min-width: 0;
-  width: 100%;
-  border: 1px solid var(--color-border);
-  border-radius: 0.4rem;
-  padding: 0.45rem 0.6rem;
-  font: inherit;
-  background: var(--color-surface);
-  color: var(--color-text-primary);
-}
-.explorer-controls button {
-  min-height: 2.6rem;
 }
 .explorer-state {
   padding: 1rem;
@@ -277,17 +258,10 @@ body {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
-  padding: 0.85rem;
-  border: 1px solid var(--color-border);
-  border-radius: 0.55rem;
 }
 .explorer-beer-card-content {
   min-width: 0;
   flex: 1;
-}
-.explorer-beer-card {
-  background: var(--color-surface);
-  color: var(--color-text-primary);
 }
 .explorer-beer-card h4 {
   margin: 0 0 0.25rem;
@@ -327,12 +301,6 @@ body {
 .explorer-upcoming p {
   color: var(--color-text-secondary);
 }
-.explorer-pagination .secondary-button {
-  min-height: 2.75rem;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface-muted);
-  color: var(--color-text-primary);
-}
 @media (max-width: 700px) {
   .explorer-layout {
     padding: 1rem;
@@ -341,7 +309,7 @@ body {
     align-items: stretch;
     flex-direction: column;
   }
-  .explorer-controls button {
+  .explorer-controls .ui-button {
     width: 100%;
   }
   .explorer-beer-table-wrap {
@@ -2589,7 +2557,9 @@ body {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
 }
-.import-card,
+.import-card {
+  padding: 1.5rem;
+}
 .history-card {
   min-width: 0;
   background: white;
@@ -2638,13 +2608,8 @@ body {
   margin: 0.9rem 0;
   font-size: 0.9rem;
 }
-.date-input input {
-  width: 100%;
+.date-input .ui-form-field__control {
   max-width: 18rem;
-  padding: 0.45rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.35rem;
-  font: inherit;
 }
 .warning-confirmation {
   color: #805500;
@@ -2705,21 +2670,6 @@ body {
   text-align: left;
   border-bottom: 1px solid #e5eaf1;
   white-space: nowrap;
-}
-.status-pill {
-  display: inline-block;
-  padding: 0.2rem 0.45rem;
-  border-radius: 99px;
-  font-size: 0.78rem;
-  text-transform: capitalize;
-}
-.status-pill.completed {
-  background: #e8f6ed;
-  color: #155b35;
-}
-.status-pill.failed {
-  background: #fff0ef;
-  color: #a32920;
 }
 .app :where(h2),
 .login-page :where(h2) {

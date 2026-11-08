@@ -111,3 +111,161 @@
   background: var(--color-action-secondary);
   color: var(--color-text-primary);
 }
+
+/* Shared UI primitives. Keep visual ownership on these component classes. */
+.ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid transparent;
+  border-radius: 0.4rem;
+  background: var(--color-action-primary);
+  color: var(--color-text-on-accent);
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+.ui-button--primary {
+  background: var(--color-action-primary);
+  color: var(--color-text-on-accent);
+}
+.ui-button--secondary {
+  border-color: var(--color-border-strong);
+  background: var(--color-action-secondary);
+  color: var(--color-text-primary);
+}
+.ui-button--danger {
+  background: var(--color-action-danger);
+  color: var(--color-text-on-danger-action);
+}
+.ui-button--ghost {
+  background: transparent;
+  color: var(--color-text-primary);
+}
+.ui-button--primary:not(:disabled):hover {
+  background: var(--color-action-primary-hover);
+}
+.ui-button--secondary:not(:disabled):hover,
+.ui-button--ghost:not(:disabled):hover {
+  background: var(--color-surface-hover);
+}
+.ui-button--danger:not(:disabled):hover {
+  background: var(--color-action-danger-hover);
+}
+.ui-button:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+.ui-button:disabled {
+  border-color: var(--color-border-disabled);
+  background: var(--color-action-disabled);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.ui-card {
+  min-width: 0;
+  padding: 1rem;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--color-border);
+  border-radius: 0.7rem;
+  color: var(--color-text-primary);
+}
+.ui-card--standard {
+  background: var(--color-surface);
+  box-shadow: var(--shadow-surface);
+}
+.ui-card--muted {
+  background: var(--color-surface-muted);
+}
+.ui-card--raised {
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-surface-raised);
+}
+
+.ui-form-field {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.ui-form-field__label {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+.ui-form-field__control {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.4rem;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font: inherit;
+}
+.ui-form-field__control:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+.ui-form-field__control:disabled {
+  border-color: var(--color-border-disabled);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+.ui-form-field__hint {
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+.ui-form-field__error {
+  color: var(--color-text-on-error-surface);
+  font-size: 0.875rem;
+}
+
+.ui-status-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 1.5rem;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.ui-status-badge--success {
+  border-color: var(--color-status-success);
+  background: var(--color-surface-success);
+  color: var(--color-text-on-success-surface);
+}
+.ui-status-badge--warning {
+  border-color: var(--color-status-warning);
+  background: var(--color-surface-warning);
+  color: var(--color-text-on-warning-surface);
+}
+.ui-status-badge--error {
+  border-color: var(--color-status-error);
+  background: var(--color-surface-error);
+  color: var(--color-text-on-error-surface);
+}
+.ui-status-badge--info {
+  border-color: var(--color-status-info);
+  background: var(--color-surface-muted);
+  color: var(--color-status-info);
+}
+.ui-status-badge--neutral {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+}
