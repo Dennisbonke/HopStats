@@ -1,10 +1,11 @@
 # Frontend styling
 
-- `tokens.css` is the single source for reusable semantic colors. Name tokens by
-  purpose, not by hue, and add a token only when more than one style can use it.
-- `components.css` holds shared React component styles. Keep shared button
-  styling under `.app` and component variants under their classes, as with
-  `.app-header` and `.secondary-button`.
+- `tokens.css` is the single source for reusable semantic colors and surface
+  depth. Name tokens by purpose, not by hue, and add one only when it expresses
+  a meaning that can be reused.
+- `components.css` holds shared React component styles. Use explicit component
+  classes for shared primitives; `.app :where(button:not(.ui-button))` remains a
+  transitional compatibility rule for unmigrated native buttons.
 - `../styles.css` is the legacy application stylesheet. Keep its remaining
   element-level rules to resets and document-level defaults. Shared component
   rules need a component scope; route rules need a route scope. For example,
@@ -23,6 +24,26 @@
 - Existing routes may keep their scoped `prefers-color-scheme` rules until
   migrated together. New shared primitives should use semantic tokens and
   inherit the nearest `.theme-aware` palette.
+- Put reusable controls and surfaces in `components/ui/` when their behavior,
+  accessibility wiring, and visual variants should stay consistent across
+  routes. Keep one-off layout or presentation rules beside the route.
+- Name component variants by purpose (for example `primary`, `muted`, or
+  `success`), and keep their visual rules under component classes in
+  `components.css`. Shared components should use semantic tokens for colors,
+  borders, focus, and surfaces; add a token only when it has a reusable
+  meaning.
+- Use `className` for small route layout adjustments, not to replace a
+  component variant or redefine its core appearance. Give focus-visible states
+  a clear token-based indicator and give disabled controls an explicit
+  readable style.
+- Shared primitives inherit the nearest token context. They keep the root
+  light palette on compatibility routes and use the automatic light/dark
+  palette only inside `.theme-aware`. Migrate a complete route surface before
+  opting it into dark colors.
+- Avoid broad element selectors for shared visuals. Component CSS belongs to
+  `.ui-*` classes; route CSS should be scoped to that route. The remaining
+  `.app :where(button:not(.ui-button))` rule is transitional styling for
+  unmigrated controls and deliberately excludes shared buttons.
 
 Stylesheets are imported once from `main.tsx`, in token, shared component, then
 legacy application order. Keep that order and avoid importing styles back into

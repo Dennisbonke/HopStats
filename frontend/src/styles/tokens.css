@@ -1,5 +1,5 @@
 /*
- * Semantic color tokens for HopStats.
+ * Semantic design tokens for HopStats.
  * Add tokens here only when they have a reusable meaning across components.
  */
 :root {
@@ -25,15 +25,16 @@
 
   /* Boundaries and keyboard focus. */
   --color-border: #cbd5e1;
-  --color-border-strong: #94a3b8;
+  --color-border-strong: #64748b;
   --color-border-disabled: #e2e8f0;
-  --color-focus: #fbbf24;
+  --color-focus: #805500;
 
   /* Action backgrounds and their readable foregrounds. */
   --color-action-primary: #176b4d;
   --color-action-primary-hover: #14583f;
   --color-action-secondary: #e8eef8;
   --color-action-danger: #a32920;
+  --color-action-danger-hover: #831c16;
   --color-action-disabled: #e2e8f0;
   --color-text-on-accent: #ffffff;
   --color-text-on-danger-action: #ffffff;
@@ -51,6 +52,10 @@
   --color-chart-axis: #526176;
   --color-chart-tooltip-surface: #172033;
   --color-chart-tooltip-text: #ffffff;
+
+  /* Shared surface depth for standard and raised cards. */
+  --shadow-surface: 0 1px 3px rgb(23 32 51 / 8%);
+  --shadow-surface-raised: 0 5px 18px rgb(23 32 51 / 15%);
 }
 
 /*
@@ -90,6 +95,7 @@
     --color-action-primary-hover: #6ed5a4;
     --color-action-secondary: #334155;
     --color-action-danger: #dc2626;
+    --color-action-danger-hover: #d92323;
     --color-action-disabled: #334155;
     --color-text-on-accent: #10251b;
     --color-text-on-danger-action: #ffffff;
@@ -105,5 +111,8 @@
     --color-chart-axis: #c1ccd8;
     --color-chart-tooltip-surface: #0b121a;
     --color-chart-tooltip-text: #f1f5f9;
+
+    --shadow-surface: 0 1px 3px rgb(0 0 0 / 24%);
+    --shadow-surface-raised: 0 5px 18px rgb(0 0 0 / 38%);
   }
 }

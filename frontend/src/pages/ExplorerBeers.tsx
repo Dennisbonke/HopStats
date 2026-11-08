@@ -5,6 +5,7 @@ import {
   ExploreBeersResponse,
   fetchExploreBeers,
 } from "../api/explore";
+import { Button, Card, FormField } from "../components/ui";
 
 const DEFAULT_SORT = "last_tried_desc";
 const SORTS = [
@@ -77,7 +78,7 @@ function BeerArtwork({ beer }: { beer: ExploreBeer }) {
 
 function BeerCard({ beer }: { beer: ExploreBeer }) {
   return (
-    <article className="explorer-beer-card">
+    <Card as="article" className="explorer-beer-card">
       <BeerArtwork beer={beer} />
       <div className="explorer-beer-card-content">
         <h4>{beer.name}</h4>
@@ -98,7 +99,7 @@ function BeerCard({ beer }: { beer: ExploreBeer }) {
           </div>
         </dl>
       </div>
-    </article>
+    </Card>
   );
 }
 
@@ -199,21 +200,25 @@ export default function ExplorerBeers() {
         )}
       </div>
       <form className="explorer-controls" onSubmit={submitSearch}>
-        <label className="explorer-search-control">
-          Search beers or breweries
+        <FormField
+          id="explorer-beer-search"
+          label="Search beers or breweries"
+          className="explorer-search-control"
+        >
           <input
             type="search"
             value={searchDraft}
             onChange={(event) => setSearchDraft(event.target.value)}
             placeholder="Search your beers…"
-            aria-label="Search beers or breweries"
           />
-        </label>
-        <label className="explorer-sort-control">
-          Sort beers
+        </FormField>
+        <FormField
+          id="explorer-beer-sort"
+          label="Sort beers"
+          className="explorer-sort-control"
+        >
           <select
             value={sort}
-            aria-label="Sort beers"
             onChange={(event) =>
               updateUrl(querySearch, selectedSort(event.target.value), 1)
             }
@@ -224,8 +229,8 @@ export default function ExplorerBeers() {
               </option>
             ))}
           </select>
-        </label>
-        <button type="submit">Search</button>
+        </FormField>
+        <Button type="submit">Search</Button>
       </form>
 
       {showLoading && (
@@ -292,25 +297,25 @@ export default function ExplorerBeers() {
               className="pagination explorer-pagination"
               aria-label="Beer catalogue pagination"
             >
-              <button
+              <Button
+                variant="secondary"
                 type="button"
-                className="secondary-button"
                 disabled={page <= 1}
                 onClick={() => updateUrl(querySearch, sort, page - 1)}
               >
                 Previous
-              </button>
+              </Button>
               <span>
                 Page {currentData.page} of {currentData.total_pages}
               </span>
-              <button
+              <Button
+                variant="secondary"
                 type="button"
-                className="secondary-button"
                 disabled={page >= currentData.total_pages}
                 onClick={() => updateUrl(querySearch, sort, page + 1)}
               >
                 Next
-              </button>
+              </Button>
             </div>
           </>
         )}

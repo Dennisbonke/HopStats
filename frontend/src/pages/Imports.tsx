@@ -5,6 +5,7 @@ import {
   ImportSummary,
   uploadImport,
 } from "../api/imports";
+import { Button, Card, FormField, StatusBadge } from "../components/ui";
 
 type UploadState = {
   file: File | null;
@@ -103,8 +104,12 @@ function UploadSection({
   }
 
   return (
-    <section className="import-card">
-      <h3>{title}</h3>
+    <Card
+      as="section"
+      className="import-card"
+      aria-labelledby={`import-${kind}-title`}
+    >
+      <h3 id={`import-${kind}-title`}>{title}</h3>
       <p>{description}</p>
       <p className="format-note">
         Supported format: UTF-8 CSV with the native Untappd column headers.
@@ -138,14 +143,17 @@ function UploadSection({
             I understand this replaces the complete Untappd stash snapshot.
           </label>
           {setSourceExportedAt && (
-            <label className="date-input">
-              Trusted export date (optional)
+            <FormField
+              id="inventory-source-exported-at"
+              label="Trusted export date (optional)"
+              className="date-input"
+            >
               <input
                 type="datetime-local"
                 value={sourceExportedAt}
                 onChange={(event) => setSourceExportedAt(event.target.value)}
               />
-            </label>
+            </FormField>
           )}
           {state.result?.error_code === "undated_snapshot" &&
             setRiskAcknowledged && (
@@ -177,7 +185,7 @@ function UploadSection({
             )}
         </>
       )}
-      <button
+      <Button
         type="button"
         onClick={submit}
         disabled={
@@ -191,10 +199,10 @@ function UploadSection({
         }
       >
         {state.loading ? "Uploading…" : "Upload CSV"}
-      </button>
+      </Button>
       {state.error && <p className="network-error">{state.error}</p>}
       {state.result && <Summary result={state.result} />}
-    </section>
+    </Card>
   );
 }
 
@@ -253,13 +261,13 @@ export default function Imports() {
       <section className="history-card">
         <div className="section-heading">
           <h3>Import history</h3>
-          <button
+          <Button
             type="button"
-            className="secondary-button"
+            variant="secondary"
             onClick={() => void refreshHistory()}
           >
             Refresh
-          </button>
+          </Button>
         </div>
         {historyError && <p className="network-error">{historyError}</p>}
         {!historyError && history.length === 0 ? (
@@ -291,9 +299,17 @@ export default function Imports() {
                     </td>
                     <td>{run.filename}</td>
                     <td>
-                      <span className={`status-pill ${run.status}`}>
+                      <StatusBadge
+                        variant={
+                          run.status === "completed"
+                            ? "success"
+                            : run.status === "failed"
+                              ? "error"
+                              : "info"
+                        }
+                      >
                         {run.status}
-                      </span>
+                      </StatusBadge>
                     </td>
                     <td>{run.inserted_count}</td>
                     <td>{run.updated_count}</td>

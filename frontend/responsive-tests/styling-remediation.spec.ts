@@ -234,6 +234,59 @@ async function stubApplication(page: Page) {
         locations: [],
         unresolved: { record_count: 0, total_units: 0 },
       },
+      "/api/v1/imports": [
+        {
+          id: 1,
+          source_type: "checkins",
+          filename: "untappd-checkins.csv",
+          sha256: "test-hash",
+          started_at: "2026-01-01T12:00:00Z",
+          completed_at: "2026-01-01T12:00:05Z",
+          status: "completed",
+          inserted_count: 4,
+          updated_count: 0,
+          unchanged_count: 0,
+          removed_count: 0,
+          rejected_count: 0,
+          error_code: null,
+          error_summary: null,
+          errors: [],
+        },
+        {
+          id: 2,
+          source_type: "inventory",
+          filename: "untappd-stash.csv",
+          sha256: "test-hash-2",
+          started_at: "2026-01-02T12:00:00Z",
+          completed_at: "2026-01-02T12:00:05Z",
+          status: "failed",
+          inserted_count: 0,
+          updated_count: 0,
+          unchanged_count: 0,
+          removed_count: 0,
+          rejected_count: 1,
+          error_code: "invalid_csv",
+          error_summary: "Invalid CSV",
+          errors: [],
+        },
+        {
+          id: 3,
+          source_type: "checkins",
+          filename: "new-checkins.csv",
+          sha256: "test-hash-3",
+          started_at: "2026-01-03T12:00:00Z",
+          completed_at: null,
+          status: "processing",
+          inserted_count: 0,
+          updated_count: 0,
+          unchanged_count: 0,
+          removed_count: 0,
+          rejected_count: 0,
+          error_code: null,
+          error_summary: null,
+          errors: [],
+        },
+      ],
       "/api/v1/explore/beers": {
         items: [
           {
@@ -397,6 +450,232 @@ async function expectNoDocumentOverflow(page: Page) {
   expect(overflow).toBeLessThanOrEqual(1);
 }
 
+const buttonVariants = ["primary", "secondary", "danger", "ghost"] as const;
+
+type ButtonVariant = (typeof buttonVariants)[number];
+
+async function installButtonCascadeFixture(
+  page: Page,
+  surfaceSelector: string,
+) {
+  await page.locator(surfaceSelector).evaluate((surface) => {
+    const fixture = document.createElement("div");
+    fixture.id = "button-cascade-fixture";
+    fixture.style.cssText =
+      "display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1rem";
+
+    for (const variant of ["primary", "secondary", "danger", "ghost"]) {
+      const button = document.createElement("button");
+      button.id = `cascade-${variant}`;
+      button.className = `ui-button ui-button--${variant}`;
+      button.textContent = `${variant} action`;
+      fixture.append(button);
+
+      const disabledButton = document.createElement("button");
+      disabledButton.id = `cascade-disabled-${variant}`;
+      disabledButton.className = `ui-button ui-button--${variant}`;
+      disabledButton.textContent = `disabled ${variant} action`;
+      disabledButton.disabled = true;
+      fixture.append(disabledButton);
+    }
+
+    const legacyButton = document.createElement("button");
+    legacyButton.id = "cascade-legacy-native";
+    legacyButton.textContent = "Legacy native action";
+    fixture.append(legacyButton);
+
+    const disabledLegacyButton = document.createElement("button");
+    disabledLegacyButton.id = "cascade-disabled-legacy-native";
+    disabledLegacyButton.textContent = "Disabled legacy native action";
+    disabledLegacyButton.disabled = true;
+    fixture.append(disabledLegacyButton);
+
+    surface.append(fixture);
+  });
+}
+
+async function readButtonCascadeStyles(button: Locator) {
+  return button.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const resolveToken = (token: string) => {
+      const probe = document.createElement("span");
+      probe.style.color = style.getPropertyValue(token).trim();
+      (element.parentElement ?? document.body).append(probe);
+      const resolved = getComputedStyle(probe).color;
+      probe.remove();
+      return resolved;
+    };
+    const surfaceBackground = () => {
+      let parent = element.parentElement;
+      while (parent) {
+        const background = getComputedStyle(parent).backgroundColor;
+        const channels = background.match(/[\d.]+/g) ?? [];
+        if (channels.length !== 4 || Number(channels[3]) !== 0) {
+          return background;
+        }
+        parent = parent.parentElement;
+      }
+      return getComputedStyle(document.documentElement).backgroundColor;
+    };
+    const backgroundChannels = style.backgroundColor.match(/[\d.]+/g) ?? [];
+
+    return {
+      background: style.backgroundColor,
+      backgroundIsTransparent:
+        backgroundChannels.length === 4 && Number(backgroundChannels[3]) === 0,
+      foreground: style.color,
+      border: style.borderTopColor,
+      outline: style.outlineColor,
+      outlineStyle: style.outlineStyle,
+      outlineWidth: style.outlineWidth,
+      opacity: style.opacity,
+      surface: surfaceBackground(),
+      actionPrimary: resolveToken("--color-action-primary"),
+      actionPrimaryHover: resolveToken("--color-action-primary-hover"),
+      actionSecondary: resolveToken("--color-action-secondary"),
+      actionDanger: resolveToken("--color-action-danger"),
+      actionDangerHover: resolveToken("--color-action-danger-hover"),
+      actionDisabled: resolveToken("--color-action-disabled"),
+      textPrimary: resolveToken("--color-text-primary"),
+      textOnAccent: resolveToken("--color-text-on-accent"),
+      textOnDanger: resolveToken("--color-text-on-danger-action"),
+      textMuted: resolveToken("--color-text-muted"),
+      surfaceHover: resolveToken("--color-surface-hover"),
+      borderDisabled: resolveToken("--color-border-disabled"),
+      focus: resolveToken("--color-focus"),
+      borderStrong: resolveToken("--color-border-strong"),
+    };
+  });
+}
+
+async function expectButtonVariantStyles(
+  page: Page,
+  context: string,
+  variant: ButtonVariant,
+) {
+  const button = page.locator(`#cascade-${variant}`);
+  const expected = {
+    primary: {
+      background: "actionPrimary",
+      foreground: "textOnAccent",
+      hover: "actionPrimaryHover",
+    },
+    secondary: {
+      background: "actionSecondary",
+      foreground: "textPrimary",
+      hover: "surfaceHover",
+    },
+    danger: {
+      background: "actionDanger",
+      foreground: "textOnDanger",
+      hover: "actionDangerHover",
+    },
+    ghost: {
+      background: "transparent",
+      foreground: "textPrimary",
+      hover: "surfaceHover",
+    },
+  }[variant];
+
+  const normal = await readButtonCascadeStyles(button);
+  if (variant === "ghost") {
+    expect(
+      normal.backgroundIsTransparent,
+      `${context} ghost button background`,
+    ).toBe(true);
+  } else {
+    expect(normal.background, `${context} ${variant} button background`).toBe(
+      normal[expected.background],
+    );
+  }
+  expect(normal.foreground, `${context} ${variant} foreground`).toBe(
+    normal[expected.foreground],
+  );
+  await expectReadable(button, `${context} ${variant} button`);
+
+  if (variant === "secondary") {
+    expect(
+      contrastRatio(normal.border, normal.surface),
+      `${context} secondary button boundary`,
+    ).toBeGreaterThanOrEqual(3);
+  } else if (variant === "primary" || variant === "danger") {
+    expect(
+      contrastRatio(normal.background, normal.surface),
+      `${context} ${variant} button boundary`,
+    ).toBeGreaterThanOrEqual(3);
+  }
+
+  await button.hover();
+  const hover = await readButtonCascadeStyles(button);
+  expect(hover.background, `${context} ${variant} hover background`).toBe(
+    hover[expected.hover],
+  );
+  expect(hover.foreground, `${context} ${variant} hover foreground`).toBe(
+    normal[expected.foreground],
+  );
+  await expectReadable(button, `${context} ${variant} hovered button`);
+
+  if (variant === "secondary") {
+    expect(
+      contrastRatio(hover.border, hover.surface),
+      `${context} hovered secondary button boundary`,
+    ).toBeGreaterThanOrEqual(3);
+  } else if (variant === "primary" || variant === "danger") {
+    expect(
+      contrastRatio(hover.background, hover.surface),
+      `${context} hovered ${variant} button boundary`,
+    ).toBeGreaterThanOrEqual(3);
+  }
+
+  await button.focus();
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Shift+Tab");
+  await expect(button).toBeFocused();
+  const focused = await readButtonCascadeStyles(button);
+  expect(focused.outlineStyle, `${context} ${variant} focus outline`).toBe(
+    "solid",
+  );
+  expect(focused.outlineWidth, `${context} ${variant} focus width`).toBe("3px");
+  expect(focused.outline, `${context} ${variant} focus color`).toBe(
+    focused.focus,
+  );
+  expect(
+    contrastRatio(focused.outline, focused.surface),
+    `${context} ${variant} focus indicator contrast`,
+  ).toBeGreaterThanOrEqual(3);
+
+  const disabled = page.locator(`#cascade-disabled-${variant}`);
+  await expect(disabled).toBeDisabled();
+  const disabledStyles = await readButtonCascadeStyles(disabled);
+  expect(disabledStyles.background).toBe(disabledStyles.actionDisabled);
+  expect(disabledStyles.foreground).toBe(disabledStyles.textMuted);
+  expect(disabledStyles.border).toBe(disabledStyles.borderDisabled);
+  expect(disabledStyles.opacity).toBe("1");
+  expect(
+    contrastRatio(disabledStyles.foreground, disabledStyles.background),
+    `${context} disabled ${variant} label contrast`,
+  ).toBeGreaterThanOrEqual(3);
+}
+
+async function expectLegacyButtonCompatibility(page: Page, context: string) {
+  const nativeButton = page.locator("#cascade-legacy-native");
+  const nativeStyles = await readButtonCascadeStyles(nativeButton);
+  expect(nativeStyles.background, `${context} legacy button background`).toBe(
+    nativeStyles.actionPrimary,
+  );
+  expect(nativeStyles.foreground, `${context} legacy button foreground`).toBe(
+    nativeStyles.textOnAccent,
+  );
+  expect(nativeStyles.opacity, `${context} legacy button opacity`).toBe("1");
+
+  const disabledNative = page.locator("#cascade-disabled-legacy-native");
+  await expect(disabledNative).toBeDisabled();
+  const disabledStyles = await readButtonCascadeStyles(disabledNative);
+  expect(disabledStyles.background).toBe(disabledStyles.actionPrimary);
+  expect(disabledStyles.foreground).toBe(disabledStyles.textOnAccent);
+  expect(disabledStyles.opacity).toBe("0.5");
+}
+
 test("grouped Inventory stays readable and wraps at mobile and desktop widths", async ({
   page,
 }) => {
@@ -490,6 +769,14 @@ test("semantic themes stay scoped while Explorer uses the shared palette", async
     "A Long Seasonal IPA with a Name That Wraps on Narrow Screens";
   await expect(page.locator(".explorer-beer-card h4")).toHaveText(longBeerName);
   await expect(page.locator(".explorer-beer-card")).toHaveCount(1);
+  await explorer.evaluate((element) => {
+    const badge = document.createElement("span");
+    badge.className =
+      "ui-status-badge ui-status-badge--success theme-test-status";
+    badge.textContent = "Theme test status";
+    element.querySelector(".explorer-catalogue")?.append(badge);
+  });
+  const themeStatusBadge = page.getByText("Theme test status");
 
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
@@ -517,6 +804,35 @@ test("semantic themes stay scoped while Explorer uses the shared palette", async
     await expect(explorer).toHaveCSS("color-scheme", expected.controlScheme);
     await expect(explorer).toHaveCSS("background-color", expected.canvas);
     await expect(catalogue).toHaveCSS("background-color", expected.surface);
+    await expect(page.locator(".explorer-beer-card")).toHaveCSS(
+      "background-color",
+      expected.surface,
+    );
+    const themeStatusValues =
+      colorScheme === "light"
+        ? {
+            surface: "rgb(232, 246, 237)",
+            text: "rgb(21, 91, 53)",
+            border: "rgb(22, 128, 60)",
+          }
+        : {
+            surface: "rgb(23, 55, 42)",
+            text: "rgb(187, 247, 208)",
+            border: "rgb(85, 189, 141)",
+          };
+    await expect(themeStatusBadge).toHaveCSS(
+      "background-color",
+      themeStatusValues.surface,
+    );
+    await expect(themeStatusBadge).toHaveCSS("color", themeStatusValues.text);
+    await expect(themeStatusBadge).toHaveCSS(
+      "border-top-color",
+      themeStatusValues.border,
+    );
+    await expectReadable(
+      themeStatusBadge,
+      `${colorScheme} themed status badge`,
+    );
     await expect(explorer).toHaveCSS("color", expected.text);
     await expect(explorer.locator(".page-heading p")).toHaveCSS(
       "color",
@@ -548,7 +864,7 @@ test("semantic themes stay scoped while Explorer uses the shared palette", async
             errorSurfaceText: "#a32920",
             dangerActionText: "#ffffff",
             border: "#cbd5e1",
-            focus: "#fbbf24",
+            focus: "#805500",
             statusSuccess: "#16803c",
             chartPrimary: "#176b4d",
             chartTooltip: "#172033",
@@ -600,6 +916,39 @@ test("semantic themes stay scoped while Explorer uses the shared palette", async
         page.getByRole("searchbox", { name: "Search beers or breweries" }),
         `${colorScheme} search control at ${width}px`,
       );
+      await expect(
+        page.getByRole("searchbox", { name: "Search beers or breweries" }),
+      ).toHaveCSS("background-color", expected.surface);
+      await expect(
+        page.getByRole("searchbox", { name: "Search beers or breweries" }),
+      ).toHaveCSS("color", expected.text);
+      await expect(
+        page.getByRole("searchbox", { name: "Search beers or breweries" }),
+      ).toHaveCSS(
+        "border-color",
+        colorScheme === "light" ? "rgb(100, 116, 139)" : "rgb(113, 128, 150)",
+      );
+      const searchBoundary = await page
+        .getByRole("searchbox", { name: "Search beers or breweries" })
+        .evaluate((element) => {
+          const catalogue = element.closest(".explorer-catalogue");
+          if (!catalogue) throw new Error("Search control lost its surface");
+          return {
+            border: getComputedStyle(element).borderTopColor,
+            surface: getComputedStyle(catalogue).backgroundColor,
+          };
+        });
+      expect(
+        contrastRatio(searchBoundary.border, searchBoundary.surface),
+      ).toBeGreaterThanOrEqual(3);
+      await expectReadable(
+        page.getByLabel("Sort beers"),
+        `${colorScheme} Explorer sort control at ${width}px`,
+      );
+      await expect(page.getByLabel("Sort beers")).toHaveCSS(
+        "background-color",
+        expected.surface,
+      );
       await expectReadable(
         page.getByRole("button", { name: "Search" }),
         `${colorScheme} search action at ${width}px`,
@@ -610,6 +959,10 @@ test("semantic themes stay scoped while Explorer uses the shared palette", async
         expected.actionBackground,
       );
       await expect(searchAction).toHaveCSS("color", expected.actionText);
+      await expect(searchAction).toHaveCSS("min-height", "44px");
+      await expect(
+        page.getByRole("searchbox", { name: "Search beers or breweries" }),
+      ).toHaveCSS("min-height", "44px");
       const actionAndSurface = await searchAction.evaluate((element) => {
         const surface = element.closest(".explorer-catalogue");
         if (!surface)
@@ -623,6 +976,9 @@ test("semantic themes stay scoped while Explorer uses the shared palette", async
         contrastRatio(actionAndSurface.action, actionAndSurface.surface),
         `${colorScheme} search action boundary at ${width}px`,
       ).toBeGreaterThanOrEqual(3);
+      const paginationAction = page.getByRole("button", { name: "Next" });
+      await expect(paginationAction).toBeDisabled();
+      await expect(paginationAction).toHaveCSS("min-height", "44px");
 
       if (width <= 700) {
         await expect(page.locator(".explorer-beer-cards")).toBeVisible();
@@ -646,6 +1002,170 @@ test("semantic themes stay scoped while Explorer uses the shared palette", async
         );
       }
     }
+
+    await page
+      .getByRole("searchbox", { name: "Search beers or breweries" })
+      .focus();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Tab");
+    const focusedSearchAction = page.getByRole("button", { name: "Search" });
+    await expect(focusedSearchAction).toBeFocused();
+    await expect(focusedSearchAction).toHaveCSS("outline-style", "solid");
+    await expect(focusedSearchAction).toHaveCSS("outline-width", "3px");
+    await expect(focusedSearchAction).toHaveCSS(
+      "outline-color",
+      colorScheme === "light" ? "rgb(128, 85, 0)" : "rgb(251, 191, 36)",
+    );
+    expect(
+      contrastRatio(
+        await focusedSearchAction.evaluate(
+          (element) => getComputedStyle(element).outlineColor,
+        ),
+        expected.canvas,
+      ),
+    ).toBeGreaterThanOrEqual(3);
+  }
+});
+
+test("shared primitives stay readable on the light compatibility route", async ({
+  page,
+}) => {
+  await stubApplication(page);
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.goto("/imports");
+    await expect(page.getByRole("heading", { name: "Imports" })).toBeVisible();
+
+    const root = page.locator("html");
+    await expect(root).toHaveCSS("color-scheme", "light");
+    const uploadCard = page.getByRole("region", {
+      name: "Untappd check-in CSV",
+    });
+    await expect(uploadCard).toHaveCSS(
+      "background-color",
+      "rgb(255, 255, 255)",
+    );
+    const uploadButton = uploadCard.getByRole("button", { name: "Upload CSV" });
+    await expect(uploadButton).toBeDisabled();
+    await expect(uploadButton).toHaveCSS("min-height", "44px");
+    const refreshButton = page.getByRole("button", { name: "Refresh" });
+    await expect(refreshButton).toHaveCSS(
+      "background-color",
+      "rgb(232, 238, 248)",
+    );
+    await expect(refreshButton).toHaveCSS("color", "rgb(23, 32, 51)");
+    await expectReadable(refreshButton, `${colorScheme} Imports action button`);
+    const refreshBoundary = await refreshButton.evaluate((element) => {
+      const history = element.closest(".history-card");
+      if (!history) throw new Error("Refresh action lost its history surface");
+      return {
+        border: getComputedStyle(element).borderTopColor,
+        surface: getComputedStyle(history).backgroundColor,
+      };
+    });
+    expect(
+      contrastRatio(refreshBoundary.border, refreshBoundary.surface),
+    ).toBeGreaterThanOrEqual(3);
+
+    const statusVariants = [
+      {
+        label: "completed",
+        surface: "rgb(232, 246, 237)",
+        text: "rgb(21, 91, 53)",
+        border: "rgb(22, 128, 60)",
+      },
+      {
+        label: "failed",
+        surface: "rgb(255, 241, 240)",
+        text: "rgb(163, 41, 32)",
+        border: "rgb(180, 35, 24)",
+      },
+      {
+        label: "processing",
+        surface: "rgb(238, 242, 247)",
+        text: "rgb(29, 78, 216)",
+        border: "rgb(29, 78, 216)",
+      },
+    ];
+    for (const expectedBadge of statusVariants) {
+      const badge = page.getByText(expectedBadge.label, { exact: true });
+      await expect(badge).toHaveCSS("background-color", expectedBadge.surface);
+      await expect(badge).toHaveCSS("color", expectedBadge.text);
+      await expect(badge).toHaveCSS("border-top-color", expectedBadge.border);
+      const statusBoundary = await badge.evaluate((element) => {
+        const style = getComputedStyle(element);
+        const history = element.closest(".history-card");
+        if (!history) throw new Error("Status badge lost its history surface");
+        return {
+          border: style.borderTopColor,
+          surface: getComputedStyle(history).backgroundColor,
+        };
+      });
+      expect(
+        contrastRatio(statusBoundary.border, statusBoundary.surface),
+      ).toBeGreaterThanOrEqual(3);
+      await expectReadable(
+        badge,
+        `${colorScheme} ${expectedBadge.label} badge`,
+      );
+    }
+    const status = page.getByText("completed", { exact: true });
+
+    const dateField = page.getByLabel("Trusted export date (optional)");
+    await expect(dateField).toHaveAttribute(
+      "id",
+      "inventory-source-exported-at",
+    );
+    for (const width of [320, 390, 768, 1280]) {
+      await page.setViewportSize({ width, height: width === 1280 ? 800 : 844 });
+      await expectNoDocumentOverflow(page);
+      await expectReadable(
+        status,
+        `${colorScheme} Imports status at ${width}px`,
+      );
+    }
+  }
+});
+
+test("shared Button variants keep token colors across cascade and theme contexts", async ({
+  page,
+}) => {
+  await stubApplication(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.goto("/imports");
+    await expect(page.getByRole("heading", { name: "Imports" })).toBeVisible();
+    await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
+    await installButtonCascadeFixture(page, ".history-card");
+
+    const context = `Imports compatibility route with ${colorScheme} OS preference`;
+    await expectLegacyButtonCompatibility(page, context);
+    for (const variant of buttonVariants) {
+      await expectButtonVariantStyles(page, context, variant);
+    }
+    await expectNoDocumentOverflow(page);
+  }
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.goto("/explore/beers");
+    const explorer = page.locator(".explorer-page");
+    await expect(explorer).toBeVisible();
+    await expect(explorer).toHaveCSS(
+      "color-scheme",
+      colorScheme === "dark" ? "dark" : "light",
+    );
+    await installButtonCascadeFixture(page, ".explorer-catalogue");
+
+    const context = `Explorer theme-aware route with ${colorScheme} preference`;
+    await expectLegacyButtonCompatibility(page, context);
+    for (const variant of buttonVariants) {
+      await expectButtonVariantStyles(page, context, variant);
+    }
+    await expectNoDocumentOverflow(page);
   }
 });
 
