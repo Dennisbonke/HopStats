@@ -1,33 +1,7 @@
 :root {
-  color-scheme: light;
-  --page-bg: #f5f7fb;
-  --surface: #ffffff;
-  --surface-muted: #eef2f7;
-  --surface-danger: #fff1f0;
-  --text-primary: #172033;
-  --text-secondary: #475569;
-  --border: #cbd5e1;
-  --accent: #176b4d;
-  --accent-contrast: #ffffff;
-  --danger: #a32920;
   font-family: system-ui, sans-serif;
-  color: var(--text-primary);
-  background: var(--page-bg);
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --page-bg: #101923;
-    --surface: #172533;
-    --surface-muted: #253747;
-    --surface-danger: #422c32;
-    --text-primary: #f1f5f9;
-    --text-secondary: #c1ccd8;
-    --border: #526476;
-    --accent: #55bd8d;
-    --accent-contrast: #10251b;
-    --danger: #fecaca;
-  }
+  color: #172033;
+  background: #f5f7fb;
 }
 * {
   box-sizing: border-box;
@@ -177,6 +151,32 @@ section {
 }
 .explorer-layout {
   padding: 1.25rem;
+}
+.explorer-page {
+  color-scheme: light;
+  --surface: #ffffff;
+  --surface-muted: #eef2f7;
+  --surface-danger: #fff1f0;
+  --text-primary: #172033;
+  --text-secondary: #475569;
+  --border: #cbd5e1;
+  --accent: #176b4d;
+  --danger: #a32920;
+  color: var(--text-primary);
+}
+@media (prefers-color-scheme: dark) {
+  .explorer-page {
+    color-scheme: dark;
+    --surface: #172533;
+    --surface-muted: #253747;
+    --surface-danger: #422c32;
+    --text-primary: #f1f5f9;
+    --text-secondary: #c1ccd8;
+    --border: #526476;
+    --accent: #55bd8d;
+    --accent-contrast: #10251b;
+    --danger: #fecaca;
+  }
 }
 .explorer-heading h2 {
   margin: 0;

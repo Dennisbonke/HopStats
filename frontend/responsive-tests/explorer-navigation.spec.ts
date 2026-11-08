@@ -92,6 +92,23 @@ test("Explorer colors and active tab stay distinct in light and dark themes", as
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
     await page.goto("/explore/beers");
+    const themeIsolation = await page.evaluate(() => ({
+      pageBackground: getComputedStyle(document.documentElement)
+        .backgroundColor,
+      explorerScheme: getComputedStyle(
+        document.querySelector(".explorer-page") as HTMLElement,
+      ).colorScheme,
+      explorerSurface: getComputedStyle(
+        document.querySelector(".explorer-page") as HTMLElement,
+      )
+        .getPropertyValue("--surface")
+        .trim(),
+    }));
+    expect(themeIsolation.pageBackground).toBe("rgb(245, 247, 251)");
+    expect(themeIsolation.explorerScheme).toBe(colorScheme);
+    expect(themeIsolation.explorerSurface).toBe(
+      colorScheme === "dark" ? "#172533" : "#ffffff",
+    );
     const activeTab = page.getByRole("link", { name: "Beers" });
     await expect(activeTab).toBeVisible();
     const tabStyle = await activeTab.evaluate((node) => {
