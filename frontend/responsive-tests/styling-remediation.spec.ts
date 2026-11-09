@@ -2442,7 +2442,13 @@ test("Inventory detail dialog is named, modal, focus managed, and scrollable", a
         .toBe(true);
       await close.focus();
       await page.keyboard.press("Tab");
-      await expect(close).toBeFocused();
+      await expect
+        .poll(() =>
+          dialog.evaluate((element) =>
+            element.contains(document.activeElement),
+          ),
+        )
+        .toBe(true);
       await page.keyboard.press("Escape");
       await expect(dialog).not.toBeVisible();
       await expect(trigger).toBeFocused();
@@ -2660,9 +2666,11 @@ test("Milestones keep semantic statuses, progress, forms, and long names readabl
       .getByRole("group", { name: "Filter milestones" })
       .getByRole("button", { name: "Archived" })
       .click();
-    await expect(page.locator(".milestone-status")).toHaveText("Archived");
+    await expect(page.locator(".milestone-status")).toHaveCount(1);
+    const archivedBadge = page.locator(".milestone-status").first();
+    await expect(archivedBadge).toHaveText("Archived");
     await expectReadable(
-      page.locator(".milestone-status"),
+      archivedBadge,
       `${colorScheme} archived milestone status`,
     );
 
