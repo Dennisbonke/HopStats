@@ -78,7 +78,7 @@ function BeerArtwork({ beer }: { beer: ExploreBeer }) {
 
 function BeerCard({ beer }: { beer: ExploreBeer }) {
   return (
-    <Card as="article" className="explorer-beer-card">
+    <Card as="article" className="explorer-beer-card theme-aware">
       <BeerArtwork beer={beer} />
       <div className="explorer-beer-card-content">
         <h4>{beer.name}</h4>
@@ -187,7 +187,7 @@ export default function ExplorerBeers() {
 
   return (
     <section
-      className="explorer-catalogue theme-aware"
+      className="explorer-catalogue"
       aria-labelledby="explore-beers-title"
     >
       <div className="section-heading explorer-catalogue-heading">
