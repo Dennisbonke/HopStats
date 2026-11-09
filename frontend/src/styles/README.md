@@ -31,9 +31,10 @@
   pages), and the implemented Explorer beer catalogue. Analytics and wildcard
   or unfinished routes stay on the root light compatibility palette. Keep a
   route off the list until its full visible surface is migrated.
-- Explorer's beer catalogue inherits the app route boundary. The Breweries and
-  Styles placeholders remain on the compatibility palette; do not add a broad
-  `/explore/*` theme match while those child routes are unfinished.
+- Explorer's implemented beer catalogue owns a local `.theme-aware` boundary
+  inside the themed route. The Breweries and Styles placeholders remain on the
+  compatibility palette; do not add a broad `/explore/*` theme match while
+  those child routes are unfinished.
 - Existing routes may keep their scoped `prefers-color-scheme` rules until
   migrated together. New shared primitives should use semantic tokens and
   inherit the nearest `.theme-aware` palette.

@@ -187,7 +187,7 @@ export default function ExplorerBeers() {
 
   return (
     <section
-      className="explorer-catalogue"
+      className="explorer-catalogue theme-aware"
       aria-labelledby="explore-beers-title"
     >
       <div className="section-heading explorer-catalogue-heading">
