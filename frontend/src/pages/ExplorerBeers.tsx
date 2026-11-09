@@ -78,7 +78,7 @@ function BeerArtwork({ beer }: { beer: ExploreBeer }) {
 
 function BeerCard({ beer }: { beer: ExploreBeer }) {
   return (
-    <Card as="article" className="explorer-beer-card theme-aware">
+    <Card as="article" className="explorer-beer-card">
       <BeerArtwork beer={beer} />
       <div className="explorer-beer-card-content">
         <h4>{beer.name}</h4>
