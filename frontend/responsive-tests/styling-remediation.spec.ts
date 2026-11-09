@@ -2426,9 +2426,13 @@ test("Inventory detail dialog is named, modal, focus managed, and scrollable", a
         )
         .toBe(true);
 
-      await page
-        .getByRole("link", { name: "Dashboard" })
-        .evaluate((element) => (element as HTMLElement).focus());
+      const backgroundControl =
+        width <= 960
+          ? page.getByRole("button", { name: "Main menu" })
+          : page.getByRole("link", { name: "Dashboard" });
+      await backgroundControl.evaluate((element) =>
+        (element as HTMLElement).focus(),
+      );
       await expect
         .poll(() =>
           dialog.evaluate((element) =>
@@ -2496,7 +2500,9 @@ test("Locations preserve hierarchy and wrap long names at every viewport", async
       expect(rootBox!.height).toBeGreaterThanOrEqual(44);
       expect(rootBox!.x + rootBox!.width).toBeLessThanOrEqual(width + 1);
       await expect(
-        page.getByText("Deep storage", { exact: true }),
+        page.locator(
+          ".location-tree[data-depth='5'] > li > .location-node > .location-select strong",
+        ),
       ).toBeVisible();
 
       const maximumIndent = await page
