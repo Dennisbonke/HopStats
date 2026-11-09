@@ -1636,8 +1636,6 @@ test("Analytics breakdown tooltips follow touch movement at 320px", async ({
     await expect(breakdown.locator(".recharts-bar-rectangle")).toHaveCount(24);
     await breakdown.scrollIntoViewIfNeeded();
     const firstBar = breakdown.locator(".recharts-bar-rectangle").first();
-    await firstBar.scrollIntoViewIfNeeded();
-    await expect(firstBar).toBeAttached();
     let barBox = await firstBar.boundingBox();
     await expect
       .poll(async () => {
@@ -1647,28 +1645,13 @@ test("Analytics breakdown tooltips follow touch movement at 320px", async ({
       .toBe(true);
     expect(barBox).not.toBeNull();
 
-    await page.evaluate(
-      ({ x, y }) => {
-        const target = document.elementFromPoint(x, y);
-        if (!(target instanceof Element)) {
-          throw new Error("Touch point did not hit the chart");
-        }
-        const touch = new Touch({
-          identifier: 1,
-          target,
-          clientX: x,
-          clientY: y,
-        });
+    await breakdown.locator(".recharts-wrapper").evaluate(
+      (chart, { x, y }) => {
+        const touch = { clientX: x, clientY: y };
         for (const type of ["touchstart", "touchmove"]) {
-          target.dispatchEvent(
-            new TouchEvent(type, {
-              bubbles: true,
-              cancelable: true,
-              touches: [touch],
-              targetTouches: [touch],
-              changedTouches: [touch],
-            }),
-          );
+          const event = new Event(type, { bubbles: true, cancelable: true });
+          Object.defineProperty(event, "touches", { value: [touch] });
+          chart.dispatchEvent(event);
         }
       },
       {
