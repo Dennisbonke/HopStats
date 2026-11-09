@@ -38,8 +38,8 @@ const links = [
 ];
 
 // Keep dark theme activation tied to complete, migrated route surfaces.
-// Milestone detail pages are included explicitly; unfinished Explorer catalogues
-// and the wildcard placeholder remain on the compatibility palette.
+// Analytics includes its URL-selected Overview and Drinking Trends panels;
+// unfinished Explorer catalogues and the wildcard placeholder remain light.
 const themeAwareRoutes = [
   "/",
   "/inventory",
@@ -47,6 +47,7 @@ const themeAwareRoutes = [
   "/imports",
   "/milestones",
   "/milestones/:id",
+  "/analytics",
   "/explore/beers",
 ];
 

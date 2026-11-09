@@ -1670,7 +1670,7 @@ test("shared Button variants keep token colors across migrated theme contexts", 
   }
 });
 
-test("application header styling stays scoped away from Analytics headings", async ({
+test("Analytics and Drinking Trends use semantic themes without affecting the shell", async ({
   page,
 }) => {
   await stubApplication(page);
@@ -1680,6 +1680,13 @@ test("application header styling stays scoped away from Analytics headings", asy
     await page.emulateMedia({ colorScheme });
     await page.goto("/analytics");
     await expect(page.getByText("Check-in Breakdown")).toBeVisible();
+    await expect(page.locator(".app")).toHaveClass(/theme-aware/);
+    await expect(page.locator(".app")).toHaveCSS("color-scheme", colorScheme);
+    await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
+    await expect(page.locator(".analytics-chart-panel").first()).toHaveCSS(
+      "background-color",
+      colorScheme === "dark" ? "rgb(23, 37, 51)" : "rgb(255, 255, 255)",
+    );
     const appHeader = page.locator(".app-header");
     await expect(appHeader).toHaveCSS(
       "background-color",
@@ -1707,6 +1714,19 @@ test("application header styling stays scoped away from Analytics headings", asy
     await expect(menuButton).toHaveAttribute("aria-expanded", "false");
     await page.goto("/analytics");
     await page.getByRole("tab", { name: "Drinking Trends" }).click();
+    await expect(page.locator(".app")).toHaveCSS("color-scheme", colorScheme);
+    await expect(page.locator(".drinking-trends-view")).toHaveCSS(
+      "background-color",
+      colorScheme === "dark" ? "rgb(23, 37, 51)" : "rgb(255, 255, 255)",
+    );
+    const selectedTrendsTab = page.getByRole("tab", {
+      name: "Drinking Trends",
+    });
+    await expect(selectedTrendsTab).toHaveAttribute("aria-selected", "true");
+    await expect(selectedTrendsTab).toHaveCSS(
+      "border-bottom-color",
+      colorScheme === "dark" ? "rgb(85, 189, 141)" : "rgb(23, 107, 77)",
+    );
 
     const trendsHeader = page.locator(".drinking-trends-view > header");
     await expect(trendsHeader).toBeVisible();
@@ -1869,17 +1889,18 @@ test("Dashboard and shell themes stay readable and responsive", async ({
       await page.goto("/analytics");
       await expect(page.getByText("Check-in Breakdown")).toBeVisible();
       await expectNoDocumentOverflow(page);
-      await expect(page.locator(".app")).not.toHaveClass(/theme-aware/);
+      await expect(page.locator(".app")).toHaveClass(/theme-aware/);
+      await expect(page.locator(".app")).toHaveCSS("color-scheme", colorScheme);
       const legacyMain = page.locator(".app-main");
       await expect(legacyMain).not.toHaveClass(/theme-aware/);
-      await expect(legacyMain).toHaveCSS("color-scheme", "light");
+      await expect(legacyMain).toHaveCSS("color-scheme", colorScheme);
       await expect(page.locator(".analytics-chart-panel").first()).toHaveCSS(
         "background-color",
-        "rgb(255, 255, 255)",
+        colorScheme === "dark" ? "rgb(23, 37, 51)" : "rgb(255, 255, 255)",
       );
       await expectReadable(
         page.locator(".analytics-chart-panel h3").first(),
-        `${colorScheme} Analytics compatibility surface at ${width}px`,
+        `${colorScheme} Analytics semantic surface at ${width}px`,
       );
     }
   }
@@ -1968,6 +1989,9 @@ test("Analytics charts keep controls, labels, and legends usable across viewport
       "/analytics?period=custom&start=2026-01-01&end=2026-12-31&granularity=month",
     );
     await expect(page.getByText("Check-in Breakdown")).toBeVisible();
+    await expect(page.locator(".app")).toHaveClass(/theme-aware/);
+    await expect(page.locator(".app")).toHaveCSS("color-scheme", colorScheme);
+    await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
 
     for (const width of [320, 390, 768, 1280]) {
       await page.setViewportSize({
@@ -1990,6 +2014,10 @@ test("Analytics charts keep controls, labels, and legends usable across viewport
         .toBeLessThanOrEqual(width);
       await expectNoDocumentOverflow(page);
       await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
+      await expect(breakdown).toHaveCSS(
+        "background-color",
+        colorScheme === "dark" ? "rgb(23, 37, 51)" : "rgb(255, 255, 255)",
+      );
       await expect(breakdown.locator(".recharts-legend-wrapper")).toBeVisible();
       await expect(
         breakdown.locator(".recharts-legend-item-text").nth(0),
@@ -1997,6 +2025,29 @@ test("Analytics charts keep controls, labels, and legends usable across viewport
       await expect(
         breakdown.locator(".recharts-legend-item-text").nth(1),
       ).toContainText("Repeat check-ins");
+      for (const legend of await breakdown
+        .locator(".recharts-legend-item-text")
+        .all()) {
+        await expectReadable(
+          legend,
+          `${colorScheme} chart legend at ${width}px`,
+        );
+      }
+      const axisStyle = await breakdown
+        .locator(".recharts-cartesian-axis-tick-value")
+        .first()
+        .evaluate((element) => ({
+          fill: getComputedStyle(element).fill,
+          background: getComputedStyle(
+            element.closest(".analytics-chart-panel")!,
+          ).backgroundColor,
+        }));
+      expect(axisStyle.fill).toBe(
+        colorScheme === "dark" ? "rgb(193, 204, 216)" : "rgb(82, 97, 118)",
+      );
+      expect(
+        contrastRatio(axisStyle.fill, axisStyle.background),
+      ).toBeGreaterThanOrEqual(4.5);
       await expect(trend.locator(".recharts-legend-wrapper")).toBeVisible();
       const overviewChartBox = await trend
         .locator(".chart-canvas.analytics-overview-chart")
@@ -2030,6 +2081,10 @@ test("Analytics charts keep controls, labels, and legends usable across viewport
         .locator(".distribution-chart")
         .filter({ hasText: "Check-ins by Hour of Day" });
       await expect(hourly).toBeVisible();
+      await expect(hourly).toHaveCSS(
+        "background-color",
+        colorScheme === "dark" ? "rgb(23, 37, 51)" : "rgb(255, 255, 255)",
+      );
       const plotBox = await hourly
         .locator(".distribution-canvas")
         .boundingBox();
@@ -2042,6 +2097,35 @@ test("Analytics charts keep controls, labels, and legends usable across viewport
       await expectReadable(
         page.locator("#weekday-hour-instructions"),
         `${colorScheme} heatmap explanation at ${width}px`,
+      );
+      await expect(page.locator(".calendar-scroll")).toHaveCSS(
+        "overflow-x",
+        "auto",
+      );
+      await expect(page.locator(".weekday-hour-scroll")).toHaveCSS(
+        "overflow-x",
+        "auto",
+      );
+      const calendarZero = page.locator(
+        '.calendar-day[data-calendar-date="2026-01-01"]',
+      );
+      await expect(calendarZero).toHaveAttribute("aria-label", /0 check-ins/);
+      await expect(calendarZero).toHaveCSS(
+        "background-color",
+        colorScheme === "dark" ? "rgb(37, 55, 71)" : "rgb(238, 242, 247)",
+      );
+      await expect(page.locator(".calendar-legend")).toContainText(
+        "Outside period",
+      );
+      const firstHourlyCell = page.locator(".weekday-hour-cell").first();
+      await expect(firstHourlyCell).toHaveAttribute("data-heat-level", "1");
+      await expect(firstHourlyCell).toHaveAttribute(
+        "aria-label",
+        /Monday, 00:00/,
+      );
+      await expect(firstHourlyCell).toHaveCSS(
+        "background-color",
+        colorScheme === "dark" ? "rgb(33, 77, 57)" : "rgb(213, 239, 224)",
       );
       const heatmapCell = await page
         .locator(".weekday-hour-cell")
@@ -2094,6 +2178,7 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
     expectedText: string,
     viewport: { width: number; height: number },
     context: string,
+    colorScheme: "light" | "dark",
     edge?: "top" | "bottom",
   ) => {
     let barBox = await bar.boundingBox();
@@ -2142,6 +2227,18 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
         scrollHeight: element.scrollHeight,
         background: getComputedStyle(element).backgroundColor,
         foreground: getComputedStyle(element).color,
+        border: getComputedStyle(element).borderTopColor,
+        tooltipToken: getComputedStyle(element)
+          .getPropertyValue("--color-chart-tooltip-surface")
+          .trim(),
+        bodyTooltipToken: getComputedStyle(document.body)
+          .getPropertyValue("--color-chart-tooltip-surface")
+          .trim(),
+        colorScheme: getComputedStyle(element).colorScheme,
+        hasThemeBoundary: element.classList.contains("theme-aware"),
+        bodyHasThemeBoundary: document.body.classList.contains("theme-aware"),
+        wrapperPosition: getComputedStyle(element.parentElement!).position,
+        wrapperZIndex: getComputedStyle(element.parentElement!).zIndex,
         portalTarget: element.parentElement?.parentElement === document.body,
         insideClippedCard: element.closest(".distribution-chart") !== null,
       };
@@ -2158,8 +2255,24 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
     expect(geometry.scrollHeight, context).toBeLessThanOrEqual(
       geometry.contentHeight + 1,
     );
-    expect(geometry.background, context).toBe("rgb(23, 32, 51)");
-    expect(geometry.foreground, context).toBe("rgb(255, 255, 255)");
+    expect(geometry.background, context).toBe(
+      colorScheme === "dark" ? "rgb(11, 18, 26)" : "rgb(23, 32, 51)",
+    );
+    expect(geometry.foreground, context).toBe(
+      colorScheme === "dark" ? "rgb(241, 245, 249)" : "rgb(255, 255, 255)",
+    );
+    expect(geometry.border, context).toBe(
+      colorScheme === "dark" ? "rgb(113, 128, 150)" : "rgb(100, 116, 139)",
+    );
+    expect(geometry.tooltipToken, context).toBe(
+      colorScheme === "dark" ? "#0b121a" : "#172033",
+    );
+    expect(geometry.bodyTooltipToken, context).toBe("#172033");
+    expect(geometry.colorScheme, context).toBe(colorScheme);
+    expect(geometry.hasThemeBoundary, context).toBe(true);
+    expect(geometry.bodyHasThemeBoundary, context).toBe(false);
+    expect(geometry.wrapperPosition, context).toBe("fixed");
+    expect(Number(geometry.wrapperZIndex), context).toBeGreaterThanOrEqual(30);
     expect(geometry.portalTarget, context).toBe(true);
     expect(geometry.insideClippedCard, context).toBe(false);
     expect(
@@ -2199,12 +2312,14 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
         "Jan 2026",
         viewport,
         `${colorScheme} ${width}px first breakdown bucket`,
+        colorScheme,
       );
       await inspectEdgeBar(
         bars.last(),
         "Dec 2026",
         viewport,
         `${colorScheme} ${width}px last breakdown bucket`,
+        colorScheme,
       );
 
       await page.getByRole("tab", { name: "Drinking Trends" }).click();
@@ -2219,12 +2334,14 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
         "00:00",
         viewport,
         `${colorScheme} ${width}px first hourly bucket`,
+        colorScheme,
       );
       await inspectEdgeBar(
         hourlyBars.last(),
         "23:00",
         viewport,
         `${colorScheme} ${width}px last hourly bucket`,
+        colorScheme,
       );
       if (width === 320 && colorScheme === "light") {
         const shortViewport = { width, height: 360 };
@@ -2235,6 +2352,7 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
           "00:00",
           shortViewport,
           "320px tooltip near the viewport bottom",
+          colorScheme,
           "bottom",
         );
         await inspectEdgeBar(
@@ -2242,6 +2360,7 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
           "23:00",
           shortViewport,
           "320px tooltip near the viewport top",
+          colorScheme,
           "top",
         );
         await page.setViewportSize(viewport);

@@ -92,7 +92,7 @@ export default function AnalyticsChartTooltip({
   if (!active || x === undefined || y === undefined) return null;
 
   return (
-    <div ref={contentRef} className="analytics-tooltip">
+    <div ref={contentRef} className="analytics-tooltip theme-aware">
       {children}
     </div>
   );

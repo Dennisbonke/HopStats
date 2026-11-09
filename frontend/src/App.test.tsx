@@ -68,6 +68,38 @@ beforeEach(() => {
             total_pages: 0,
           }),
         });
+      if (String(url).startsWith("/api/v1/analytics/checkins"))
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            start: "2026-01-01",
+            end: "2026-12-31",
+            timezone: "Europe/Amsterdam",
+            granularity: "month",
+            summary: {
+              total_checkins: 0,
+              new_discoveries: 0,
+              repeat_checkins: 0,
+              distinct_beers: 0,
+            },
+            cumulative_baseline_checkins: 0,
+            cumulative_baseline_discoveries: 0,
+            buckets: [],
+          }),
+        });
+      if (String(url).startsWith("/api/v1/analytics/drinking-trends"))
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            start: "2026-01-01",
+            end: "2026-12-31",
+            timezone: "Europe/Amsterdam",
+            daily: [],
+            weekday: [],
+            hourly: [],
+            weekday_hour: [],
+          }),
+        });
       return Promise.resolve({
         ok: true,
         json: async () => ({ buckets: [] }),
@@ -88,6 +120,20 @@ test("renders shell and navigation", async () => {
   expect(screen.getByText("Explorer")).toBeInTheDocument();
   expect(await screen.findByText("Backend: connected")).toBeInTheDocument();
 });
+
+test("Analytics enables the semantic route boundary for URL-selected trends", async () => {
+  render(
+    <MemoryRouter initialEntries={["/analytics?view=trends"]}>
+      <App />
+    </MemoryRouter>,
+  );
+  expect(
+    await screen.findByRole("heading", { name: "Drinking Trends" }),
+  ).toBeInTheDocument();
+  expect(document.querySelector(".app")).toHaveClass("theme-aware");
+  expect(document.querySelector(".app-header")).toHaveClass("theme-aware");
+});
+
 test("shows connection failure", async () => {
   vi.stubGlobal(
     "fetch",

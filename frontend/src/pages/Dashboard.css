@@ -351,12 +351,7 @@
 }
 
 .dashboard-page .dashboard-chart .recharts-cartesian-axis-tick-value {
-  fill: var(--color-chart-axis);
   font-size: 0.78rem;
-}
-
-.dashboard-page .dashboard-chart .recharts-cartesian-grid line {
-  stroke: var(--color-chart-grid);
 }
 
 .dashboard-page .dashboard-secondary-value {
