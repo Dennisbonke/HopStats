@@ -12,6 +12,8 @@ import { fetchCheckinAnalytics } from "../api/analytics";
 import { DashboardData, fetchDashboard } from "../api/dashboard";
 import { Insight, fetchInsights } from "../api/insights";
 import { fetchMilestones, Milestone } from "../api/milestones";
+import { Button, Card, StatusBadge } from "../components/ui";
+import "./Dashboard.css";
 
 const countFormatter = new Intl.NumberFormat();
 const dashboardTimezone = "Europe/Amsterdam";
@@ -189,7 +191,10 @@ function MetricCard({
         ? `−${countFormatter.format(Math.abs(delta))}`
         : null;
   return (
-    <article className={`dashboard-metric-card${primary ? " primary" : ""}`}>
+    <Card
+      as="article"
+      className={`dashboard-metric-card${primary ? " primary" : ""}`}
+    >
       <h2>{title}</h2>
       <strong>{value}</strong>
       {detail && <p>{detail}</p>}
@@ -214,7 +219,7 @@ function MetricCard({
             : `${deltaLabel} since last import`}
         </p>
       )}
-    </article>
+    </Card>
   );
 }
 
@@ -244,9 +249,9 @@ function SectionState({
       >
         <span>{error}</span>
         {retry && (
-          <button type="button" className="secondary-button" onClick={retry}>
+          <Button type="button" variant="secondary" onClick={retry}>
             Retry {label}
-          </button>
+          </Button>
         )}
       </div>
     );
@@ -256,6 +261,14 @@ function SectionState({
 
 function FeaturedMilestone({ milestone }: { milestone: Milestone }) {
   const progress = Math.max(0, Math.min(100, milestone.progress_percent));
+  const statusVariant =
+    milestone.status === "overdue"
+      ? "error"
+      : milestone.status === "scheduled"
+        ? "info"
+        : milestone.status === "completed" || milestone.status === "active"
+          ? "success"
+          : "neutral";
   return (
     <Link
       className="featured-milestone"
@@ -264,9 +277,12 @@ function FeaturedMilestone({ milestone }: { milestone: Milestone }) {
     >
       <div className="featured-milestone-topline">
         <span>Featured milestone</span>
-        <span className={`dashboard-milestone-status ${milestone.status}`}>
+        <StatusBadge
+          className="dashboard-milestone-status"
+          variant={statusVariant}
+        >
           {milestoneStatusLabel[milestone.status]}
-        </span>
+        </StatusBadge>
         <span>{milestone.progress_percent.toLocaleString()}%</span>
       </div>
       <h3>{milestone.name}</h3>
@@ -299,7 +315,9 @@ function MilestoneSection({ resource }: { resource: Resource<Milestone[]> }) {
   const [featured, ...additional] = milestones;
 
   return (
-    <section
+    <Card
+      as="section"
+      variant="standard"
       className="dashboard-panel dashboard-milestones"
       aria-labelledby="dashboard-milestones-title"
     >
@@ -358,7 +376,7 @@ function MilestoneSection({ resource }: { resource: Resource<Milestone[]> }) {
           )}
         </>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -393,7 +411,9 @@ function InsightCard({ insight }: { insight: Insight }) {
 function InsightsSection({ resource }: { resource: Resource<Insight[]> }) {
   const insights = resource.data?.slice(0, 3) ?? [];
   return (
-    <section
+    <Card
+      as="section"
+      variant="standard"
       className="dashboard-panel dashboard-insights"
       aria-labelledby="dashboard-insights-title"
     >
@@ -423,7 +443,7 @@ function InsightsSection({ resource }: { resource: Resource<Insight[]> }) {
           ))}
         </div>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -442,7 +462,7 @@ function InventoryHealth({
     <details className="dashboard-health">
       <summary>Inventory &amp; data health</summary>
       <div className="dashboard-health-grid">
-        <section className="dashboard-panel">
+        <Card as="section" className="dashboard-panel">
           <h3>Inventory snapshot</h3>
           <div className="dashboard-secondary-stats">
             <MetricCard
@@ -462,8 +482,8 @@ function InventoryHealth({
             Unmatched or ambiguous inventory may have been tried previously but
             cannot be reliably linked to an imported check-in.
           </p>
-        </section>
-        <section className="dashboard-panel">
+        </Card>
+        <Card as="section" className="dashboard-panel">
           <h3>Inventory matching confidence</h3>
           <p className="panel-explanation">
             {!hasInventory
@@ -496,8 +516,8 @@ function InventoryHealth({
               </strong>
             </div>
           </div>
-        </section>
-        <section className="dashboard-panel">
+        </Card>
+        <Card as="section" className="dashboard-panel">
           <h3>Dataset freshness</h3>
           <p className="panel-explanation">
             These timestamps show when HopStats imported data, not when Untappd
@@ -527,14 +547,18 @@ function InventoryHealth({
               </div>
             )}
           </dl>
-        </section>
+        </Card>
       </div>
     </details>
   );
 }
 
 function DashboardPanel({ children }: { children: ReactNode }) {
-  return <section className="dashboard-panel">{children}</section>;
+  return (
+    <Card as="section" className="dashboard-panel">
+      {children}
+    </Card>
+  );
 }
 
 export default function Dashboard() {
@@ -634,9 +658,14 @@ export default function Dashboard() {
 
       <Suspense
         fallback={
-          <section className="dashboard-panel" role="status" aria-busy="true">
+          <Card
+            as="section"
+            className="dashboard-panel"
+            role="status"
+            aria-busy="true"
+          >
             Loading monthly discoveries…
-          </section>
+          </Card>
         }
       >
         <DiscoveriesChart

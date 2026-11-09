@@ -9,6 +9,7 @@ import {
 } from "recharts";
 import { Link } from "react-router-dom";
 import { AnalyticsBucket } from "../api/analytics";
+import { Button, Card } from "./ui";
 
 const countFormatter = new Intl.NumberFormat();
 
@@ -72,7 +73,8 @@ export default function DashboardDiscoveriesChart({
   }));
 
   return (
-    <section
+    <Card
+      as="section"
       className="dashboard-panel dashboard-discoveries"
       aria-labelledby="dashboard-discoveries-title"
     >
@@ -97,13 +99,9 @@ export default function DashboardDiscoveriesChart({
           role="alert"
         >
           <span>{resource.error}</span>
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={resource.retry}
-          >
+          <Button type="button" variant="secondary" onClick={resource.retry}>
             Retry discoveries
-          </button>
+          </Button>
         </div>
       ) : hasCheckins === false ? (
         <p className="dashboard-empty-compact">
@@ -134,7 +132,7 @@ export default function DashboardDiscoveriesChart({
             aria-label="Unique beer discoveries over the last six months"
             aria-describedby="dashboard-discoveries-summary"
           >
-            <ResponsiveContainer width="100%" height={230}>
+            <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={chartData}
                 accessibilityLayer
@@ -148,6 +146,13 @@ export default function DashboardDiscoveriesChart({
                     `${countFormatter.format(Number(value))} discoveries`,
                     "Unique beers",
                   ]}
+                  contentStyle={{
+                    backgroundColor: "var(--color-chart-tooltip-surface)",
+                    borderColor: "var(--color-border-strong)",
+                    color: "var(--color-chart-tooltip-text)",
+                  }}
+                  labelStyle={{ color: "var(--color-chart-tooltip-text)" }}
+                  itemStyle={{ color: "var(--color-chart-tooltip-text)" }}
                   labelFormatter={(label, payload) => {
                     const labelText = String(label);
                     const bucket =
@@ -160,7 +165,7 @@ export default function DashboardDiscoveriesChart({
                 <Bar
                   dataKey="new_discoveries"
                   name="Unique beer discoveries"
-                  fill="#23835e"
+                  fill="var(--color-chart-primary)"
                   radius={[4, 4, 0, 0]}
                   isAnimationActive={false}
                 />
@@ -172,6 +177,6 @@ export default function DashboardDiscoveriesChart({
           </p>
         </>
       )}
-    </section>
+    </Card>
   );
 }

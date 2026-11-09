@@ -1,0 +1,56 @@
+.login-page {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  min-height: 100vh;
+  place-items: center;
+  margin: 0 auto;
+  padding: max(1rem, env(safe-area-inset-top)) 1rem
+    max(1rem, env(safe-area-inset-bottom));
+  background: var(--color-canvas);
+  color: var(--color-text-primary);
+}
+
+.login-page .login-card {
+  width: min(100%, 26rem);
+  min-width: 0;
+  padding: clamp(1.25rem, 6vw, 2rem);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-surface-raised);
+}
+
+.login-page .login-brand {
+  margin-bottom: 2rem;
+  color: var(--color-text-primary);
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.login-page .login-card h1 {
+  margin: 0.1rem 0 0.35rem;
+}
+
+.login-page .login-description {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.login-page .login-card form {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.login-page .login-card form > .ui-button {
+  width: 100%;
+}
+
+.login-page .login-error {
+  margin: 0;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--color-status-error);
+  border-radius: 0.45rem;
+  background: var(--color-surface-error);
+  color: var(--color-text-on-error-surface);
+  overflow-wrap: anywhere;
+}

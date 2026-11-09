@@ -268,13 +268,165 @@ const analyticsResponsiveTrends = {
   })),
 };
 
+const dashboardFixture = {
+  total_checkins: 2924,
+  unique_beers: 2325,
+  unique_breweries: 640,
+  unique_styles: 209,
+  average_personal_rating: 4.5,
+  rated_checkins: 1200,
+  inventory_units: 183,
+  unique_inventory_beers: 172,
+  not_confirmed_checked_in: 30,
+  match_coverage: { external_id: 100, exact: 42, ambiguous: 10, unmatched: 20 },
+  freshness: {
+    checkins_last_imported_at: "2026-10-14T10:00:00+00:00",
+    inventory_last_imported_at: "2026-10-13T10:00:00+00:00",
+    checkins_source_exported_at: null,
+    inventory_source_exported_at: null,
+  },
+  import_deltas: {
+    total_checkins: 12,
+    unique_beers: 8,
+    unique_breweries: null,
+    unique_styles: -2,
+  },
+};
+
+const dashboardCheckinsFixture = (() => {
+  const dateParts = new Intl.DateTimeFormat("en", {
+    timeZone: "Europe/Amsterdam",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(new Date());
+  const year = Number(dateParts.find((part) => part.type === "year")?.value);
+  const month = Number(dateParts.find((part) => part.type === "month")?.value);
+  const day = dateParts.find((part) => part.type === "day")?.value;
+  let cumulativeCheckins = 84;
+  let cumulativeDiscoveries = 32;
+  const buckets = Array.from({ length: 6 }, (_, index) => {
+    const startDate = new Date(Date.UTC(year, month - 1 - 5 + index, 1));
+    const key = startDate.toISOString().slice(0, 7);
+    const label = new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(startDate);
+    const newDiscoveries = (index % 3) + 1;
+    const repeatCheckins = (index % 4) + 3;
+    cumulativeCheckins += newDiscoveries + repeatCheckins;
+    cumulativeDiscoveries += newDiscoveries;
+    return {
+      key,
+      label,
+      start: `${key}-01`,
+      end:
+        index === 5 && day
+          ? `${year}-${String(month).padStart(2, "0")}-${day}`
+          : new Date(Date.UTC(year, month - 1 - 5 + index + 1, 0))
+              .toISOString()
+              .slice(0, 10),
+      new_discoveries: newDiscoveries,
+      repeat_checkins: repeatCheckins,
+      total_checkins: newDiscoveries + repeatCheckins,
+      cumulative_checkins: cumulativeCheckins,
+      cumulative_discoveries: cumulativeDiscoveries,
+    };
+  });
+  const start = buckets[0].start;
+  const end = buckets[buckets.length - 1].end;
+  return {
+    ...checkins,
+    start,
+    end,
+    summary: {
+      total_checkins: buckets.reduce(
+        (sum, bucket) => sum + bucket.total_checkins,
+        0,
+      ),
+      new_discoveries: buckets.reduce(
+        (sum, bucket) => sum + bucket.new_discoveries,
+        0,
+      ),
+      repeat_checkins: buckets.reduce(
+        (sum, bucket) => sum + bucket.repeat_checkins,
+        0,
+      ),
+      distinct_beers: 32,
+    },
+    cumulative_baseline_checkins: 84,
+    cumulative_baseline_discoveries: 32,
+    buckets,
+  };
+})();
+
+const dashboardMilestone = {
+  id: 4,
+  name: "Discover 100 New Beers from Independent Breweries",
+  metric: "discoveries",
+  goal_type: "incremental",
+  target: 100,
+  calendar_year: null,
+  start_date: "2026-01-01",
+  deadline_date: "2026-12-31",
+  timezone: "Europe/Amsterdam",
+  archived_at: null,
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-10-14T00:00:00Z",
+  current: 82,
+  remaining: 18,
+  progress_percent: 82,
+  status: "active",
+  deadline_outcome: null,
+  completed_at: null,
+  completed_before_deadline: null,
+  required_per_day: null,
+  required_per_week: null,
+  elapsed_per_day: null,
+  elapsed_per_week: null,
+  trajectory_difference: null,
+};
+
+const dashboardInsights = [
+  {
+    id: "long-seasonal-insight",
+    type: "checkin_trend",
+    category: "activity",
+    priority: 50,
+    title: "Your activity at a glance",
+    description:
+      "You recorded 20 check-ins this month, compared with 10 last month.",
+    href: "/analytics",
+    data: { current_count: 20, previous_count: 10, difference: 10 },
+  },
+];
+
 async function stubApplication(
   page: Page,
   checkinsFixture = checkins,
   drinkingTrendsFixture = drinkingTrends,
+  options: { anonymous?: boolean; dashboard?: boolean } = {},
 ) {
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
+    if (options.anonymous && path === "/api/v1/auth/me") {
+      await route.fulfill({
+        status: 401,
+        json: { detail: "Authentication required" },
+      });
+      return;
+    }
+    if (options.anonymous && path === "/api/v1/auth/csrf") {
+      await route.fulfill({ status: 200, json: { token: "test-token" } });
+      return;
+    }
+    if (options.anonymous && path === "/api/v1/auth/login") {
+      await route.fulfill({
+        status: 401,
+        json: { detail: "Invalid username or password" },
+      });
+      return;
+    }
     const body: Record<string, unknown> = {
       "/api/v1/auth/me": {
         id: 1,
@@ -282,6 +434,9 @@ async function stubApplication(
         created_at: "2026-01-01T00:00:00Z",
       },
       "/api/v1/health": { status: "ok" },
+      "/api/v1/dashboard": dashboardFixture,
+      "/api/v1/milestones": { milestones: [dashboardMilestone] },
+      "/api/v1/insights": { insights: dashboardInsights },
       "/api/v1/inventory/styles": [
         { id: 1, name: longStyleName },
         { id: 2, name: "Pilsner" },
@@ -366,7 +521,9 @@ async function stubApplication(
         total: 1,
         total_pages: 1,
       },
-      "/api/v1/analytics/checkins": checkinsFixture,
+      "/api/v1/analytics/checkins": options.dashboard
+        ? dashboardCheckinsFixture
+        : checkinsFixture,
       "/api/v1/analytics/drinking-trends": drinkingTrendsFixture,
     };
     if (path === "/api/v1/inventory") {
@@ -1268,8 +1425,14 @@ test("application header styling stays scoped away from Analytics headings", asy
     await page.goto("/analytics");
     await expect(page.getByText("Check-in Breakdown")).toBeVisible();
     const appHeader = page.locator(".app-header");
-    await expect(appHeader).toHaveCSS("background-color", "rgb(23, 32, 51)");
-    await expect(appHeader).toHaveCSS("color", "rgb(255, 255, 255)");
+    await expect(appHeader).toHaveCSS(
+      "background-color",
+      colorScheme === "dark" ? "rgb(29, 44, 58)" : "rgb(255, 255, 255)",
+    );
+    await expect(appHeader).toHaveCSS(
+      "color",
+      colorScheme === "dark" ? "rgb(241, 245, 249)" : "rgb(23, 32, 51)",
+    );
     for (const description of await page
       .locator(".analytics-chart-panel .panel-explanation")
       .all()) {
@@ -1310,6 +1473,221 @@ test("application header styling stays scoped away from Analytics headings", asy
       heatmapHeader.locator("#weekday-hour-instructions"),
       `${colorScheme} weekday/hour explanation`,
     );
+  }
+});
+
+test("Dashboard and shell themes stay readable and responsive", async ({
+  page,
+}) => {
+  await stubApplication(page, checkins, drinkingTrends, { dashboard: true });
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    for (const width of [320, 390, 768, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/");
+      await expect(
+        page.getByRole("heading", { name: "Your beer journey" }),
+      ).toBeVisible();
+      await expectNoDocumentOverflow(page);
+
+      const dashboardSurface = page.locator(".app");
+      await expect(dashboardSurface).toHaveClass(/theme-aware/);
+      await expect(dashboardSurface).toHaveCSS(
+        "background-color",
+        colorScheme === "dark" ? "rgb(16, 25, 35)" : "rgb(245, 247, 251)",
+      );
+      await expectReadable(
+        page.getByRole("heading", { name: "Your beer journey" }),
+        `${colorScheme} Dashboard heading at ${width}px`,
+      );
+      await expectReadable(
+        page.locator(".dashboard-primary h2").first(),
+        `${colorScheme} Dashboard metric label at ${width}px`,
+      );
+      await expectReadable(
+        page.locator(".featured-milestone h3"),
+        `${colorScheme} featured milestone at ${width}px`,
+      );
+      await expect(page.locator(".dashboard-milestone-status")).toHaveText(
+        "In progress",
+      );
+      await expectReadable(
+        page.locator(".dashboard-milestone-status"),
+        `${colorScheme} milestone status at ${width}px`,
+      );
+      await expectReadable(
+        page.locator(".dashboard-insight p"),
+        `${colorScheme} insight description at ${width}px`,
+      );
+      const chartBox = await page.locator(".dashboard-chart").boundingBox();
+      expect(chartBox).not.toBeNull();
+      expect(chartBox!.width).toBeGreaterThan(150);
+      expect(chartBox!.height).toBeGreaterThanOrEqual(208);
+      const chartAxis = page
+        .locator(".dashboard-chart .recharts-cartesian-axis-tick-value")
+        .first();
+      await expect(chartAxis).toBeVisible();
+      await expect(chartAxis).toHaveCSS(
+        "fill",
+        colorScheme === "dark" ? "rgb(193, 204, 216)" : "rgb(82, 97, 118)",
+      );
+      await expect(
+        page.locator(".dashboard-chart .recharts-cartesian-grid line").first(),
+      ).toHaveCSS(
+        "stroke",
+        colorScheme === "dark" ? "rgb(60, 75, 73)" : "rgb(220, 229, 226)",
+      );
+      await expect(page.locator(".dashboard-metric-card").first()).toHaveCSS(
+        "background-color",
+        colorScheme === "dark" ? "rgb(23, 37, 51)" : "rgb(255, 255, 255)",
+      );
+      await expect(page.locator(".featured-milestone")).toHaveCSS(
+        "background-color",
+        colorScheme === "dark" ? "rgb(23, 55, 42)" : "rgb(232, 246, 237)",
+      );
+
+      const header = page.locator(".app-header");
+      await expect(header).toHaveCSS(
+        "background-color",
+        colorScheme === "dark" ? "rgb(29, 44, 58)" : "rgb(255, 255, 255)",
+      );
+      const selectedDashboardLink = page
+        .getByRole("navigation", { name: "Main navigation" })
+        .getByRole("link", { name: "Dashboard" });
+      await expect(selectedDashboardLink).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+      await expect(selectedDashboardLink).toHaveCSS(
+        "background-color",
+        colorScheme === "dark" ? "rgb(37, 55, 71)" : "rgb(238, 242, 247)",
+      );
+
+      if (width <= 960) {
+        const brand = page.locator(".app-header .brand");
+        const menuButton = page.getByRole("button", { name: "Main menu" });
+        const [brandBox, toggleBox] = await Promise.all([
+          brand.boundingBox(),
+          menuButton.boundingBox(),
+        ]);
+        expect(brandBox).not.toBeNull();
+        expect(toggleBox).not.toBeNull();
+        expect(
+          Math.abs(
+            brandBox!.y +
+              brandBox!.height / 2 -
+              (toggleBox!.y + toggleBox!.height / 2),
+          ),
+        ).toBeLessThan(2);
+        await menuButton.focus();
+        await expect(menuButton).toHaveCSS("outline-style", "solid");
+        await page.keyboard.press("Enter");
+        await expect(menuButton).toHaveAttribute("aria-expanded", "true");
+        await expect(
+          page.getByRole("navigation", { name: "Main navigation" }),
+        ).toBeVisible();
+        await page.keyboard.press("Tab");
+        await expect(selectedDashboardLink).toBeFocused();
+        await expect(selectedDashboardLink).toHaveCSS("outline-width", "3px");
+        await expect(selectedDashboardLink).toHaveCSS(
+          "outline-color",
+          colorScheme === "dark" ? "rgb(251, 191, 36)" : "rgb(128, 85, 0)",
+        );
+        await expect(selectedDashboardLink).toHaveCSS("min-height", "44px");
+        await expectNoDocumentOverflow(page);
+        await page.keyboard.press("Escape");
+        await expect(menuButton).toHaveAttribute("aria-expanded", "false");
+      } else {
+        await expect(page.getByRole("link", { name: "Imports" })).toBeVisible();
+      }
+
+      await page.goto("/imports");
+      await expect(
+        page.getByRole("heading", { name: "Imports" }),
+      ).toBeVisible();
+      await expectNoDocumentOverflow(page);
+      await expect(page.locator(".app")).not.toHaveClass(/theme-aware/);
+      const legacyMain = page.locator(".app-main");
+      await expect(legacyMain).not.toHaveClass(/theme-aware/);
+      await expect(legacyMain).toHaveCSS("color-scheme", "light");
+      await expect(page.locator(".history-card")).toHaveCSS(
+        "background-color",
+        "rgb(255, 255, 255)",
+      );
+      await expectReadable(
+        page.locator(".history-card h3"),
+        `${colorScheme} legacy Imports surface at ${width}px`,
+      );
+    }
+  }
+});
+
+test("login surface uses semantic themes, associated labels, and readable errors", async ({
+  page,
+}) => {
+  await stubApplication(page, checkins, drinkingTrends, { anonymous: true });
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    for (const width of [320, 390, 768, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/");
+      await expect(
+        page.getByRole("heading", { name: "Sign in" }),
+      ).toBeVisible();
+      await expectNoDocumentOverflow(page);
+
+      const loginPage = page.locator(".login-page");
+      await expect(loginPage).toHaveClass(/theme-aware/);
+      await expect(loginPage).toHaveCSS(
+        "background-color",
+        colorScheme === "dark" ? "rgb(16, 25, 35)" : "rgb(245, 247, 251)",
+      );
+      await expect(page.locator(".login-card")).toHaveCSS(
+        "background-color",
+        colorScheme === "dark" ? "rgb(23, 37, 51)" : "rgb(255, 255, 255)",
+      );
+      const username = page.getByLabel("Username");
+      const password = page.getByLabel("Password");
+      await expect(username).toHaveAttribute("id", "login-username");
+      await expect(password).toHaveAttribute("id", "login-password");
+      await expect(username).toHaveAttribute("name", "username");
+      await expect(username).toHaveAttribute("autocomplete", "username");
+      await expect(password).toHaveAttribute("name", "password");
+      await expect(password).toHaveAttribute(
+        "autocomplete",
+        "current-password",
+      );
+      await expect(username).toHaveCSS("min-height", "44px");
+      await expect(page.getByRole("button", { name: "Sign in" })).toHaveCSS(
+        "min-height",
+        "44px",
+      );
+      await expectReadable(
+        page.getByRole("heading", { name: "Sign in" }),
+        `${colorScheme} login heading at ${width}px`,
+      );
+      await expectReadable(
+        page.locator(".login-description"),
+        `${colorScheme} login description at ${width}px`,
+      );
+      await username.focus();
+      await expect(username).toHaveCSS("outline-style", "solid");
+      await expect(username).toHaveCSS(
+        "outline-color",
+        colorScheme === "dark" ? "rgb(251, 191, 36)" : "rgb(128, 85, 0)",
+      );
+      await username.fill("styling-test");
+      await password.fill("not-a-real-password");
+      await page.getByRole("button", { name: "Sign in" }).click();
+      const error = page.getByRole("alert");
+      await expect(error).toContainText(
+        "The username or password is incorrect.",
+      );
+      await expectReadable(error, `${colorScheme} login error at ${width}px`);
+      await expectNoDocumentOverflow(page);
+    }
   }
 });
 
