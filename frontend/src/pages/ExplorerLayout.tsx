@@ -1,3 +1,4 @@
+import "./Explorer.css";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 export function ExplorerUpcoming({ title }: { title: string }) {
@@ -15,7 +16,7 @@ export function ExplorerUpcoming({ title }: { title: string }) {
 export default function ExplorerLayout() {
   const location = useLocation();
   return (
-    <div className="theme-aware explorer-page">
+    <div className="explorer-page">
       <div className="page-heading">
         <h2>Explorer</h2>
         <p>Browse beers from your personal check-in history.</p>

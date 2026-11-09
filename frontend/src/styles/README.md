@@ -6,13 +6,14 @@
 - `components.css` holds shared React component styles. Use explicit component
   classes for shared primitives; `.app :where(button:not(.ui-button))` remains a
   transitional compatibility rule for unmigrated native buttons.
-- `../styles.css` is the legacy application stylesheet. Keep its remaining
-  element-level rules to resets and document-level defaults. Shared component
-  rules need a component scope; route rules need a route scope. For example,
-  table sizing and cell behavior are scoped to the Imports history, Inventory,
-  Explorer, and weekday/hour tables instead of applying to every table.
-  Migrate page rules as those pages are worked on instead of moving the whole
-  file at once.
+  Cross-route layout and text utilities (`.page-heading`, `.section-heading`,
+  `.muted`, `.panel-explanation`, and `.button-link`) also live here.
+- Modal backdrops share the semantic `--color-overlay` token.
+- `../styles.css` is the legacy application stylesheet. Shared component rules
+  need a component scope; route rules need a route scope. Analytics still owns
+  its compatibility styles there until PR 7. Keep these selectors scoped under
+  `.analytics-page` and migrate them with that route instead of moving the whole
+  file at once. Table sizing and cell behavior belong to their owning route.
 - Put route-specific styles beside their page component (for example,
   `pages/Inventory.css`) and import them from that page.
 - Dashboard and login presentation rules live beside their page components in
@@ -25,9 +26,14 @@
   operating system requests dark mode. Do not opt in a component that still
   relies on un-themed light backgrounds.
 - The shell header and authentication views own separate `.theme-aware`
-  boundaries. The authenticated app root adopts that boundary only on the
-  migrated Dashboard route; navigating to an unmigrated route removes it so
-  page content keeps the root light compatibility palette.
+  boundaries. `App.tsx` keeps an explicit allowlist for complete route surfaces:
+  Dashboard, Inventory, Locations, Imports, Milestones (including detail
+  pages), and the implemented Explorer beer catalogue. Analytics and wildcard
+  or unfinished routes stay on the root light compatibility palette. Keep a
+  route off the list until its full visible surface is migrated.
+- Explorer's beer catalogue inherits the app route boundary. The Breweries and
+  Styles placeholders remain on the compatibility palette; do not add a broad
+  `/explore/*` theme match while those child routes are unfinished.
 - Existing routes may keep their scoped `prefers-color-scheme` rules until
   migrated together. New shared primitives should use semantic tokens and
   inherit the nearest `.theme-aware` palette.
@@ -52,6 +58,7 @@
   `.app :where(button:not(.ui-button))` rule is transitional styling for
   unmigrated controls and deliberately excludes shared buttons.
 
-Stylesheets are imported once from `main.tsx`, in token, shared component, then
-legacy application order. Keep that order and avoid importing styles back into
-`tokens.css` or `components.css`.
+Global stylesheets are imported from `main.tsx`, in token, shared component,
+then legacy application order. Route stylesheets are imported beside their
+page component and stay inside a route class. Keep the global order and avoid
+importing styles back into `tokens.css` or `components.css`.

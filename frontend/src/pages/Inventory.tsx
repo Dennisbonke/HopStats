@@ -1,3 +1,4 @@
+import "./Inventory.css";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -8,6 +9,7 @@ import {
   InventoryResponse,
 } from "../api/inventory";
 import { fetchLocations, LocationData, LocationNode } from "../api/locations";
+import { Button, Card, FormField, StatusBadge } from "../components/ui";
 
 const numberFormatter = new Intl.NumberFormat();
 
@@ -29,6 +31,16 @@ function matchLabel(status: string): string {
       unmatched: "Not confirmed checked in",
     }[status] ?? status
   );
+}
+
+function matchVariant(
+  status: string,
+): "success" | "warning" | "error" | "info" | "neutral" {
+  if (status === "external_id" || status === "exact" || status === "resolved")
+    return "success";
+  if (status === "ambiguous") return "warning";
+  if (status === "unmatched" || status === "unresolved") return "neutral";
+  return "info";
 }
 
 function flattenLocations(
@@ -55,8 +67,11 @@ function LocationSelect({
     [data],
   );
   return (
-    <label className="filter-control">
-      Storage location
+    <FormField
+      id="inventory-location-filter"
+      label="Storage location"
+      className="inventory-filter-control"
+    >
       <select
         value={selected}
         onChange={(event) => onChange(event.target.value)}
@@ -70,7 +85,7 @@ function LocationSelect({
         ))}
         <option value="__unresolved__">Unresolved or ambiguous</option>
       </select>
-    </label>
+    </FormField>
   );
 }
 
@@ -99,9 +114,12 @@ function Summary({ item }: { item: InventoryItem }) {
       <p className="location-line">
         {item.location ? item.location.path : "No resolved storage location"}
       </p>
-      <span className={`status-pill ${item.match_status}`}>
+      <StatusBadge
+        className={`inventory-status status-pill ${item.match_status}`}
+        variant={matchVariant(item.match_status)}
+      >
         {matchLabel(item.match_status)}
-      </span>
+      </StatusBadge>
       {item.match_status === "unmatched" && (
         <p className="hint-text">
           This does not prove the beer was never checked in.
@@ -118,19 +136,44 @@ function DetailPanel({
   item: InventoryItem;
   onClose: () => void;
 }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const previousFocus = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    previousFocus.current = document.activeElement as HTMLElement | null;
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+
+    return () => {
+      if (dialog.open) {
+        if (typeof dialog.close === "function") dialog.close();
+        else dialog.removeAttribute("open");
+      }
+      previousFocus.current?.focus();
+    };
+  }, []);
+
   return (
-    <div className="detail-overlay" role="presentation" onClick={onClose}>
-      <section
-        className="detail-panel"
-        role="dialog"
-        aria-modal="true"
-        onClick={(event) => event.stopPropagation()}
-      >
+    <dialog
+      ref={dialogRef}
+      className="inventory-dialog"
+      aria-labelledby="inventory-detail-title"
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section className="inventory-dialog-content">
         <div className="section-heading">
-          <h2>{item.beer_name}</h2>
-          <button type="button" className="secondary-button" onClick={onClose}>
+          <h2 id="inventory-detail-title">{item.beer_name}</h2>
+          <Button type="button" variant="secondary" onClick={onClose}>
             Close
-          </button>
+          </Button>
         </div>
         {item.photo_url ? (
           <img
@@ -217,7 +260,7 @@ function DetailPanel({
           </div>
         )}
       </section>
-    </div>
+    </dialog>
   );
 }
 
@@ -230,7 +273,12 @@ function InventoryRows({
 }) {
   return (
     <>
-      <div className="inventory-table-wrap">
+      <div
+        className="inventory-table-wrap"
+        role="region"
+        aria-label="Inventory records table"
+        tabIndex={0}
+      >
         <table className="inventory-table">
           <thead>
             <tr>
@@ -261,18 +309,21 @@ function InventoryRows({
                 </td>
                 <td>{item.location?.path ?? "Unresolved"}</td>
                 <td>
-                  <span className={`status-pill ${item.match_status}`}>
+                  <StatusBadge
+                    className={`inventory-status status-pill ${item.match_status}`}
+                    variant={matchVariant(item.match_status)}
+                  >
                     {matchLabel(item.match_status)}
-                  </span>
+                  </StatusBadge>
                 </td>
                 <td>
-                  <button
+                  <Button
                     type="button"
-                    className="secondary-button"
+                    variant="secondary"
                     onClick={() => onSelect(item)}
                   >
                     Details
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}
@@ -281,16 +332,16 @@ function InventoryRows({
       </div>
       <div className="inventory-cards">
         {data.items.map((item) => (
-          <article className="inventory-card" key={item.id}>
+          <Card as="article" className="inventory-card" key={item.id}>
             <Summary item={item} />
-            <button
+            <Button
               type="button"
-              className="secondary-button"
+              variant="secondary"
               onClick={() => onSelect(item)}
             >
               View record details
-            </button>
-          </article>
+            </Button>
+          </Card>
         ))}
       </div>
     </>
@@ -334,7 +385,12 @@ function GroupedInventoryRows({
             (entry) => entry.style_id === group.styleId,
           )?.total ?? group.items.length;
         return (
-          <section className="inventory-style-group" key={key}>
+          <Card
+            as="section"
+            variant="muted"
+            className="inventory-style-group"
+            key={key}
+          >
             <h3>
               {group.name} <span>({numberFormatter.format(total)} total)</span>
             </h3>
@@ -342,7 +398,12 @@ function GroupedInventoryRows({
               Showing {numberFormatter.format(group.items.length)} of{" "}
               {numberFormatter.format(total)} matching entries on this page.
             </p>
-            <div className="inventory-table-wrap">
+            <div
+              className="inventory-table-wrap"
+              role="region"
+              aria-label="Inventory records table"
+              tabIndex={0}
+            >
               <table className="inventory-table">
                 <thead>
                   <tr>
@@ -375,18 +436,21 @@ function GroupedInventoryRows({
                       </td>
                       <td>{item.location?.path ?? "Unresolved"}</td>
                       <td>
-                        <span className={`status-pill ${item.match_status}`}>
+                        <StatusBadge
+                          className={`inventory-status status-pill ${item.match_status}`}
+                          variant={matchVariant(item.match_status)}
+                        >
                           {matchLabel(item.match_status)}
-                        </span>
+                        </StatusBadge>
                       </td>
                       <td>
-                        <button
+                        <Button
                           type="button"
-                          className="secondary-button"
+                          variant="secondary"
                           onClick={() => onSelect(item)}
                         >
                           Details
-                        </button>
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -395,19 +459,19 @@ function GroupedInventoryRows({
             </div>
             <div className="inventory-cards">
               {group.items.map((item) => (
-                <article className="inventory-card" key={item.id}>
+                <Card as="article" className="inventory-card" key={item.id}>
                   <Summary item={item} />
-                  <button
+                  <Button
                     type="button"
-                    className="secondary-button"
+                    variant="secondary"
                     onClick={() => onSelect(item)}
                   >
                     View record details
-                  </button>
-                </article>
+                  </Button>
+                </Card>
               ))}
             </div>
-          </section>
+          </Card>
         );
       })}
     </div>
@@ -518,21 +582,27 @@ export default function Inventory() {
         </p>
       </div>
       <form className="inventory-filters" onSubmit={submit}>
-        <label className="filter-control search-control">
-          Search beer, brewery, or original notes
+        <FormField
+          id="inventory-search"
+          label="Search beer, brewery, or original notes"
+          className="inventory-filter-control search-control"
+        >
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search inventory…"
           />
-        </label>
+        </FormField>
         <LocationSelect
           data={locations}
           value={location}
           onChange={(value) => changeFilter(setLocation, value)}
         />
-        <label className="filter-control">
-          Beer style
+        <FormField
+          id="inventory-style"
+          label="Beer style"
+          className="inventory-filter-control"
+        >
           <select
             value={style}
             onChange={(event) => changeFilter(setStyle, event.target.value)}
@@ -544,9 +614,12 @@ export default function Inventory() {
               </option>
             ))}
           </select>
-        </label>
-        <label className="filter-control">
-          Check-in status
+        </FormField>
+        <FormField
+          id="inventory-match-status"
+          label="Check-in status"
+          className="inventory-filter-control"
+        >
           <select
             value={match}
             onChange={(event) => changeFilter(setMatch, event.target.value)}
@@ -557,10 +630,13 @@ export default function Inventory() {
             <option value="ambiguous">Ambiguous</option>
             <option value="unmatched">Not confirmed checked in</option>
           </select>
-        </label>
+        </FormField>
         {!groupByStyle && (
-          <label className="filter-control">
-            Sort order
+          <FormField
+            id="inventory-sort"
+            label="Sort order"
+            className="inventory-filter-control"
+          >
             <select
               value={sort}
               onChange={(event) => changeFilter(setSort, event.target.value)}
@@ -579,7 +655,7 @@ export default function Inventory() {
               <option value="location_asc">Location A–Z</option>
               <option value="location_desc">Location Z–A</option>
             </select>
-          </label>
+          </FormField>
         )}
         <label className="checkbox-filter">
           <input
@@ -593,10 +669,12 @@ export default function Inventory() {
           Group by beer style
         </label>
         {groupByStyle && (
-          <label className="filter-control">
-            Sort within styles
+          <FormField
+            id="inventory-group-sort"
+            label="Sort within styles"
+            className="inventory-filter-control"
+          >
             <select
-              aria-label="Sort within styles"
               value={groupSort}
               onChange={(event) => {
                 setGroupSort(event.target.value);
@@ -612,7 +690,7 @@ export default function Inventory() {
               <option value="best_before_asc">Best-by soonest first</option>
               <option value="best_before_desc">Best-by furthest first</option>
             </select>
-          </label>
+          </FormField>
         )}
         {location && location !== "__unresolved__" && (
           <label className="checkbox-filter">
@@ -627,7 +705,7 @@ export default function Inventory() {
             Include child locations
           </label>
         )}
-        <button type="submit">Search</button>
+        <Button type="submit">Search</Button>
       </form>
       {location && location !== "__unresolved__" && includeDescendants && (
         <p className="filter-note">
@@ -635,22 +713,24 @@ export default function Inventory() {
         </p>
       )}
       {loading && (
-        <section className="inventory-state">Loading inventory…</section>
+        <section className="inventory-state" role="status" aria-busy="true">
+          Loading inventory…
+        </section>
       )}
       {error && !loading && (
-        <section className="inventory-state error-state">
+        <section className="inventory-state error-state" role="alert">
           <strong>{error}</strong>
           <p>Check the backend connection and try again.</p>
         </section>
       )}
       {!loading && !error && data && data.total === 0 && (
-        <section className="inventory-state">
+        <section className="inventory-state" role="status">
           <strong>No inventory records match these filters.</strong>
           <p>Try clearing the search or choosing a broader location.</p>
         </section>
       )}
       {!loading && !error && data && data.total > 0 && (
-        <section className="inventory-results">
+        <Card as="section" className="inventory-results">
           <div className="section-heading">
             <p>{numberFormatter.format(data.total)} inventory records</p>
             <span>
@@ -669,24 +749,24 @@ export default function Inventory() {
             />
           )}
           <div className="pagination">
-            <button
+            <Button
               type="button"
-              className="secondary-button"
+              variant="secondary"
               disabled={page <= 1}
               onClick={() => setPage(page - 1)}
             >
               Previous
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="secondary-button"
+              variant="secondary"
               disabled={page >= data.total_pages}
               onClick={() => setPage(page + 1)}
             >
               Next
-            </button>
+            </Button>
           </div>
-        </section>
+        </Card>
       )}
       {detail && <DetailPanel item={detail} onClose={() => setDetail(null)} />}
     </div>

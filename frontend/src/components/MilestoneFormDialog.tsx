@@ -1,4 +1,5 @@
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import "./MilestoneFormDialog.css";
 import {
   createMilestone,
   Milestone,
@@ -6,6 +7,7 @@ import {
   MilestoneInput,
   updateMilestone,
 } from "../api/milestones";
+import { Button } from "./ui";
 
 type FormValues = {
   name: string;
@@ -177,15 +179,15 @@ export default function MilestoneFormDialog({
           <h2 id="milestone-form-title">
             {milestone ? "Edit milestone" : "Create milestone"}
           </h2>
-          <button
+          <Button
             type="button"
-            className="secondary-button"
+            variant="secondary"
             onClick={onClose}
             disabled={saving}
             aria-label="Close milestone form"
           >
             Close
-          </button>
+          </Button>
         </div>
         <form className="milestone-form" onSubmit={submit}>
           <label>
@@ -300,21 +302,21 @@ export default function MilestoneFormDialog({
             </p>
           )}
           <div className="milestone-dialog-actions">
-            <button
+            <Button
               type="button"
-              className="secondary-button"
+              variant="secondary"
               onClick={onClose}
               disabled={saving}
             >
               Cancel
-            </button>
-            <button type="submit" disabled={saving}>
+            </Button>
+            <Button type="submit" disabled={saving}>
               {saving
                 ? "Saving…"
                 : milestone
                   ? "Save changes"
                   : "Create milestone"}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

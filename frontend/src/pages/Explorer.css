@@ -1,0 +1,302 @@
+.explorer-page {
+  min-width: 0;
+  padding: 1.25rem;
+  background: var(--color-canvas);
+  color: var(--color-text-primary);
+}
+
+.explorer-page .page-heading {
+  margin: 0 0 1rem;
+}
+
+.explorer-page .page-heading h2,
+.explorer-page .page-heading p {
+  margin: 0;
+}
+
+.explorer-page .page-heading p {
+  margin-top: 0.4rem;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.explorer-page .explorer-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.explorer-page .explorer-tabs a,
+.explorer-page .explorer-tab-unavailable {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+.explorer-page .explorer-tabs a:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.explorer-page .explorer-tabs a.active {
+  border-bottom-color: var(--color-action-primary);
+  background: transparent;
+  color: var(--color-text-primary);
+  font-weight: 650;
+}
+
+.explorer-page .explorer-tabs a:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.explorer-page .explorer-tab-unavailable {
+  cursor: default;
+}
+
+.explorer-page .upcoming-label {
+  max-width: 100%;
+  padding: 0.22rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  font-size: 0.68rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.explorer-page .explorer-catalogue {
+  min-width: 0;
+  padding: 0;
+  border-radius: 0.7rem;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.explorer-page .explorer-catalogue-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  margin: 0 0 1rem;
+}
+
+.explorer-page .explorer-catalogue-heading h3,
+.explorer-page .explorer-catalogue-heading p {
+  margin: 0;
+}
+
+.explorer-page .explorer-catalogue-heading p {
+  margin-top: 0.35rem;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.explorer-page .explorer-controls {
+  display: flex;
+  align-items: end;
+  gap: 0.75rem;
+  min-width: 0;
+  margin-bottom: 1rem;
+}
+
+.explorer-page .explorer-controls .ui-form-field {
+  min-width: 0;
+  font-size: 0.88rem;
+}
+
+.explorer-page .explorer-search-control {
+  flex: 1 1 18rem;
+}
+
+.explorer-page .explorer-sort-control {
+  flex: 0 1 16rem;
+}
+
+.explorer-page .explorer-state {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  background: var(--color-surface-muted);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.explorer-page .explorer-state p {
+  margin: 0.35rem 0 0;
+}
+
+.explorer-page .explorer-state.error-state {
+  border-color: var(--color-status-error);
+  background: var(--color-surface-error);
+  color: var(--color-text-on-error-surface);
+}
+
+.explorer-page .explorer-beer-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.explorer-page .explorer-beer-table-wrap:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.explorer-page .explorer-beer-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--color-text-primary);
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.explorer-page .explorer-beer-table th,
+.explorer-page .explorer-beer-table td {
+  padding: 0.65rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.explorer-page .explorer-beer-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 12rem;
+}
+
+.explorer-page .explorer-beer-name-cell strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.explorer-page .explorer-beer-artwork,
+.explorer-page .explorer-beer-artwork-fallback {
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 2.5rem;
+  border-radius: 0.35rem;
+  background: var(--color-surface-muted);
+  object-fit: cover;
+}
+
+.explorer-page .explorer-beer-artwork-fallback {
+  display: grid;
+  place-items: center;
+  color: var(--color-text-secondary);
+  font-size: 0.6rem;
+}
+
+.explorer-page .explorer-beer-cards {
+  display: none;
+}
+
+.explorer-page .explorer-beer-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.explorer-page .explorer-beer-card-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.explorer-page .explorer-beer-card h4 {
+  margin: 0 0 0.25rem;
+  overflow-wrap: anywhere;
+}
+
+.explorer-page .explorer-beer-card p {
+  margin: 0.2rem 0;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.explorer-page .explorer-beer-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem 0.75rem;
+  min-width: 0;
+  margin: 0.6rem 0 0;
+}
+
+.explorer-page .explorer-beer-card dl > div {
+  min-width: 0;
+}
+
+.explorer-page .explorer-beer-card dt {
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.explorer-page .explorer-beer-card dd {
+  margin: 0.1rem 0 0;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.explorer-page .explorer-upcoming {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  background: var(--color-surface-muted);
+  color: var(--color-text-primary);
+}
+
+.explorer-page .explorer-upcoming p {
+  color: var(--color-text-secondary);
+}
+
+.explorer-page .explorer-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-width: 0;
+  margin-top: 1rem;
+}
+
+@media (max-width: 700px) {
+  .explorer-page {
+    padding: 1rem;
+  }
+
+  .explorer-page .explorer-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .explorer-page .explorer-controls .ui-button {
+    width: 100%;
+  }
+
+  .explorer-page .explorer-beer-table-wrap {
+    display: none;
+  }
+
+  .explorer-page .explorer-beer-cards {
+    display: grid;
+    gap: 0.65rem;
+    min-width: 0;
+  }
+
+  .explorer-page .explorer-beer-card dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

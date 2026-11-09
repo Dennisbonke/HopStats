@@ -1,3 +1,4 @@
+import "./Locations.css";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -13,6 +14,7 @@ import {
   updateAlias,
   updateLocation,
 } from "../api/locations";
+import { Button, Card } from "../components/ui";
 
 function flatten(
   nodes: LocationNode[],
@@ -51,18 +53,21 @@ function LocationTree({
   nodes,
   selectedId,
   onSelect,
+  depth = 0,
 }: {
   nodes: LocationNode[];
   selectedId: number | null;
   onSelect: (id: number) => void;
+  depth?: number;
 }) {
   return (
-    <ul className="location-tree">
+    <ul className="location-tree" data-depth={Math.min(depth, 5)}>
       {nodes.map((node) => (
         <li key={node.id}>
           <div className="location-node">
-            <button
+            <Button
               type="button"
+              variant="ghost"
               className={`location-select ${selectedId === node.id ? "selected" : ""}`}
               aria-pressed={selectedId === node.id}
               onClick={() => onSelect(node.id)}
@@ -80,7 +85,7 @@ function LocationTree({
                   Aliases: {node.aliases.join(", ")}
                 </span>
               )}
-            </button>
+            </Button>
             <div className="location-counts">
               <span>{node.record_count} records</span>
               <span>{node.total_units} units</span>
@@ -97,6 +102,7 @@ function LocationTree({
               nodes={node.children}
               selectedId={selectedId}
               onSelect={onSelect}
+              depth={depth + 1}
             />
           )}
         </li>
@@ -312,24 +318,26 @@ export default function Locations() {
         </p>
       </div>
       {error && (
-        <section className="inventory-state error-state" role="alert">
+        <section className="location-state error-state" role="alert">
           <strong>{error}</strong>
-          <button
+          <Button
             type="button"
-            className="secondary-button"
+            variant="secondary"
             onClick={() => void refresh()}
           >
             Retry
-          </button>
+          </Button>
         </section>
       )}
       {feedback && <ReconciliationMessage {...feedback} />}
       {loading && (
-        <section className="inventory-state">Loading locations…</section>
+        <section className="location-state" role="status" aria-busy="true">
+          Loading locations…
+        </section>
       )}
       {data && (
         <>
-          <section className="location-panel create-location-panel">
+          <Card as="section" className="location-panel create-location-panel">
             <div className="section-heading">
               <h3>Create location</h3>
             </div>
@@ -379,17 +387,13 @@ export default function Locations() {
                   }
                 />
               </label>
-              <button
-                className="primary-button"
-                type="submit"
-                disabled={saving}
-              >
+              <Button variant="primary" type="submit" disabled={saving}>
                 Create location
-              </button>
+              </Button>
             </form>
-          </section>
+          </Card>
           <div className="location-workspace">
-            <section className="location-panel">
+            <Card as="section" className="location-panel">
               <div className="section-heading">
                 <h3>Location hierarchy</h3>
                 <span>{locations.length} locations</span>
@@ -417,8 +421,9 @@ export default function Locations() {
                   View unresolved inventory
                 </Link>
               </div>
-            </section>
-            <section
+            </Card>
+            <Card
+              as="section"
               className="location-panel location-detail-panel"
               aria-live="polite"
             >
@@ -445,16 +450,16 @@ export default function Locations() {
                       {selected.ownership === "unknown"
                         ? "This legacy location has unknown provenance and is locked until an operator explicitly classifies it."
                         : "This location is managed by private JSON configuration and is read-only in the web interface."}
-                      <button
+                      <Button
                         type="button"
-                        className="secondary-button"
+                        variant="secondary"
                         onClick={() => void transferOwnership()}
                         disabled={saving}
                       >
                         {selected.ownership === "unknown"
                           ? "Classify as UI-managed"
                           : "Transfer to UI management"}
-                      </button>
+                      </Button>
                     </div>
                   )}
                   <form
@@ -507,21 +512,21 @@ export default function Locations() {
                       />
                     </label>
                     <div className="form-actions">
-                      <button
-                        className="primary-button"
+                      <Button
+                        variant="primary"
                         type="submit"
                         disabled={saving || selectedLocked}
                       >
                         Save location
-                      </button>
-                      <button
-                        className="danger-button"
+                      </Button>
+                      <Button
+                        variant="danger"
                         type="button"
                         disabled={saving || selectedLocked}
                         onClick={() => void removeLocation()}
                       >
                         Delete location
-                      </button>
+                      </Button>
                     </div>
                   </form>
                   <div className="detail-section">
@@ -530,7 +535,7 @@ export default function Locations() {
                       className="inline-form"
                       onSubmit={(event) => void submitAlias(event)}
                     >
-                      <label className="sr-only" htmlFor="new-alias">
+                      <label className="visually-hidden" htmlFor="new-alias">
                         New alias
                       </label>
                       <input
@@ -539,13 +544,13 @@ export default function Locations() {
                         value={newAlias}
                         onChange={(event) => setNewAlias(event.target.value)}
                       />
-                      <button
-                        className="secondary-button"
+                      <Button
+                        variant="secondary"
                         type="submit"
                         disabled={saving}
                       >
                         Add alias
-                      </button>
+                      </Button>
                     </form>
                     <ul className="alias-list">
                       {fallbackAliases(selected).map((alias) => (
@@ -574,42 +579,42 @@ export default function Locations() {
                             <div className="alias-actions">
                               {editingAlias === alias.id ? (
                                 <>
-                                  <button
+                                  <Button
                                     type="button"
-                                    className="secondary-button"
+                                    variant="secondary"
                                     onClick={() => void saveAlias(alias)}
                                     disabled={saving}
                                   >
                                     Save
-                                  </button>
-                                  <button
+                                  </Button>
+                                  <Button
                                     type="button"
-                                    className="secondary-button"
+                                    variant="secondary"
                                     onClick={() => setEditingAlias(null)}
                                   >
                                     Cancel
-                                  </button>
+                                  </Button>
                                 </>
                               ) : (
                                 <>
-                                  <button
+                                  <Button
                                     type="button"
-                                    className="secondary-button"
+                                    variant="secondary"
                                     onClick={() => {
                                       setEditingAlias(alias.id);
                                       setEditingAliasValue(alias.alias);
                                     }}
                                   >
                                     Edit
-                                  </button>
-                                  <button
+                                  </Button>
+                                  <Button
                                     type="button"
-                                    className="danger-button"
+                                    variant="danger"
                                     onClick={() => void removeAlias(alias)}
                                     disabled={saving}
                                   >
                                     Remove
-                                  </button>
+                                  </Button>
                                 </>
                               )}
                             </div>
@@ -650,7 +655,7 @@ export default function Locations() {
                   Select a location to view and edit its details.
                 </p>
               )}
-            </section>
+            </Card>
           </div>
         </>
       )}

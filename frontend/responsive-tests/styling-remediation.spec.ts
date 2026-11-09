@@ -6,8 +6,105 @@ const longBreweryName =
   "The Independent Brewery with an Exceptionally Long Regional Name and Brewing Company";
 const longLocationPath =
   "Cellar → North Storage Room → Top Shelf → Long Term Bottle Conditioning Area";
+const longLocationName =
+  "Long Term Bottle Conditioning Area with a Name That Wraps on Narrow Screens";
+const longLocationAlias =
+  "Very Long Storage Alias for Imported Inventory Assignment Matching";
 const longStyleName =
   "Imperial IPA with an Exceptionally Long Dry-Hopped Seasonal Release Name";
+
+type LocationFixtureNode = {
+  id: number;
+  name: string;
+  parent_id: number | null;
+  description: null;
+  path: string;
+  aliases: string[];
+  alias_details: Array<{
+    id: number;
+    alias: string;
+    managed_by_config: boolean;
+  }>;
+  rules: Array<{
+    id: number;
+    pattern: string;
+    match_kind: string;
+    priority: number;
+    managed_by_config: boolean;
+  }>;
+  managed_by_config: boolean;
+  ownership: "database";
+  record_count: number;
+  total_units: number;
+  children: LocationFixtureNode[];
+};
+
+function locationNode(
+  id: number,
+  name: string,
+  parentId: number | null,
+  path: string,
+  children: LocationFixtureNode[] = [],
+): LocationFixtureNode {
+  return {
+    id,
+    name,
+    parent_id: parentId,
+    description: null,
+    path,
+    aliases: id === 1 ? [longLocationAlias] : [],
+    alias_details:
+      id === 1
+        ? [{ id: 101, alias: longLocationAlias, managed_by_config: false }]
+        : [],
+    rules: [],
+    managed_by_config: false,
+    ownership: "database" as const,
+    record_count: id === 1 ? 4 : 1,
+    total_units: id === 1 ? 8 : 2,
+    children,
+  };
+}
+
+const locationsFixture = {
+  locations: [
+    locationNode(1, longLocationName, null, longLocationPath, [
+      locationNode(2, "Lower Cellar", 1, `${longLocationPath} → Lower Cellar`, [
+        locationNode(
+          3,
+          "North Rack",
+          2,
+          `${longLocationPath} → Lower Cellar → North Rack`,
+          [
+            locationNode(
+              4,
+              "Shelf Four",
+              3,
+              `${longLocationPath} → Lower Cellar → North Rack → Shelf Four`,
+              [
+                locationNode(
+                  5,
+                  "Long-term row",
+                  4,
+                  `${longLocationPath} → Lower Cellar → North Rack → Shelf Four → Long-term row`,
+                  [
+                    locationNode(
+                      6,
+                      "Deep storage",
+                      5,
+                      `${longLocationPath} → Lower Cellar → North Rack → Shelf Four → Long-term row → Deep storage`,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ]),
+    ]),
+  ],
+  unresolved: { record_count: 2, total_units: 3 },
+};
 
 const inventoryItems = [
   {
@@ -387,6 +484,87 @@ const dashboardMilestone = {
   trajectory_difference: null,
 };
 
+const longMilestoneName =
+  "Discover One Hundred New Beers from Independent Breweries before the End of a Long Seasonal Challenge";
+const milestoneFixtures = [
+  { ...dashboardMilestone, name: longMilestoneName },
+  {
+    ...dashboardMilestone,
+    id: 5,
+    name: "Scheduled tasting goal",
+    status: "scheduled",
+    current: 0,
+    progress_percent: 0,
+  },
+  {
+    ...dashboardMilestone,
+    id: 6,
+    name: "Overdue tasting goal",
+    status: "overdue",
+    progress_percent: 45,
+  },
+  {
+    ...dashboardMilestone,
+    id: 7,
+    name: "Completed tasting goal",
+    status: "completed",
+    progress_percent: 100,
+  },
+  {
+    ...dashboardMilestone,
+    id: 8,
+    name: "Period ended tasting goal",
+    status: "period_ended",
+    progress_percent: 82,
+  },
+  {
+    ...dashboardMilestone,
+    id: 9,
+    name: "Archived tasting goal",
+    status: "archived",
+    archived_at: "2026-10-01T00:00:00Z",
+  },
+];
+
+const longImportFilename =
+  "untappd-check-ins-export-with-a-very-long-filename-for-small-screen-wrapping.csv";
+const longImportError =
+  "The uploaded CSV contains a malformed record with a very long explanation that must wrap inside the history and result cards without widening the page.";
+const completedImport = {
+  id: 4,
+  source_type: "checkins",
+  filename: longImportFilename,
+  sha256: "test-hash-4",
+  started_at: "2026-01-04T12:00:00Z",
+  completed_at: "2026-01-04T12:00:05Z",
+  status: "completed",
+  inserted_count: 8,
+  updated_count: 1,
+  unchanged_count: 0,
+  removed_count: 0,
+  rejected_count: 0,
+  error_code: null,
+  error_summary: null,
+  errors: [],
+};
+const rejectedImport = {
+  ...completedImport,
+  id: 5,
+  source_type: "inventory",
+  filename: "stash-export.csv",
+  status: "failed",
+  rejected_count: 2,
+  error_code: "invalid_csv",
+  error_summary: longImportError,
+  errors: [
+    {
+      row_number: 18,
+      field: "beer_name",
+      reason: longImportError,
+    },
+  ],
+};
+
 const dashboardInsights = [
   {
     id: "long-seasonal-insight",
@@ -408,7 +586,9 @@ async function stubApplication(
   options: { anonymous?: boolean; dashboard?: boolean } = {},
 ) {
   await page.route("**/api/v1/**", async (route) => {
-    const path = new URL(route.request().url()).pathname;
+    const url = new URL(route.request().url());
+    const path = url.pathname;
+    const method = route.request().method();
     if (options.anonymous && path === "/api/v1/auth/me") {
       await route.fulfill({
         status: 401,
@@ -427,6 +607,31 @@ async function stubApplication(
       });
       return;
     }
+    if (path === "/api/v1/milestones" && method === "GET") {
+      const archived = url.searchParams.get("archived") === "true";
+      await route.fulfill({
+        json: {
+          milestones: archived
+            ? [milestoneFixtures[milestoneFixtures.length - 1]]
+            : milestoneFixtures.filter(
+                (milestone) => milestone.status !== "archived",
+              ),
+        },
+      });
+      return;
+    }
+    if (path === "/api/v1/milestones/4" && method === "GET") {
+      await route.fulfill({ json: milestoneFixtures[0] });
+      return;
+    }
+    if (path === "/api/v1/imports/checkins" && method === "POST") {
+      await route.fulfill({ status: 200, json: completedImport });
+      return;
+    }
+    if (path === "/api/v1/imports/inventory" && method === "POST") {
+      await route.fulfill({ status: 422, json: rejectedImport });
+      return;
+    }
     const body: Record<string, unknown> = {
       "/api/v1/auth/me": {
         id: 1,
@@ -435,7 +640,12 @@ async function stubApplication(
       },
       "/api/v1/health": { status: "ok" },
       "/api/v1/dashboard": dashboardFixture,
-      "/api/v1/milestones": { milestones: [dashboardMilestone] },
+      "/api/v1/milestones/summary": {
+        active_count: 1,
+        completed_count: 0,
+        overdue_count: 0,
+        milestones: [dashboardMilestone],
+      },
       "/api/v1/insights": { insights: dashboardInsights },
       "/api/v1/inventory/styles": [
         { id: 1, name: longStyleName },
@@ -443,14 +653,13 @@ async function stubApplication(
         { id: 3, name: "Fruited Sour Ale" },
       ],
       "/api/v1/locations": {
-        locations: [],
-        unresolved: { record_count: 0, total_units: 0 },
+        ...locationsFixture,
       },
       "/api/v1/imports": [
         {
           id: 1,
           source_type: "checkins",
-          filename: "untappd-checkins.csv",
+          filename: longImportFilename,
           sha256: "test-hash",
           started_at: "2026-01-01T12:00:00Z",
           completed_at: "2026-01-01T12:00:05Z",
@@ -467,7 +676,7 @@ async function stubApplication(
         {
           id: 2,
           source_type: "inventory",
-          filename: "untappd-stash.csv",
+          filename: "untappd-stash-export-with-a-long-file-name.csv",
           sha256: "test-hash-2",
           started_at: "2026-01-02T12:00:00Z",
           completed_at: "2026-01-02T12:00:05Z",
@@ -478,7 +687,7 @@ async function stubApplication(
           removed_count: 0,
           rejected_count: 1,
           error_code: "invalid_csv",
-          error_summary: "Invalid CSV",
+          error_summary: longImportError,
           errors: [],
         },
         {
@@ -541,6 +750,10 @@ async function stubApplication(
           ],
         },
       });
+      return;
+    }
+    if (path === "/api/v1/inventory/1") {
+      await route.fulfill({ json: inventoryItems[0] });
       return;
     }
     await route.fulfill({
@@ -1007,6 +1220,7 @@ test("semantic themes stay scoped while Explorer uses the shared palette", async
   await stubApplication(page);
   await page.setViewportSize({ width: 320, height: 844 });
   await page.goto("/explore/beers");
+  await expect(page.locator(".app")).toHaveClass(/theme-aware/);
 
   const explorer = page.locator(".explorer-page");
   const catalogue = page.locator(".explorer-catalogue");
@@ -1272,7 +1486,7 @@ test("semantic themes stay scoped while Explorer uses the shared palette", async
   }
 });
 
-test("shared primitives stay readable on the light compatibility route", async ({
+test("Imports use the semantic theme and keep controls and history readable", async ({
   page,
 }) => {
   await stubApplication(page);
@@ -1281,6 +1495,8 @@ test("shared primitives stay readable on the light compatibility route", async (
     await page.emulateMedia({ colorScheme });
     await page.goto("/imports");
     await expect(page.getByRole("heading", { name: "Imports" })).toBeVisible();
+    await expect(page.locator(".app")).toHaveClass(/theme-aware/);
+    await expect(page.locator(".app")).toHaveCSS("color-scheme", colorScheme);
 
     const root = page.locator("html");
     await expect(root).toHaveCSS("color-scheme", "light");
@@ -1289,7 +1505,7 @@ test("shared primitives stay readable on the light compatibility route", async (
     });
     await expect(uploadCard).toHaveCSS(
       "background-color",
-      "rgb(255, 255, 255)",
+      colorScheme === "dark" ? "rgb(23, 37, 51)" : "rgb(255, 255, 255)",
     );
     const uploadButton = uploadCard.getByRole("button", { name: "Upload CSV" });
     await expect(uploadButton).toBeDisabled();
@@ -1297,9 +1513,12 @@ test("shared primitives stay readable on the light compatibility route", async (
     const refreshButton = page.getByRole("button", { name: "Refresh" });
     await expect(refreshButton).toHaveCSS(
       "background-color",
-      "rgb(232, 238, 248)",
+      colorScheme === "dark" ? "rgb(51, 65, 85)" : "rgb(232, 238, 248)",
     );
-    await expect(refreshButton).toHaveCSS("color", "rgb(23, 32, 51)");
+    await expect(refreshButton).toHaveCSS(
+      "color",
+      colorScheme === "dark" ? "rgb(241, 245, 249)" : "rgb(23, 32, 51)",
+    );
     await expectReadable(refreshButton, `${colorScheme} Imports action button`);
     const refreshBoundary = await refreshButton.evaluate((element) => {
       const history = element.closest(".history-card");
@@ -1313,26 +1532,48 @@ test("shared primitives stay readable on the light compatibility route", async (
       contrastRatio(refreshBoundary.border, refreshBoundary.surface),
     ).toBeGreaterThanOrEqual(3);
 
-    const statusVariants = [
-      {
-        label: "completed",
-        surface: "rgb(232, 246, 237)",
-        text: "rgb(21, 91, 53)",
-        border: "rgb(22, 128, 60)",
-      },
-      {
-        label: "failed",
-        surface: "rgb(255, 241, 240)",
-        text: "rgb(163, 41, 32)",
-        border: "rgb(180, 35, 24)",
-      },
-      {
-        label: "processing",
-        surface: "rgb(238, 242, 247)",
-        text: "rgb(29, 78, 216)",
-        border: "rgb(29, 78, 216)",
-      },
-    ];
+    const statusVariants =
+      colorScheme === "light"
+        ? [
+            {
+              label: "completed",
+              surface: "rgb(232, 246, 237)",
+              text: "rgb(21, 91, 53)",
+              border: "rgb(22, 128, 60)",
+            },
+            {
+              label: "failed",
+              surface: "rgb(255, 241, 240)",
+              text: "rgb(163, 41, 32)",
+              border: "rgb(180, 35, 24)",
+            },
+            {
+              label: "processing",
+              surface: "rgb(238, 242, 247)",
+              text: "rgb(29, 78, 216)",
+              border: "rgb(29, 78, 216)",
+            },
+          ]
+        : [
+            {
+              label: "completed",
+              surface: "rgb(23, 55, 42)",
+              text: "rgb(187, 247, 208)",
+              border: "rgb(85, 189, 141)",
+            },
+            {
+              label: "failed",
+              surface: "rgb(66, 44, 50)",
+              text: "rgb(254, 202, 202)",
+              border: "rgb(252, 165, 165)",
+            },
+            {
+              label: "processing",
+              surface: "rgb(37, 55, 71)",
+              text: "rgb(147, 197, 253)",
+              border: "rgb(147, 197, 253)",
+            },
+          ];
     for (const expectedBadge of statusVariants) {
       const badge = page.getByText(expectedBadge.label, { exact: true });
       await expect(badge).toHaveCSS("background-color", expectedBadge.surface);
@@ -1373,7 +1614,7 @@ test("shared primitives stay readable on the light compatibility route", async (
   }
 });
 
-test("shared Button variants keep token colors across cascade and theme contexts", async ({
+test("shared Button variants keep token colors across migrated theme contexts", async ({
   page,
 }) => {
   await stubApplication(page);
@@ -1384,9 +1625,11 @@ test("shared Button variants keep token colors across cascade and theme contexts
     await page.goto("/imports");
     await expect(page.getByRole("heading", { name: "Imports" })).toBeVisible();
     await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
+    await expect(page.locator(".app")).toHaveClass(/theme-aware/);
+    await expect(page.locator(".app")).toHaveCSS("color-scheme", colorScheme);
     await installButtonCascadeFixture(page, ".history-card");
 
-    const context = `Imports compatibility route with ${colorScheme} OS preference`;
+    const context = `Imports themed route with ${colorScheme} OS preference`;
     await expectLegacyButtonCompatibility(page, context);
     for (const variant of buttonVariants) {
       await expectButtonVariantStyles(page, context, variant);
@@ -1610,22 +1853,20 @@ test("Dashboard and shell themes stay readable and responsive", async ({
         await expect(page.getByRole("link", { name: "Imports" })).toBeVisible();
       }
 
-      await page.goto("/imports");
-      await expect(
-        page.getByRole("heading", { name: "Imports" }),
-      ).toBeVisible();
+      await page.goto("/analytics");
+      await expect(page.getByText("Check-in Breakdown")).toBeVisible();
       await expectNoDocumentOverflow(page);
       await expect(page.locator(".app")).not.toHaveClass(/theme-aware/);
       const legacyMain = page.locator(".app-main");
       await expect(legacyMain).not.toHaveClass(/theme-aware/);
       await expect(legacyMain).toHaveCSS("color-scheme", "light");
-      await expect(page.locator(".history-card")).toHaveCSS(
+      await expect(page.locator(".analytics-chart-panel").first()).toHaveCSS(
         "background-color",
         "rgb(255, 255, 255)",
       );
       await expectReadable(
-        page.locator(".history-card h3"),
-        `${colorScheme} legacy Imports surface at ${width}px`,
+        page.locator(".analytics-chart-panel h3").first(),
+        `${colorScheme} Analytics compatibility surface at ${width}px`,
       );
     }
   }
@@ -2127,4 +2368,349 @@ test("month drilldown controls wrap and remain keyboard reachable at 320px", asy
   expect(monthBox?.y).toBeGreaterThanOrEqual(0);
   expect(monthBox!.y + monthBox!.height).toBeLessThanOrEqual(844);
   await expectNoDocumentOverflow(page);
+});
+
+test("Inventory detail dialog is named, modal, focus managed, and scrollable", async ({
+  page,
+}) => {
+  await stubApplication(page);
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    for (const width of [320, 390, 768, 1280]) {
+      const height = width === 1280 ? 800 : 844;
+      await page.setViewportSize({ width, height });
+      await page.goto("/inventory");
+      await expect(page.locator(".app")).toHaveClass(/theme-aware/);
+      await expect(page.locator(".app")).toHaveCSS("color-scheme", colorScheme);
+      await expect(page.locator(".inventory-page h2")).toHaveText("Inventory");
+
+      const trigger =
+        width <= 700
+          ? page.locator(".inventory-cards .ui-button").first()
+          : page.locator(".inventory-table tbody .ui-button").first();
+      await expect(trigger).toBeVisible();
+      await trigger.click();
+
+      const dialog = page.getByRole("dialog", { name: longBeerName });
+      await expect(dialog).toBeVisible();
+      await expect(dialog).toHaveCSS("overflow-y", "auto");
+      await expectReadable(
+        dialog.getByRole("heading", { name: longBeerName }),
+        `${colorScheme} Inventory dialog title`,
+      );
+      await expectReadable(
+        dialog.locator(".detail-list dt").first(),
+        `${colorScheme} Inventory dialog field label`,
+      );
+      await expectReadable(
+        dialog.locator(".detail-list dd").first(),
+        `${colorScheme} Inventory dialog field value`,
+      );
+      const dialogBox = await dialog.boundingBox();
+      expect(dialogBox).not.toBeNull();
+      expect(dialogBox!.x).toBeGreaterThanOrEqual(0);
+      expect(dialogBox!.y).toBeGreaterThanOrEqual(0);
+      expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(width + 1);
+      expect(dialogBox!.y + dialogBox!.height).toBeLessThanOrEqual(height + 1);
+
+      const close = dialog.getByRole("button", { name: "Close" });
+      await expect(close).toBeVisible();
+      await expect(close).toHaveCSS("min-height", "44px");
+      await expectReadable(close, `${colorScheme} Inventory dialog close`);
+      await expect
+        .poll(() =>
+          dialog.evaluate((element) =>
+            element.contains(document.activeElement),
+          ),
+        )
+        .toBe(true);
+
+      await page
+        .getByRole("link", { name: "Dashboard" })
+        .evaluate((element) => (element as HTMLElement).focus());
+      await expect
+        .poll(() =>
+          dialog.evaluate((element) =>
+            element.contains(document.activeElement),
+          ),
+        )
+        .toBe(true);
+      await close.focus();
+      await page.keyboard.press("Tab");
+      await expect(close).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(dialog).not.toBeVisible();
+      await expect(trigger).toBeFocused();
+      await expectNoDocumentOverflow(page);
+    }
+
+    await page.setViewportSize({ width: 844, height: 390 });
+    await page.goto("/inventory");
+    const landscapeTrigger = page
+      .locator(".inventory-table tbody .ui-button")
+      .first();
+    await landscapeTrigger.click();
+    const landscapeDialog = page.getByRole("dialog", { name: longBeerName });
+    await expect(landscapeDialog).toHaveCSS("overflow-y", "auto");
+    const landscapeBox = await landscapeDialog.boundingBox();
+    expect(landscapeBox).not.toBeNull();
+    expect(landscapeBox!.x).toBeGreaterThanOrEqual(0);
+    expect(landscapeBox!.y).toBeGreaterThanOrEqual(0);
+    expect(landscapeBox!.x + landscapeBox!.width).toBeLessThanOrEqual(845);
+    expect(landscapeBox!.y + landscapeBox!.height).toBeLessThanOrEqual(391);
+    await expect(
+      landscapeDialog.getByRole("button", { name: "Close" }),
+    ).toBeVisible();
+    await expectNoDocumentOverflow(page);
+    await page.keyboard.press("Escape");
+  }
+});
+
+test("Locations preserve hierarchy and wrap long names at every viewport", async ({
+  page,
+}) => {
+  await stubApplication(page);
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    for (const width of [320, 390, 768, 1280]) {
+      await page.setViewportSize({ width, height: width === 1280 ? 800 : 844 });
+      await page.goto("/locations");
+      await expect(
+        page.getByRole("heading", { name: "Storage locations" }),
+      ).toBeVisible();
+      await expect(page.locator(".app")).toHaveClass(/theme-aware/);
+      await expectNoDocumentOverflow(page);
+
+      const rootLocation = page.locator(
+        ".location-tree[data-depth='0'] > li > .location-node > .location-select",
+      );
+      await expect(rootLocation.locator("strong")).toHaveText(longLocationName);
+      await expectReadable(
+        rootLocation.locator("strong"),
+        `${colorScheme} long location name at ${width}px`,
+      );
+      const rootBox = await rootLocation.boundingBox();
+      expect(rootBox).not.toBeNull();
+      expect(rootBox!.height).toBeGreaterThanOrEqual(44);
+      expect(rootBox!.x + rootBox!.width).toBeLessThanOrEqual(width + 1);
+      await expect(
+        page.getByText("Deep storage", { exact: true }),
+      ).toBeVisible();
+
+      const maximumIndent = await page
+        .locator(".location-tree[data-depth='5']")
+        .evaluate((element) =>
+          Number.parseFloat(getComputedStyle(element).paddingInlineStart),
+        );
+      expect(maximumIndent).toBe(0);
+
+      await rootLocation.click();
+      await expect(
+        page.getByRole("heading", { name: longLocationName }),
+      ).toBeVisible();
+      await expectReadable(
+        page.locator(".location-detail-panel .muted").first(),
+        `${colorScheme} location path at ${width}px`,
+      );
+      await expect(
+        page.getByRole("link", { name: "View inventory" }).last(),
+      ).toBeVisible();
+      await expectNoDocumentOverflow(page);
+    }
+  }
+});
+
+test("Imports keep long filenames, results, and history local to their surfaces", async ({
+  page,
+}) => {
+  await stubApplication(page);
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    for (const width of [320, 390, 768, 1280]) {
+      await page.setViewportSize({ width, height: width === 1280 ? 800 : 844 });
+      await page.goto("/imports");
+      await expect(page.locator(".app")).toHaveClass(/theme-aware/);
+      await expectNoDocumentOverflow(page);
+
+      const checkinCard = page.getByRole("region", {
+        name: "Untappd check-in CSV",
+      });
+      const checkinInput = checkinCard.getByLabel("Choose CSV file");
+      await checkinInput.setInputFiles({
+        name: longImportFilename,
+        mimeType: "text/csv",
+        buffer: Buffer.from("beer_name,brewery_name\nTest Ale,Test Brewery\n"),
+      });
+      await expect(checkinCard).toContainText(longImportFilename);
+      await expectReadable(
+        checkinCard.locator(".selected-file"),
+        `${colorScheme} selected import filename at ${width}px`,
+      );
+      await checkinCard.getByRole("button", { name: "Upload CSV" }).click();
+      await expect(checkinCard.getByRole("status")).toContainText(
+        "Import complete",
+      );
+
+      const stashCard = page.getByRole("region", {
+        name: "Untappd stash CSV",
+      });
+      await stashCard.getByLabel("Choose CSV file").setInputFiles({
+        name: "stash-export.csv",
+        mimeType: "text/csv",
+        buffer: Buffer.from("beer_name\nTest Ale\n"),
+      });
+      await stashCard
+        .getByLabel(
+          "I understand this replaces the complete Untappd stash snapshot.",
+        )
+        .check();
+      await stashCard.getByRole("button", { name: "Upload CSV" }).click();
+      const rejectedResult = stashCard.locator(".import-result.failed");
+      await expect(rejectedResult).toHaveAttribute("role", "alert");
+      await expect(rejectedResult).toBeVisible();
+      await expect(rejectedResult.locator("p")).toHaveText(longImportError);
+      await expectReadable(
+        rejectedResult.locator("p"),
+        `${colorScheme} import validation message at ${width}px`,
+      );
+
+      const history = page.getByRole("region", {
+        name: "Import history table",
+      });
+      await expect(history).toHaveAttribute("tabindex", "0");
+      for (const status of ["completed", "failed", "processing"]) {
+        const badge = page.locator(".history-card .ui-status-badge").filter({
+          hasText: status,
+        });
+        await expect(badge).toBeVisible();
+        await expectReadable(badge, `${colorScheme} ${status} import history`);
+      }
+      await expectNoDocumentOverflow(page);
+    }
+  }
+});
+
+test("Milestones keep semantic statuses, progress, forms, and long names readable", async ({
+  page,
+}) => {
+  await stubApplication(page);
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    for (const width of [320, 390, 768, 1280]) {
+      await page.setViewportSize({ width, height: width === 1280 ? 800 : 844 });
+      await page.goto("/milestones");
+      await expect(page.locator(".app")).toHaveClass(/theme-aware/);
+      await expect(
+        page.getByRole("heading", { name: "Milestones" }),
+      ).toBeVisible();
+      await expectNoDocumentOverflow(page);
+
+      const longName = page.locator(".milestone-card h2").filter({
+        hasText: longMilestoneName,
+      });
+      await expect(longName).toBeVisible();
+      await expectReadable(
+        longName,
+        `${colorScheme} milestone name at ${width}px`,
+      );
+      for (const status of [
+        "In progress",
+        "Scheduled",
+        "Overdue",
+        "Completed",
+        "Period ended",
+      ]) {
+        const badge = page
+          .locator(".milestone-status")
+          .filter({ hasText: status });
+        await expect(badge.first()).toBeVisible();
+        await expectReadable(
+          badge.first(),
+          `${colorScheme} ${status} milestone status`,
+        );
+      }
+      const progress = page.locator(".milestone-card progress").first();
+      await expect(progress).toBeVisible();
+      await expect(progress).toHaveCSS(
+        "accent-color",
+        colorScheme === "dark" ? "rgb(85, 189, 141)" : "rgb(23, 107, 77)",
+      );
+      for (const filter of await page
+        .getByRole("group", { name: "Filter milestones" })
+        .getByRole("button")
+        .all()) {
+        const box = await filter.boundingBox();
+        expect(box).not.toBeNull();
+        expect(box!.height).toBeGreaterThanOrEqual(44);
+      }
+      await expectNoDocumentOverflow(page);
+    }
+
+    await page
+      .getByRole("group", { name: "Filter milestones" })
+      .getByRole("button", { name: "Archived" })
+      .click();
+    await expect(page.locator(".milestone-status")).toHaveText("Archived");
+    await expectReadable(
+      page.locator(".milestone-status"),
+      `${colorScheme} archived milestone status`,
+    );
+
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.goto("/milestones");
+    const createButton = page
+      .locator(".milestone-page-heading")
+      .getByRole("button", { name: "Create milestone" });
+    await createButton.click();
+    const dialog = page.getByRole("dialog", { name: "Create milestone" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel("Name")).toBeFocused();
+    const dialogBox = await dialog.boundingBox();
+    expect(dialogBox).not.toBeNull();
+    expect(dialogBox!.width).toBeLessThanOrEqual(320);
+    expect(dialogBox!.height).toBeLessThanOrEqual(640);
+    await expectNoDocumentOverflow(page);
+    await page.keyboard.press("Escape");
+    await expect(dialog).not.toBeVisible();
+    await expect(createButton).toBeFocused();
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/milestones/4");
+  await expect(page.locator(".app")).toHaveClass(/theme-aware/);
+  await expect(
+    page.getByRole("heading", { name: longMilestoneName }),
+  ).toBeVisible();
+  await expect(page.locator(".milestone-detail progress")).toBeVisible();
+  await expectNoDocumentOverflow(page);
+});
+
+test("unfinished Explorer catalogues remain on the compatibility palette", async ({
+  page,
+}) => {
+  await stubApplication(page);
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    for (const width of [320, 390, 768, 1280]) {
+      await page.setViewportSize({ width, height: width === 1280 ? 800 : 844 });
+      await page.goto("/explore/breweries");
+      await expect(
+        page.getByRole("heading", { name: "Breweries catalogue coming later" }),
+      ).toBeVisible();
+      await expect(page.locator(".app")).not.toHaveClass(/theme-aware/);
+      await expect(page.locator(".explorer-page")).not.toHaveClass(
+        /theme-aware/,
+      );
+      await expect(page.locator(".app")).toHaveCSS("color-scheme", "light");
+      await expect(page.locator(".explorer-upcoming")).toHaveCSS(
+        "background-color",
+        "rgb(238, 242, 247)",
+      );
+      await expectNoDocumentOverflow(page);
+    }
+  }
 });

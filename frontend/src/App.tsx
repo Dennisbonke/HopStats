@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import {
+  matchPath,
   Navigate,
   NavLink,
   Route,
@@ -36,6 +37,19 @@ const links = [
   ["/imports", "Imports"],
 ];
 
+// Keep dark theme activation tied to complete, migrated route surfaces.
+// Milestone detail pages are included explicitly; unfinished Explorer catalogues
+// and the wildcard placeholder remain on the compatibility palette.
+const themeAwareRoutes = [
+  "/",
+  "/inventory",
+  "/locations",
+  "/imports",
+  "/milestones",
+  "/milestones/:id",
+  "/explore/beers",
+];
+
 function Placeholder({ title }: { title: string }) {
   return (
     <section className="placeholder-panel">
@@ -48,6 +62,9 @@ function Placeholder({ title }: { title: string }) {
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
+  const themeAware = themeAwareRoutes.some(
+    (path) => matchPath(path, location.pathname) !== null,
+  );
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [authState, setAuthState] = useState<
     "loading" | "authenticated" | "anonymous" | "error"
@@ -137,7 +154,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app${location.pathname === "/" ? " theme-aware" : ""}`}>
+    <div className={`app${themeAware ? " theme-aware" : ""}`}>
       <header className="app-header theme-aware">
         <div className="brand">🍺 HopStats</div>
         <Button
