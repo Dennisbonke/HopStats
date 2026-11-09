@@ -1263,10 +1263,21 @@ test("semantic themes stay scoped while Explorer uses the shared palette", async
     await expect(explorer).toHaveCSS("color-scheme", expected.controlScheme);
     await expect(explorer).toHaveCSS("background-color", expected.canvas);
     await expect(catalogue).toHaveCSS("background-color", expected.surface);
-    await expect(page.locator(".explorer-beer-card")).toHaveCSS(
-      "background-color",
-      expected.surface,
-    );
+    const beerCardSurface = await page
+      .locator(".explorer-beer-card")
+      .evaluate((element) => {
+        const style = getComputedStyle(element);
+        return {
+          colorScheme: style.colorScheme,
+          surfaceToken: style.getPropertyValue("--color-surface").trim(),
+          background: style.backgroundColor,
+        };
+      });
+    expect(beerCardSurface).toEqual({
+      colorScheme: expected.controlScheme,
+      surfaceToken: colorScheme === "dark" ? "#172533" : "#ffffff",
+      background: expected.surface,
+    });
     const themeStatusValues =
       colorScheme === "light"
         ? {
