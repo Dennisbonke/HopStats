@@ -15,12 +15,19 @@
   file at once.
 - Put route-specific styles beside their page component (for example,
   `pages/Inventory.css`) and import them from that page.
+- Dashboard and login presentation rules live beside their page components in
+  `pages/Dashboard.css` and `pages/Login.css`; use tokens there so complete
+  surfaces inherit both palettes.
 - The root palette and native controls stay light for compatibility. A page or
   complete surface opts into the shared automatic light/dark palette by adding
   `.theme-aware` to its root and using semantic tokens for both foregrounds and
   backgrounds. Dark tokens are applied only inside that boundary when the
   operating system requests dark mode. Do not opt in a component that still
   relies on un-themed light backgrounds.
+- The shell header and authentication views own separate `.theme-aware`
+  boundaries. The authenticated app root adopts that boundary only on the
+  migrated Dashboard route; navigating to an unmigrated route removes it so
+  page content keeps the root light compatibility palette.
 - Existing routes may keep their scoped `prefers-color-scheme` rules until
   migrated together. New shared primitives should use semantic tokens and
   inherit the nearest `.theme-aware` palette.

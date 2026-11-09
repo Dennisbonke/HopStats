@@ -4,6 +4,7 @@ import {
   NavLink,
   Route,
   Routes,
+  useLocation,
   useNavigate,
 } from "react-router-dom";
 import { fetchCurrentUser, logout, CurrentUser } from "./api/auth";
@@ -23,6 +24,7 @@ const ExplorerUpcoming = lazy(() =>
   })),
 );
 import Login from "./pages/Login";
+import { Button, StatusBadge } from "./components/ui";
 
 const links = [
   ["/", "Dashboard"],
@@ -45,6 +47,7 @@ function Placeholder({ title }: { title: string }) {
 
 export default function App() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [authState, setAuthState] = useState<
     "loading" | "authenticated" | "anonymous" | "error"
@@ -93,14 +96,14 @@ export default function App() {
 
   if (authState === "loading") {
     return (
-      <main className="auth-loading" aria-busy="true">
+      <main className="auth-loading theme-aware" aria-busy="true">
         Checking session…
       </main>
     );
   }
   if (authState === "error") {
     return (
-      <main className="auth-loading">
+      <main className="auth-loading theme-aware">
         <p>Unable to establish a session. Refresh to try again.</p>
       </main>
     );
@@ -134,10 +137,10 @@ export default function App() {
   }
 
   return (
-    <div className="app">
-      <header className="app-header">
+    <div className={`app${location.pathname === "/" ? " theme-aware" : ""}`}>
+      <header className="app-header theme-aware">
         <div className="brand">🍺 HopStats</div>
-        <button
+        <Button
           type="button"
           className="mobile-menu-toggle"
           aria-expanded={mobileMenuOpen}
@@ -146,7 +149,7 @@ export default function App() {
         >
           <span className="visually-hidden">Main menu</span>
           <span aria-hidden="true">{mobileMenuOpen ? "×" : "☰"}</span>
-        </button>
+        </Button>
         <nav
           id="main-navigation"
           className={mobileMenuOpen ? "is-open" : ""}
@@ -162,9 +165,10 @@ export default function App() {
               {label}
             </NavLink>
           ))}
-          <button
+          <Button
             type="button"
             className="logout-button"
+            variant="ghost"
             onClick={() => {
               setMobileMenuOpen(false);
               void signOut();
@@ -174,23 +178,33 @@ export default function App() {
             {logoutLoading
               ? "Signing out…"
               : `Sign out${user ? ` (${user.username})` : ""}`}
-          </button>
+          </Button>
         </nav>
       </header>
-      <main>
+      <main className="app-main">
         {logoutError && (
           <p className="logout-error" role="alert">
             {logoutError}
           </p>
         )}
-        <div className={`status ${status}`}>
+        <StatusBadge
+          className="app-status theme-aware"
+          variant={
+            status === "connected"
+              ? "success"
+              : status === "offline"
+                ? "error"
+                : "neutral"
+          }
+          role="status"
+        >
           Backend:{" "}
           {status === "loading"
             ? "checking…"
             : status === "connected"
               ? "connected"
               : "unavailable"}
-        </div>
+        </StatusBadge>
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/inventory" element={<Inventory />} />

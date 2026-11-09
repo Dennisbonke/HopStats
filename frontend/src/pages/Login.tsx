@@ -1,6 +1,8 @@
 import { FormEvent, useState } from "react";
 import { ApiError } from "../api/client";
 import { login } from "../api/auth";
+import { Button, Card, FormField } from "../components/ui";
+import "./Login.css";
 
 export default function Login({ onLogin }: { onLogin: () => void }) {
   const [username, setUsername] = useState("");
@@ -30,41 +32,41 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
   }
 
   return (
-    <main className="login-page">
-      <section className="login-card" aria-labelledby="login-title">
+    <main className="login-page theme-aware">
+      <Card as="section" className="login-card" aria-labelledby="login-title">
         <div className="brand login-brand">🍺 HopStats</div>
         <h1 id="login-title">Sign in</h1>
-        <p className="muted">Sign in to view your beer data.</p>
+        <p className="login-description">Sign in to view your beer data.</p>
         <form onSubmit={submit}>
-          <label>
-            Username
+          <FormField id="login-username" label="Username">
             <input
+              name="username"
               autoComplete="username"
               required
               value={username}
               onChange={(event) => setUsername(event.target.value)}
             />
-          </label>
-          <label>
-            Password
+          </FormField>
+          <FormField id="login-password" label="Password">
             <input
               type="password"
+              name="password"
               autoComplete="current-password"
               required
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
-          </label>
+          </FormField>
           {error && (
             <p className="login-error" role="alert">
               {error}
             </p>
           )}
-          <button type="submit" disabled={loading}>
+          <Button type="submit" disabled={loading}>
             {loading ? "Signing in…" : "Sign in"}
-          </button>
+          </Button>
         </form>
-      </section>
+      </Card>
     </main>
   );
 }
