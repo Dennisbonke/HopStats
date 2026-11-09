@@ -1219,26 +1219,28 @@ test("semantic themes stay scoped while Explorer uses the shared palette", async
 }) => {
   await stubApplication(page);
   await page.setViewportSize({ width: 320, height: 844 });
-  await page.goto("/explore/beers");
-  await expect(page.locator(".app")).toHaveClass(/theme-aware/);
 
   const explorer = page.locator(".explorer-page");
   const catalogue = page.locator(".explorer-catalogue");
   const longBeerName =
     "A Long Seasonal IPA with a Name That Wraps on Narrow Screens";
-  await expect(page.locator(".explorer-beer-card h4")).toHaveText(longBeerName);
-  await expect(page.locator(".explorer-beer-card")).toHaveCount(1);
-  await explorer.evaluate((element) => {
-    const badge = document.createElement("span");
-    badge.className =
-      "ui-status-badge ui-status-badge--success theme-test-status";
-    badge.textContent = "Theme test status";
-    element.querySelector(".explorer-catalogue")?.append(badge);
-  });
-  const themeStatusBadge = page.getByText("Theme test status");
 
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
+    await page.goto("/explore/beers");
+    await expect(page.locator(".app")).toHaveClass(/theme-aware/);
+    await expect(page.locator(".explorer-beer-card h4")).toHaveText(
+      longBeerName,
+    );
+    await expect(page.locator(".explorer-beer-card")).toHaveCount(1);
+    await explorer.evaluate((element) => {
+      const badge = document.createElement("span");
+      badge.className =
+        "ui-status-badge ui-status-badge--success theme-test-status";
+      badge.textContent = "Theme test status";
+      element.querySelector(".explorer-catalogue")?.append(badge);
+    });
+    const themeStatusBadge = page.getByText("Theme test status");
     const expected =
       colorScheme === "light"
         ? {
