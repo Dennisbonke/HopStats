@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
+  CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
+  RefObject,
   ReactNode,
 } from "react";
 import {
@@ -20,8 +22,13 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  type Coordinate,
 } from "recharts";
 import LayoutDiagnostics from "../components/LayoutDiagnostics";
+import AnalyticsChartTooltip, {
+  ANALYTICS_TOOLTIP_WRAPPER_STYLE,
+} from "../components/AnalyticsChartTooltip";
+import { Button } from "../components/ui";
 import {
   AnalyticsApiError,
   AnalyticsBucket,
@@ -234,8 +241,12 @@ function ExactTooltip({
   payload,
   label,
   showShare = false,
+  coordinate,
+  chartRef,
 }: {
   active?: boolean;
+  coordinate?: Coordinate;
+  chartRef: RefObject<HTMLElement | null>;
   payload?: Array<{
     name: string;
     value: number;
@@ -249,12 +260,19 @@ function ExactTooltip({
   const bucket = payload[0].payload;
   if (!bucket) return null;
   return (
-    <div className="analytics-tooltip">
+    <AnalyticsChartTooltip
+      active={active}
+      coordinate={coordinate}
+      chartRef={chartRef}
+    >
       <strong>
         {bucket.label} · {bucket.start} – {bucket.end}
       </strong>
       {payload.map((entry) => (
-        <div key={entry.name} style={{ color: entry.color }}>
+        <div
+          key={entry.name}
+          style={{ "--tooltip-series-color": entry.color } as CSSProperties}
+        >
           {entry.name}: {entry.value}
         </div>
       ))}
@@ -265,7 +283,7 @@ function ExactTooltip({
         </div>
       )}
       {label && <span className="sr-only">{label}</span>}
-    </div>
+    </AnalyticsChartTooltip>
   );
 }
 
@@ -327,6 +345,8 @@ export default function Analytics() {
     null,
   );
   const lastChartPointer = useRef<{ x: number; y: number } | null>(null);
+  const breakdownChartRef = useRef<HTMLDivElement>(null);
+  const trendChartRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState<Zoom>(() =>
     parseZoom(searchParams.get("zoom")),
   );
@@ -1028,22 +1048,22 @@ export default function Analytics() {
               className="analytics-breadcrumb"
               aria-label="Analytics drilldown"
             >
-              <button
-                type="button"
+              <Button
+                variant="secondary"
                 disabled={!zoom}
                 onClick={() => updateZoom(null)}
               >
                 Overview
-              </button>
+              </Button>
               {zoom && (
                 <>
                   <span aria-hidden="true">›</span>
                   {zoom.kind === "year" ? (
-                    <strong>{zoom.value}</strong>
+                    <strong aria-current="page">{zoom.value}</strong>
                   ) : (
                     <>
-                      <button
-                        type="button"
+                      <Button
+                        variant="secondary"
                         onClick={() =>
                           updateZoom({
                             kind: "year",
@@ -1052,9 +1072,9 @@ export default function Analytics() {
                         }
                       >
                         {zoom.value.slice(0, 4)}
-                      </button>
+                      </Button>
                       <span aria-hidden="true">›</span>
-                      <strong>
+                      <strong aria-current="page">
                         {new Date(`${zoom.value}-01T00:00:00Z`).toLocaleString(
                           "en",
                           {
@@ -1083,24 +1103,24 @@ export default function Analytics() {
                 className="analytics-window-nav"
                 aria-label="Visible bucket window"
               >
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
                   disabled={pageRange.pageIndex === 0}
                   onClick={() => updatePage(pageRange.pageIndex - 1)}
                 >
                   Previous {granularity === "day" ? "45 days" : "45 weeks"}
-                </button>
+                </Button>
                 <span>
                   Showing {visibleStart}–{visibleEnd} · page{" "}
                   {pageRange.pageIndex + 1} of {pageRange.pageCount}
                 </span>
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
                   disabled={pageRange.pageIndex + 1 >= pageRange.pageCount}
                   onClick={() => updatePage(pageRange.pageIndex + 1)}
                 >
                   Next {granularity === "day" ? "45 days" : "45 weeks"}
-                </button>
+                </Button>
               </nav>
             )}
             {invalidRange && (
@@ -1122,9 +1142,12 @@ export default function Analytics() {
                 <p>{error}</p>
                 {(error.includes("coarser granularity") ||
                   error.includes("more than")) && (
-                  <button type="button" onClick={() => setGranularity("auto")}>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setGranularity("auto")}
+                  >
                     Switch to automatic overview
-                  </button>
+                  </Button>
                 )}
               </div>
             )}
@@ -1190,12 +1213,26 @@ export default function Analytics() {
                         onTouchMove={() =>
                           enableTooltipFromInteraction("breakdown")
                         }
+                        onFocus={() =>
+                          enableTooltipFromInteraction("breakdown")
+                        }
+                        onBlur={(event) => {
+                          if (
+                            !(event.relatedTarget instanceof Node) ||
+                            !event.currentTarget.contains(event.relatedTarget)
+                          ) {
+                            dismissTooltipOnPointerLeave("breakdown");
+                          }
+                        }}
                       >
-                        <div className="chart-canvas">
-                          <ResponsiveContainer width="100%" height={320}>
+                        <div
+                          className="chart-canvas analytics-overview-chart"
+                          ref={breakdownChartRef}
+                        >
+                          <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={chartData} accessibilityLayer>
                               <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis dataKey="key" minTickGap={24} />
+                              <XAxis dataKey="label" minTickGap={28} />
                               <YAxis allowDecimals={false} />
                               <Tooltip
                                 active={
@@ -1203,14 +1240,21 @@ export default function Analytics() {
                                     ? undefined
                                     : false
                                 }
-                                content={<ExactTooltip showShare />}
+                                content={
+                                  <ExactTooltip
+                                    chartRef={breakdownChartRef}
+                                    showShare
+                                  />
+                                }
+                                portal={document.body}
+                                wrapperStyle={ANALYTICS_TOOLTIP_WRAPPER_STYLE}
                               />
                               <Legend />
                               <Bar
                                 dataKey="new_discoveries"
                                 name="New discoveries"
                                 stackId="checkins"
-                                fill="#15803d"
+                                fill="var(--color-chart-primary)"
                                 cursor={canDrill ? "pointer" : "default"}
                                 onClick={(entry) =>
                                   drillTo(entry.payload as AnalyticsBucket)
@@ -1220,7 +1264,7 @@ export default function Analytics() {
                                 dataKey="repeat_checkins"
                                 name="Repeat check-ins"
                                 stackId="checkins"
-                                fill="#2563eb"
+                                fill="var(--color-chart-secondary)"
                                 cursor={canDrill ? "pointer" : "default"}
                                 onClick={(entry) =>
                                   drillTo(entry.payload as AnalyticsBucket)
@@ -1243,20 +1287,22 @@ export default function Analytics() {
                         role="group"
                         aria-label="Trend display mode"
                       >
-                        <button
-                          type="button"
+                        <Button
+                          variant={mode === "activity" ? "secondary" : "ghost"}
                           aria-pressed={mode === "activity"}
                           onClick={() => setMode("activity")}
                         >
                           Activity
-                        </button>
-                        <button
-                          type="button"
+                        </Button>
+                        <Button
+                          variant={
+                            mode === "cumulative" ? "secondary" : "ghost"
+                          }
                           aria-pressed={mode === "cumulative"}
                           onClick={() => setMode("cumulative")}
                         >
                           Cumulative
-                        </button>
+                        </Button>
                         <label>
                           <input
                             type="checkbox"
@@ -1304,16 +1350,28 @@ export default function Analytics() {
                         onTouchMove={() =>
                           enableTooltipFromInteraction("trend")
                         }
+                        onFocus={() => enableTooltipFromInteraction("trend")}
+                        onBlur={(event) => {
+                          if (
+                            !(event.relatedTarget instanceof Node) ||
+                            !event.currentTarget.contains(event.relatedTarget)
+                          ) {
+                            dismissTooltipOnPointerLeave("trend");
+                          }
+                        }}
                       >
-                        <div className="chart-canvas">
-                          <ResponsiveContainer width="100%" height={320}>
+                        <div
+                          className="chart-canvas analytics-overview-chart"
+                          ref={trendChartRef}
+                        >
+                          <ResponsiveContainer width="100%" height="100%">
                             <LineChart
                               data={lineData}
                               accessibilityLayer
                               onClick={drillFromChart}
                             >
                               <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis dataKey="key" minTickGap={24} />
+                              <XAxis dataKey="label" minTickGap={28} />
                               <YAxis allowDecimals={false} />
                               <Tooltip
                                 active={
@@ -1321,7 +1379,11 @@ export default function Analytics() {
                                     ? undefined
                                     : false
                                 }
-                                content={<ExactTooltip />}
+                                content={
+                                  <ExactTooltip chartRef={trendChartRef} />
+                                }
+                                portal={document.body}
+                                wrapperStyle={ANALYTICS_TOOLTIP_WRAPPER_STYLE}
                               />
                               <Legend />
                               {visible.total && (
@@ -1333,7 +1395,7 @@ export default function Analytics() {
                                       ? "All check-ins"
                                       : "Cumulative check-ins"
                                   }
-                                  stroke="#2563eb"
+                                  stroke="var(--color-chart-secondary)"
                                   dot={false}
                                   activeDot={{ r: 5 }}
                                 />
@@ -1347,7 +1409,7 @@ export default function Analytics() {
                                       ? "New discoveries"
                                       : "Cumulative discoveries"
                                   }
-                                  stroke="#15803d"
+                                  stroke="var(--color-chart-primary)"
                                   dot={false}
                                   activeDot={{ r: 5 }}
                                 />
@@ -1397,15 +1459,15 @@ function BucketActions({
   return (
     <div className="bucket-actions" aria-label="Available drilldown periods">
       {buckets.map((bucket) => (
-        <button
+        <Button
           key={bucket.key}
-          type="button"
+          variant="secondary"
           onClick={() => onSelect(bucket)}
           aria-label={`Open ${bucket.label}`}
           title={`Open ${bucket.label}`}
         >
           {bucket.label}
-        </button>
+        </Button>
       ))}
     </div>
   );
