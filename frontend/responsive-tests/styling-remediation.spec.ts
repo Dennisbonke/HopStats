@@ -1552,9 +1552,10 @@ test("Dashboard and shell themes stay readable and responsive", async ({
         "background-color",
         colorScheme === "dark" ? "rgb(29, 44, 58)" : "rgb(255, 255, 255)",
       );
-      const selectedDashboardLink = page
-        .getByRole("navigation", { name: "Main navigation" })
-        .getByRole("link", { name: "Dashboard" });
+      const selectedDashboardLink = page.locator(
+        '.app-header nav a[aria-current="page"]',
+      );
+      await expect(selectedDashboardLink).toHaveText("Dashboard");
       await expect(selectedDashboardLink).toHaveAttribute(
         "aria-current",
         "page",
@@ -1587,6 +1588,13 @@ test("Dashboard and shell themes stay readable and responsive", async ({
         await expect(
           page.getByRole("navigation", { name: "Main navigation" }),
         ).toBeVisible();
+        const accessibleSelectedLink = page
+          .getByRole("navigation", { name: "Main navigation" })
+          .getByRole("link", { name: "Dashboard" });
+        await expect(accessibleSelectedLink).toHaveAttribute(
+          "aria-current",
+          "page",
+        );
         await page.keyboard.press("Tab");
         await expect(selectedDashboardLink).toBeFocused();
         await expect(selectedDashboardLink).toHaveCSS("outline-width", "3px");
