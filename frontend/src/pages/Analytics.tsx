@@ -28,7 +28,7 @@ import LayoutDiagnostics from "../components/LayoutDiagnostics";
 import AnalyticsChartTooltip, {
   ANALYTICS_TOOLTIP_WRAPPER_STYLE,
 } from "../components/AnalyticsChartTooltip";
-import { Button } from "../components/ui";
+import { Button, Card } from "../components/ui";
 import {
   AnalyticsApiError,
   AnalyticsBucket,
@@ -37,6 +37,7 @@ import {
 } from "../api/analytics";
 import type { ActivityMetric } from "../utils/calendar";
 import DrinkingTrendsView from "./DrinkingTrends";
+import "./Analytics.css";
 
 const TIMEZONE = "Europe/Amsterdam";
 type Period =
@@ -922,7 +923,11 @@ export default function Analytics() {
           Drinking Trends
         </button>
       </div>
-      <section className="analytics-filters" aria-label="Reporting filters">
+      <Card
+        as="section"
+        className="analytics-filters"
+        aria-label="Reporting filters"
+      >
         <label className="filter-control">
           Reporting period
           <select
@@ -1000,7 +1005,7 @@ export default function Analytics() {
           </label>
         )}
         <span className="analytics-timezone">Timezone: {TIMEZONE}</span>
-      </section>
+      </Card>
       <DrinkingTrendsView
         active={view === "trends" && !popFiltersPending}
         metric={metric}
@@ -1226,7 +1231,7 @@ export default function Analytics() {
                         }}
                       >
                         <div
-                          className="chart-canvas analytics-overview-chart"
+                          className="chart-canvas analytics-overview-chart ui-chart"
                           ref={breakdownChartRef}
                         >
                           <ResponsiveContainer width="100%" height="100%">
@@ -1361,7 +1366,7 @@ export default function Analytics() {
                         }}
                       >
                         <div
-                          className="chart-canvas analytics-overview-chart"
+                          className="chart-canvas analytics-overview-chart ui-chart"
                           ref={trendChartRef}
                         >
                           <ResponsiveContainer width="100%" height="100%">
@@ -1442,10 +1447,10 @@ export default function Analytics() {
 
 function Metric({ label, value }: { label: string; value: number }) {
   return (
-    <div className="metric-card">
+    <Card className="metric-card">
       <h3>{label}</h3>
       <strong>{value.toLocaleString()}</strong>
-    </div>
+    </Card>
   );
 }
 
@@ -1483,10 +1488,10 @@ function ChartPanel({
   children: ReactNode;
 }) {
   return (
-    <section className="analytics-chart-panel">
+    <Card as="section" className="analytics-chart-panel">
       <h3>{title}</h3>
       <p className="panel-explanation">{description}</p>
       {children}
-    </section>
+    </Card>
   );
 }

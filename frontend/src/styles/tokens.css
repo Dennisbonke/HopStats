@@ -54,6 +54,13 @@
   --color-chart-tooltip-surface: #172033;
   --color-chart-tooltip-text: #ffffff;
 
+  /* Ordered activity intensity levels shared by the Analytics heatmaps. */
+  --color-heatmap-zero: #eef2f7;
+  --color-heatmap-level-1: #d5efe0;
+  --color-heatmap-level-2: #a8d9bc;
+  --color-heatmap-level-3: #65b783;
+  --color-heatmap-level-4: #267348;
+
   /* Shared surface depth for standard and raised cards. */
   --shadow-surface: 0 1px 3px rgb(23 32 51 / 8%);
   --shadow-surface-raised: 0 5px 18px rgb(23 32 51 / 15%);
@@ -113,6 +120,12 @@
     --color-chart-axis: #c1ccd8;
     --color-chart-tooltip-surface: #0b121a;
     --color-chart-tooltip-text: #f1f5f9;
+
+    --color-heatmap-zero: #253747;
+    --color-heatmap-level-1: #214d39;
+    --color-heatmap-level-2: #2b6b4a;
+    --color-heatmap-level-3: #3b9462;
+    --color-heatmap-level-4: #78d69b;
 
     --shadow-surface: 0 1px 3px rgb(0 0 0 / 24%);
     --shadow-surface-raised: 0 5px 18px rgb(0 0 0 / 38%);

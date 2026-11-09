@@ -318,6 +318,69 @@
   color: var(--color-text-secondary);
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+  border: 0;
+}
+
+/* Shared Recharts presentation for Dashboard and Analytics canvases. */
+.ui-chart .recharts-cartesian-axis-tick-value {
+  fill: var(--color-chart-axis);
+}
+.ui-chart .recharts-cartesian-grid line {
+  stroke: var(--color-chart-grid);
+}
+.ui-chart .recharts-legend-wrapper {
+  max-width: 100%;
+}
+.ui-chart .recharts-default-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.3rem 0.8rem;
+}
+.ui-chart .recharts-legend-item {
+  min-width: 0;
+  white-space: normal;
+}
+.ui-chart .recharts-legend-item-text {
+  color: var(--color-chart-axis);
+  overflow-wrap: anywhere;
+}
+
+/* The tooltip is portaled under body and owns a local theme boundary. */
+.analytics-tooltip {
+  display: grid;
+  gap: 0.25rem;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(18rem, calc(100vw - 1rem));
+  padding: 0.75rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.45rem;
+  background: var(--color-chart-tooltip-surface);
+  color: var(--color-chart-tooltip-text);
+  box-shadow: var(--shadow-surface-raised);
+  overflow-wrap: anywhere;
+}
+.analytics-tooltip > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.analytics-tooltip > div[style] {
+  border-left: 0.2rem solid var(--tooltip-series-color);
+  padding-left: 0.4rem;
+}
+
 /* Shared layout and text utilities used across route surfaces. */
 .page-heading {
   margin-bottom: 1rem;

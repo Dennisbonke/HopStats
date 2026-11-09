@@ -127,7 +127,7 @@ export default function DashboardDiscoveriesChart({
             .
           </p>
           <div
-            className="dashboard-chart"
+            className="dashboard-chart ui-chart"
             role="group"
             aria-label="Unique beer discoveries over the last six months"
             aria-describedby="dashboard-discoveries-summary"

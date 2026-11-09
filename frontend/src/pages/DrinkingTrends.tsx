@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import type { RefObject } from "react";
 import ActivityMetricSelector from "../components/ActivityMetricSelector";
+import { Card } from "../components/ui";
 import AnalyticsChartTooltip, {
   ANALYTICS_TOOLTIP_WRAPPER_STYLE,
 } from "../components/AnalyticsChartTooltip";
@@ -460,14 +461,14 @@ function DistributionChart({
   const isHourly = rows.length > 7;
   const chartRef = useRef<HTMLDivElement>(null);
   return (
-    <article className="distribution-chart">
+    <Card as="article" className="distribution-chart">
       <h3>{title}</h3>
       <p className="sr-only" id={descriptionId}>
         {description} Reporting period: {reportingPeriod}. Displaying{" "}
         {metricName} as {mode === "total" ? "totals" : "averages"}.
       </p>
       <div
-        className="distribution-canvas"
+        className="distribution-canvas ui-chart"
         ref={chartRef}
         role="group"
         aria-label={`${title}. ${description} Reporting period: ${reportingPeriod}. ${metricName}, ${mode === "total" ? "totals" : "averages"}.`}
@@ -557,6 +558,6 @@ function DistributionChart({
             ? "Average check-ins per calendar day"
             : "Average check-ins per occurrence of weekday"}
       </p>
-    </article>
+    </Card>
   );
 }

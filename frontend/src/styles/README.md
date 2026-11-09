@@ -7,13 +7,14 @@
   classes for shared primitives; `.app :where(button:not(.ui-button))` remains a
   transitional compatibility rule for unmigrated native buttons.
   Cross-route layout and text utilities (`.page-heading`, `.section-heading`,
-  `.muted`, `.panel-explanation`, and `.button-link`) also live here.
+  `.muted`, `.panel-explanation`, and `.button-link`), screen-reader-only text,
+  and shared Recharts presentation also live here.
 - Modal backdrops share the semantic `--color-overlay` token.
-- `../styles.css` is the legacy application stylesheet. Shared component rules
-  need a component scope; route rules need a route scope. Analytics still owns
-  its compatibility styles there until PR 7. Keep these selectors scoped under
-  `.analytics-page` and migrate them with that route instead of moving the whole
-  file at once. Table sizing and cell behavior belong to their owning route.
+- `../styles.css` retains the global reset, shell layout, and unrelated
+  compatibility rules for PR 8. Shared component rules need a component scope;
+  route rules need a route scope. Analytics and heatmap presentation lives in
+  `pages/Analytics.css`; keep its selectors under `.analytics-page`. Table
+  sizing and cell behavior belong to their owning route.
 - Put route-specific styles beside their page component (for example,
   `pages/Inventory.css`) and import them from that page.
 - Dashboard and login presentation rules live beside their page components in
@@ -28,9 +29,10 @@
 - The shell header and authentication views own separate `.theme-aware`
   boundaries. `App.tsx` keeps an explicit allowlist for complete route surfaces:
   Dashboard, Inventory, Locations, Imports, Milestones (including detail
-  pages), and the implemented Explorer beer catalogue. Analytics and wildcard
-  or unfinished routes stay on the root light compatibility palette. Keep a
-  route off the list until its full visible surface is migrated.
+  pages), Analytics (including its URL-selected Drinking Trends view), and the
+  implemented Explorer beer catalogue. Wildcard or unfinished routes stay on
+  the root light compatibility palette. Keep a route off the list until its
+  full visible surface is migrated.
 - Explorer's implemented beer catalogue inherits the route theme from the
   allowlisted `/explore/beers` route. The Breweries and Styles placeholders
   remain on the compatibility palette; do not add a broad `/explore/*` theme
@@ -38,6 +40,9 @@
 - Existing routes may keep their scoped `prefers-color-scheme` rules until
   migrated together. New shared primitives should use semantic tokens and
   inherit the nearest `.theme-aware` palette.
+- Portaled chart tooltips sit under `body`, outside the route boundary. Their
+  content must carry its own `.theme-aware` scope so semantic tooltip tokens
+  follow the operating system preference without theming the document.
 - Put reusable controls and surfaces in `components/ui/` when their behavior,
   accessibility wiring, and visual variants should stay consistent across
   routes. Keep one-off layout or presentation rules beside the route.
