@@ -1,7 +1,9 @@
+import "./Milestones.css";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchMilestones, Milestone, MilestoneStatus } from "../api/milestones";
 import MilestoneFormDialog from "../components/MilestoneFormDialog";
+import { Button, Card, StatusBadge } from "../components/ui";
 
 type Filter =
   | "all"
@@ -31,6 +33,15 @@ const statusLabels: Record<MilestoneStatus, string> = {
   archived: "Archived",
 };
 
+function statusVariant(
+  status: MilestoneStatus,
+): "success" | "warning" | "error" | "info" | "neutral" {
+  if (status === "overdue") return "error";
+  if (status === "scheduled") return "info";
+  if (status === "completed" || status === "active") return "success";
+  return "neutral";
+}
+
 export function metricLabel(metric: Milestone["metric"]): string {
   return metric === "checkins" ? "Total check-ins" : "Unique beer discoveries";
 }
@@ -58,9 +69,12 @@ function ProgressCard({ milestone }: { milestone: Milestone }) {
     <Link className="milestone-card" to={`/milestones/${milestone.id}`}>
       <div className="milestone-card-heading">
         <h2>{milestone.name}</h2>
-        <span className={`milestone-status ${milestone.status}`}>
+        <StatusBadge
+          className={`milestone-status ${milestone.status}`}
+          variant={statusVariant(milestone.status)}
+        >
           {statusLabels[milestone.status]}
-        </span>
+        </StatusBadge>
       </div>
       <p className="milestone-card-meta">
         {metricLabel(milestone.metric)} · {goalLabel(milestone)}
@@ -162,9 +176,9 @@ export default function Milestones() {
             check-ins.
           </p>
         </div>
-        <button type="button" onClick={() => setShowForm(true)}>
+        <Button type="button" onClick={() => setShowForm(true)}>
           Create milestone
-        </button>
+        </Button>
       </div>
 
       <div className="milestone-counts" aria-label="Milestone counts">
@@ -176,10 +190,10 @@ export default function Milestones() {
             ["Overdue", counts.overdue],
           ] as const
         ).map(([label, count]) => (
-          <div className="milestone-count" key={label}>
+          <Card className="milestone-count" key={label}>
             <span>{label}</span>
             <strong>{count}</strong>
-          </div>
+          </Card>
         ))}
       </div>
 
@@ -189,7 +203,8 @@ export default function Milestones() {
         aria-label="Filter milestones"
       >
         {filters.map(({ id, label }) => (
-          <button
+          <Button
+            variant="secondary"
             className={filter === id ? "selected" : ""}
             type="button"
             key={id}
@@ -197,23 +212,28 @@ export default function Milestones() {
             onClick={() => setFilter(id)}
           >
             {label}
-          </button>
+          </Button>
         ))}
       </div>
 
       {loading ? (
-        <div className="milestone-state" role="status" aria-busy="true">
+        <Card
+          as="section"
+          className="milestone-state"
+          role="status"
+          aria-busy="true"
+        >
           Loading milestones…
-        </div>
+        </Card>
       ) : error ? (
-        <div className="milestone-state error-state" role="alert">
+        <Card as="section" className="milestone-state error-state" role="alert">
           <p>{error}</p>
-          <button type="button" onClick={() => setRetry((value) => value + 1)}>
+          <Button type="button" onClick={() => setRetry((value) => value + 1)}>
             Retry
-          </button>
-        </div>
+          </Button>
+        </Card>
       ) : visible.length === 0 ? (
-        <div className="milestone-state">
+        <Card as="section" className="milestone-state">
           <h2>
             {filter === "all"
               ? "No milestones yet"
@@ -225,11 +245,11 @@ export default function Milestones() {
               : "Try another filter or create a milestone."}
           </p>
           {filter === "all" && (
-            <button type="button" onClick={() => setShowForm(true)}>
+            <Button type="button" onClick={() => setShowForm(true)}>
               Create milestone
-            </button>
+            </Button>
           )}
-        </div>
+        </Card>
       ) : (
         <div className="milestone-grid">
           {visible.map((milestone) => (

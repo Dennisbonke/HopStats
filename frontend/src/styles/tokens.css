@@ -28,6 +28,7 @@
   --color-border-strong: #64748b;
   --color-border-disabled: #e2e8f0;
   --color-focus: #805500;
+  --color-overlay: rgb(10 18 28 / 64%);
 
   /* Action backgrounds and their readable foregrounds. */
   --color-action-primary: #176b4d;
@@ -90,6 +91,7 @@
     --color-border-strong: #718096;
     --color-border-disabled: #3b4b5b;
     --color-focus: #fbbf24;
+    --color-overlay: rgb(0 0 0 / 72%);
 
     --color-action-primary: #55bd8d;
     --color-action-primary-hover: #6ed5a4;

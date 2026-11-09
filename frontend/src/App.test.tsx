@@ -83,6 +83,7 @@ test("renders shell and navigation", async () => {
     </MemoryRouter>,
   );
   expect(await screen.findByText("🍺 HopStats")).toBeInTheDocument();
+  expect(document.querySelector(".app")).toHaveClass("theme-aware");
   expect(screen.getByText("Inventory")).toBeInTheDocument();
   expect(screen.getByText("Explorer")).toBeInTheDocument();
   expect(await screen.findByText("Backend: connected")).toBeInTheDocument();
@@ -143,6 +144,7 @@ test("opens Explorer beers and marks the other catalogues as upcoming", async ()
   expect(
     await screen.findByRole("heading", { name: "Beers" }),
   ).toBeInTheDocument();
+  expect(document.querySelector(".app")).toHaveClass("theme-aware");
   expect(
     screen.getByRole("navigation", { name: "Explorer sections" }),
   ).toHaveTextContent("Breweries Upcoming");
@@ -175,4 +177,8 @@ test("unfinished Explorer routes still render their explanatory placeholder", as
       name: "Breweries catalogue coming later",
     }),
   ).toBeInTheDocument();
+  expect(document.querySelector(".app")).not.toHaveClass("theme-aware");
+  expect(document.querySelector(".explorer-page")).not.toHaveClass(
+    "theme-aware",
+  );
 });

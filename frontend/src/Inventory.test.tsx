@@ -114,6 +114,9 @@ test("loads inventory, applies search, and opens record details", async () => {
     ),
   ).toBe(true);
   await user.click(screen.getByRole("button", { name: "Details" }));
+  expect(
+    await screen.findByRole("dialog", { name: "Example IPA" }),
+  ).toBeInTheDocument();
   expect(await screen.findByText("Original notes")).toBeInTheDocument();
   expect(
     screen.getByText("This does not prove the beer was never checked in."),

@@ -1,3 +1,4 @@
+import "./Milestones.css";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
@@ -8,6 +9,7 @@ import {
   setMilestoneArchived,
 } from "../api/milestones";
 import MilestoneFormDialog from "../components/MilestoneFormDialog";
+import { Button, Card, StatusBadge } from "../components/ui";
 import { displayDate, goalLabel, metricLabel } from "./Milestones";
 
 const statusLabels: Record<MilestoneStatus, string> = {
@@ -18,6 +20,15 @@ const statusLabels: Record<MilestoneStatus, string> = {
   period_ended: "Period ended",
   archived: "Archived",
 };
+
+function statusVariant(
+  status: MilestoneStatus,
+): "success" | "warning" | "error" | "info" | "neutral" {
+  if (status === "overdue") return "error";
+  if (status === "scheduled") return "info";
+  if (status === "completed" || status === "active") return "success";
+  return "neutral";
+}
 
 const deadlineOutcomeLabels: Record<
   NonNullable<Milestone["deadline_outcome"]>,
@@ -139,20 +150,25 @@ export default function MilestoneDetail() {
 
   if (loading) {
     return (
-      <div className="milestone-state" role="status" aria-busy="true">
+      <Card
+        as="section"
+        className="milestone-state"
+        role="status"
+        aria-busy="true"
+      >
         Loading milestone…
-      </div>
+      </Card>
     );
   }
   if (error || !milestone) {
     return (
-      <div className="milestone-state error-state" role="alert">
+      <Card as="section" className="milestone-state error-state" role="alert">
         <p>{error ?? "Milestone not found."}</p>
-        <button type="button" onClick={() => setRetry((value) => value + 1)}>
+        <Button type="button" onClick={() => setRetry((value) => value + 1)}>
           Retry
-        </button>
+        </Button>
         <Link to="/milestones">Back to milestones</Link>
-      </div>
+      </Card>
     );
   }
 
@@ -165,42 +181,45 @@ export default function MilestoneDetail() {
   return (
     <div className="milestone-page">
       <Link to="/milestones">← All milestones</Link>
-      <section className="milestone-detail">
+      <Card as="section" className="milestone-detail">
         <div className="milestone-page-heading">
           <div>
-            <span className={`milestone-status ${milestone.status}`}>
+            <StatusBadge
+              className={`milestone-status ${milestone.status}`}
+              variant={statusVariant(milestone.status)}
+            >
               {statusLabels[milestone.status]}
-            </span>
+            </StatusBadge>
             <h1>{milestone.name}</h1>
             <p>
               {metricLabel(milestone.metric)} · {goalLabel(milestone)}
             </p>
           </div>
           <div className="milestone-detail-actions">
-            <button
+            <Button
               type="button"
-              className="secondary-button"
+              variant="secondary"
               onClick={() => setShowForm(true)}
               disabled={busy}
             >
               Edit
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="secondary-button"
+              variant="secondary"
               onClick={() => void archive(!milestone.archived_at)}
               disabled={busy}
             >
               {milestone.archived_at ? "Unarchive" : "Archive"}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="danger-button"
+              variant="danger"
               onClick={() => void remove()}
               disabled={busy}
             >
               Delete
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -315,7 +334,7 @@ export default function MilestoneDetail() {
             never advance discovery goals.
           </p>
         )}
-      </section>
+      </Card>
       {showForm && (
         <MilestoneFormDialog
           milestone={milestone}

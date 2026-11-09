@@ -317,3 +317,52 @@
   background: var(--color-surface-muted);
   color: var(--color-text-secondary);
 }
+
+/* Shared layout and text utilities used across route surfaces. */
+.page-heading {
+  margin-bottom: 1rem;
+}
+.page-heading h2,
+.page-heading p {
+  margin-bottom: 0.35rem;
+}
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.section-heading > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.muted {
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+}
+.panel-explanation {
+  margin: 0.55rem 0 0;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+}
+.button-link {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.6rem 0.85rem;
+  border-radius: 0.4rem;
+  background: var(--color-action-primary);
+  color: var(--color-text-on-accent);
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.button-link:hover {
+  background: var(--color-action-primary-hover);
+}
+.button-link:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}

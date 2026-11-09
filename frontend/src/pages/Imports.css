@@ -1,0 +1,251 @@
+.imports-page {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  color: var(--color-text-primary);
+}
+
+.imports-page .page-heading {
+  margin: 0;
+}
+
+.imports-page .page-heading h2,
+.imports-page .page-heading p {
+  margin: 0 0 0.35rem;
+}
+
+.imports-page .page-heading p,
+.imports-page .format-note,
+.imports-page .selected-file,
+.imports-page .empty-state {
+  color: var(--color-text-secondary);
+}
+
+.imports-page .page-heading p,
+.imports-page .format-note,
+.imports-page .empty-state,
+.imports-page .network-error {
+  overflow-wrap: anywhere;
+}
+
+.imports-page .import-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.imports-page .import-card {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.imports-page .import-card h3,
+.imports-page .history-card h3 {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.imports-page .import-card > p {
+  margin: 0;
+}
+
+.imports-page .format-note,
+.imports-page .empty-state {
+  font-size: 0.9rem;
+}
+
+.imports-page .file-picker {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 2.75rem;
+  margin: 0.25rem 0;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.4rem;
+  background: var(--color-action-secondary);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.imports-page .file-picker:focus-within {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.imports-page .file-picker input {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-height: 2.75rem;
+  margin-top: 0.4rem;
+  color: var(--color-text-primary);
+  font: inherit;
+}
+
+.imports-page .selected-file {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.imports-page .confirmation {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin: 0.25rem 0;
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.imports-page .confirmation input {
+  width: 1.2rem;
+  height: 1.2rem;
+  flex: 0 0 auto;
+  accent-color: var(--color-action-primary);
+}
+
+.imports-page .date-input {
+  margin: 0.25rem 0;
+}
+
+.imports-page .date-input .ui-form-field__control {
+  max-width: 20rem;
+}
+
+.imports-page .warning-confirmation {
+  color: var(--color-text-on-warning-surface);
+}
+
+.imports-page .import-result {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  margin-top: 0.25rem;
+  padding: 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.45rem;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.imports-page .import-result.completed {
+  border-color: var(--color-status-success);
+  background: var(--color-surface-success);
+  color: var(--color-text-on-success-surface);
+}
+
+.imports-page .import-result.failed {
+  border-color: var(--color-status-error);
+  background: var(--color-surface-error);
+  color: var(--color-text-on-error-surface);
+}
+
+.imports-page .import-result p {
+  margin: 0;
+  color: inherit;
+}
+
+.imports-page .validation-errors {
+  min-width: 0;
+  margin: 0.2rem 0 0;
+  padding-left: 1.2rem;
+  overflow-wrap: anywhere;
+}
+
+.imports-page .network-error {
+  margin: 0;
+  color: var(--color-text-on-error-surface);
+}
+
+.imports-page .history-card {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  margin: 0;
+  padding: 1.25rem;
+}
+
+.imports-page .history-card .section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.imports-page .history-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.imports-page .history-table-wrap:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.imports-page .history-card table {
+  width: 100%;
+  min-width: 48rem;
+  border-collapse: collapse;
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
+}
+
+.imports-page .history-card th,
+.imports-page .history-card td {
+  padding: 0.7rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.imports-page .history-card td:nth-child(3),
+.imports-page .history-card td:nth-child(4) {
+  overflow-wrap: anywhere;
+}
+
+.imports-page .history-card td:nth-child(3) {
+  min-width: 12rem;
+  white-space: normal;
+}
+
+.imports-page .history-card td:nth-child(n + 5) {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .imports-page .import-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .imports-page .import-card,
+  .imports-page .history-card {
+    padding: 1rem;
+  }
+
+  .imports-page .file-picker {
+    width: 100%;
+  }
+
+  .imports-page .file-picker input {
+    min-width: 0;
+  }
+
+  .imports-page .history-card .section-heading .ui-button {
+    width: 100%;
+  }
+}

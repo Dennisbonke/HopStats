@@ -255,7 +255,12 @@ export default function ExplorerBeers() {
         currentData &&
         currentData.total > 0 && (
           <>
-            <div className="explorer-beer-table-wrap">
+            <div
+              className="explorer-beer-table-wrap"
+              role="region"
+              aria-label="Beer catalogue table"
+              tabIndex={0}
+            >
               <table className="explorer-beer-table">
                 <thead>
                   <tr>

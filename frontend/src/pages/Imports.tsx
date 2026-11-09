@@ -1,3 +1,4 @@
+import "./Imports.css";
 import { useEffect, useState } from "react";
 import {
   fetchImportHistory,
@@ -27,7 +28,10 @@ function formatDate(value: string): string {
 
 function Summary({ result }: { result: ImportSummary }) {
   return (
-    <div className={`import-result ${result.status}`} role="status">
+    <div
+      className={`import-result ${result.status}`}
+      role={result.status === "completed" ? "status" : "alert"}
+    >
       <strong>
         {result.status === "completed" ? "Import complete" : "Import rejected"}
       </strong>
@@ -119,6 +123,10 @@ function UploadSection({
         <input
           type="file"
           accept=".csv,text/csv"
+          aria-invalid={Boolean(state.error)}
+          aria-describedby={
+            state.error ? `import-${kind}-network-error` : undefined
+          }
           onChange={(event) =>
             setState({
               ...state,
@@ -200,7 +208,15 @@ function UploadSection({
       >
         {state.loading ? "Uploading…" : "Upload CSV"}
       </Button>
-      {state.error && <p className="network-error">{state.error}</p>}
+      {state.error && (
+        <p
+          className="network-error"
+          id={`import-${kind}-network-error`}
+          role="alert"
+        >
+          {state.error}
+        </p>
+      )}
       {state.result && <Summary result={state.result} />}
     </Card>
   );
@@ -258,7 +274,7 @@ export default function Imports() {
           onImported={refreshHistory}
         />
       </div>
-      <section className="history-card">
+      <Card as="section" className="history-card">
         <div className="section-heading">
           <h3>Import history</h3>
           <Button
@@ -269,13 +285,22 @@ export default function Imports() {
             Refresh
           </Button>
         </div>
-        {historyError && <p className="network-error">{historyError}</p>}
+        {historyError && (
+          <p className="network-error" role="alert">
+            {historyError}
+          </p>
+        )}
         {!historyError && history.length === 0 ? (
           <p className="empty-state">
             No imports yet. Choose an export above to get started.
           </p>
         ) : (
-          <div className="history-table-wrap">
+          <div
+            className="history-table-wrap"
+            role="region"
+            aria-label="Import history table"
+            tabIndex={0}
+          >
             <table>
               <thead>
                 <tr>
@@ -322,7 +347,7 @@ export default function Imports() {
             </table>
           </div>
         )}
-      </section>
+      </Card>
     </div>
   );
 }
