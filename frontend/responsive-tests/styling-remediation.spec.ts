@@ -2374,13 +2374,18 @@ test("Analytics touch swipe and cancellation leave later chart clicks intact", a
     );
     await expect(bars.first()).toBeVisible();
     await chart.scrollIntoViewIfNeeded();
+    let stableBox: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    } | null = null;
     await expect
       .poll(async () => {
-        const currentBox = await bars.first().boundingBox();
-        return !!currentBox && currentBox.width > 0 && currentBox.height > 0;
+        stableBox = await bars.first().boundingBox();
+        return !!stableBox && stableBox.width > 0 && stableBox.height > 0;
       })
       .toBe(true);
-    const stableBox = await bars.first().boundingBox();
     expect(stableBox).not.toBeNull();
     const point = {
       x: stableBox!.x + stableBox!.width / 2,
