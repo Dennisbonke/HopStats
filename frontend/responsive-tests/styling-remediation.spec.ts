@@ -2306,7 +2306,7 @@ test("touch taps pin Analytics and Drinking Trends tooltips without breaking hov
         .selectOption("last_90");
       await expect(tooltip).toBeHidden();
 
-      await expect(page.locator(".distribution-canvas")).toHaveCSS(
+      await expect(hourly.locator(".distribution-canvas")).toHaveCSS(
         "touch-action",
         "auto",
       );

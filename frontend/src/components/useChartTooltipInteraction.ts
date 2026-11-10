@@ -7,8 +7,10 @@ export function isTouchGeneratedClick(
 ): boolean {
   const nativeEvent = "nativeEvent" in event ? event.nativeEvent : event;
   const pointerType = (nativeEvent as PointerEvent).pointerType;
+  if (typeof pointerType === "string" && pointerType.length > 0) {
+    return pointerType === "touch";
+  }
   return (
-    pointerType === "touch" ||
     (
       nativeEvent as MouseEvent & {
         sourceCapabilities?: { firesTouchEvents?: boolean } | null;
@@ -24,8 +26,11 @@ export function useChartTooltipInteraction(
 ) {
   const [pinned, setPinned] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const touchStart = useRef<{ x: number; y: number } | null>(null);
-  const touchMoved = useRef(false);
+  const touchStart = useRef<{
+    pointerId: number;
+    x: number;
+    y: number;
+  } | null>(null);
 
   useEffect(() => {
     setPinned(false);
@@ -56,11 +61,6 @@ export function useChartTooltipInteraction(
       setPinned(false);
       setHovered(true);
     } else if (event.pointerType === "touch") {
-      if (touchStart.current) {
-        const movedX = Math.abs(event.clientX - touchStart.current.x);
-        const movedY = Math.abs(event.clientY - touchStart.current.y);
-        if (movedX > 8 || movedY > 8) touchMoved.current = true;
-      }
       setHovered(true);
     }
   }
@@ -70,27 +70,39 @@ export function useChartTooltipInteraction(
   }
 
   function onPointerDown(event: ReactPointerEvent<HTMLElement>) {
-    if (event.pointerType === "touch") {
-      touchStart.current = { x: event.clientX, y: event.clientY };
-      touchMoved.current = false;
+    if (event.pointerType === "touch" && event.isPrimary) {
+      touchStart.current = {
+        pointerId: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+      };
       setHovered(true);
     }
   }
 
   function onPointerUp(event: ReactPointerEvent<HTMLElement>) {
-    if (event.pointerType === "touch") {
-      if (!touchMoved.current) setPinned(true);
+    if (
+      event.pointerType === "touch" &&
+      touchStart.current?.pointerId === event.pointerId
+    ) {
+      const start = touchStart.current;
+      const moved =
+        !start ||
+        Math.abs(event.clientX - start.x) > 8 ||
+        Math.abs(event.clientY - start.y) > 8;
+      if (!moved) setPinned(true);
       else setHovered(false);
       touchStart.current = null;
-      touchMoved.current = false;
     }
   }
 
   function onPointerCancel(event: ReactPointerEvent<HTMLElement>) {
-    if (event.pointerType === "touch") {
+    if (
+      event.pointerType === "touch" &&
+      touchStart.current?.pointerId === event.pointerId
+    ) {
       setHovered(false);
       touchStart.current = null;
-      touchMoved.current = false;
     }
   }
 
