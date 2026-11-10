@@ -2317,7 +2317,12 @@ test("touch taps pin Analytics and Drinking Trends tooltips without breaking hov
       );
 
       await page.setViewportSize({ width: 1280, height: 800 });
-      const hoverBar = hourlyBars.nth(0);
+      const hoverBar = page
+        .locator(".distribution-chart")
+        .filter({ hasText: "Check-ins by Hour of Day" })
+        .locator(".recharts-bar-rectangle")
+        .first();
+      await expect(hoverBar).toBeVisible();
       await hoverBar.scrollIntoViewIfNeeded();
       const hoverBox = await hoverBar.boundingBox();
       expect(hoverBox).not.toBeNull();
@@ -2434,13 +2439,7 @@ test("Analytics touch swipe and cancellation leave later chart clicks intact", a
     await expect
       .poll(() => page.evaluate(() => window.scrollY))
       .toBeGreaterThan(secondSwipeScrollBefore);
-    await bars.first().scrollIntoViewIfNeeded();
-    const postSwipeClickBox = await bars.first().boundingBox();
-    expect(postSwipeClickBox).not.toBeNull();
-    await page.mouse.click(
-      postSwipeClickBox!.x + postSwipeClickBox!.width / 2,
-      postSwipeClickBox!.y + postSwipeClickBox!.height / 2,
-    );
+    await bars.first().click();
     await expect(page).toHaveURL(/zoom=month/);
 
     await page.reload();
