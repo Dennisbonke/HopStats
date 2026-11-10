@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import {
   Bar,
   BarChart,
@@ -6,12 +7,63 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  type Coordinate,
 } from "recharts";
+import type { CSSProperties, RefObject } from "react";
 import { Link } from "react-router-dom";
 import { AnalyticsBucket } from "../api/analytics";
+import AnalyticsChartTooltip, {
+  ANALYTICS_TOOLTIP_WRAPPER_STYLE,
+} from "./AnalyticsChartTooltip";
 import { Button, Card } from "./ui";
+import { useChartTooltipInteraction } from "./useChartTooltipInteraction";
 
 const countFormatter = new Intl.NumberFormat();
+
+type DashboardChartDatum = AnalyticsBucket & {
+  axis: string;
+  tooltip: string;
+  currentMonth: boolean;
+};
+
+function DashboardTooltip({
+  active,
+  coordinate,
+  payload,
+  label,
+  chartRef,
+  chartData,
+}: {
+  active?: boolean;
+  coordinate?: Coordinate;
+  payload?: Array<{
+    value: number;
+    color: string;
+    payload?: DashboardChartDatum;
+  }>;
+  label?: string;
+  chartRef: RefObject<HTMLElement | null>;
+  chartData: DashboardChartDatum[];
+}) {
+  const datum = payload?.[0];
+  const bucket =
+    chartData.find((item) => item.axis === label) ?? datum?.payload;
+  if (!active || !bucket || datum?.value === undefined) return null;
+
+  return (
+    <AnalyticsChartTooltip
+      active={active}
+      coordinate={coordinate}
+      chartRef={chartRef}
+    >
+      <strong>{bucket.tooltip ?? String(label).replace("*", "")}</strong>
+      <div style={{ "--tooltip-series-color": datum.color } as CSSProperties}>
+        {countFormatter.format(Number(datum.value))} discoveries
+      </div>
+      <div>Unique beers</div>
+    </AnalyticsChartTooltip>
+  );
+}
 
 function dateOnly(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
@@ -71,6 +123,11 @@ export default function DashboardDiscoveriesChart({
     ...bucket,
     ...dashboardMonthLabels(bucket.key, currentMonth),
   }));
+  const chartRef = useRef<HTMLDivElement>(null);
+  const tooltipInteraction = useChartTooltipInteraction(
+    chartRef,
+    `${currentMonth}|${endDate}|${chartData.map((bucket) => bucket.key).join(",")}`,
+  );
 
   return (
     <Card
@@ -128,9 +185,17 @@ export default function DashboardDiscoveriesChart({
           </p>
           <div
             className="dashboard-chart ui-chart"
+            ref={chartRef}
             role="group"
             aria-label="Unique beer discoveries over the last six months"
             aria-describedby="dashboard-discoveries-summary"
+            onPointerMove={tooltipInteraction.onPointerMove}
+            onPointerLeave={tooltipInteraction.onPointerLeave}
+            onPointerDown={tooltipInteraction.onPointerDown}
+            onPointerUp={tooltipInteraction.onPointerUp}
+            onPointerCancel={tooltipInteraction.onPointerCancel}
+            onFocus={tooltipInteraction.onFocus}
+            onBlur={tooltipInteraction.onBlur}
           >
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
@@ -142,25 +207,15 @@ export default function DashboardDiscoveriesChart({
                 <XAxis dataKey="axis" />
                 <YAxis allowDecimals={false} width={38} />
                 <Tooltip
-                  formatter={(value) => [
-                    `${countFormatter.format(Number(value))} discoveries`,
-                    "Unique beers",
-                  ]}
-                  contentStyle={{
-                    backgroundColor: "var(--color-chart-tooltip-surface)",
-                    borderColor: "var(--color-border-strong)",
-                    color: "var(--color-chart-tooltip-text)",
-                  }}
-                  labelStyle={{ color: "var(--color-chart-tooltip-text)" }}
-                  itemStyle={{ color: "var(--color-chart-tooltip-text)" }}
-                  labelFormatter={(label, payload) => {
-                    const labelText = String(label);
-                    const bucket =
-                      chartData.find((item) => item.axis === labelText) ??
-                      (payload[0]?.payload as
-                        (typeof chartData)[number] | undefined);
-                    return bucket?.tooltip ?? String(label).replace("*", "");
-                  }}
+                  active={tooltipInteraction.active}
+                  content={
+                    <DashboardTooltip
+                      chartRef={chartRef}
+                      chartData={chartData}
+                    />
+                  }
+                  portal={document.body}
+                  wrapperStyle={ANALYTICS_TOOLTIP_WRAPPER_STYLE}
                 />
                 <Bar
                   dataKey="new_discoveries"

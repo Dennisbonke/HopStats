@@ -15,6 +15,7 @@ import { Card } from "../components/ui";
 import AnalyticsChartTooltip, {
   ANALYTICS_TOOLTIP_WRAPPER_STYLE,
 } from "../components/AnalyticsChartTooltip";
+import { useChartTooltipInteraction } from "../components/useChartTooltipInteraction";
 import { fetchDrinkingTrends } from "../api/analytics";
 import CalendarHeatmap from "./CalendarHeatmap";
 import WeekdayHourHeatmap from "./WeekdayHourHeatmap";
@@ -460,6 +461,10 @@ function DistributionChart({
   const descriptionId = `${title.replaceAll(" ", "-").toLowerCase()}-description`;
   const isHourly = rows.length > 7;
   const chartRef = useRef<HTMLDivElement>(null);
+  const tooltipInteraction = useChartTooltipInteraction(
+    chartRef,
+    `${title}|${reportingPeriod}|${metric}|${mode}`,
+  );
   return (
     <Card as="article" className="distribution-chart">
       <h3>{title}</h3>
@@ -471,6 +476,13 @@ function DistributionChart({
         className="distribution-canvas ui-chart"
         ref={chartRef}
         role="group"
+        onPointerMove={tooltipInteraction.onPointerMove}
+        onPointerLeave={tooltipInteraction.onPointerLeave}
+        onPointerDown={tooltipInteraction.onPointerDown}
+        onPointerUp={tooltipInteraction.onPointerUp}
+        onPointerCancel={tooltipInteraction.onPointerCancel}
+        onFocus={tooltipInteraction.onFocus}
+        onBlur={tooltipInteraction.onBlur}
         aria-label={`${title}. ${description} Reporting period: ${reportingPeriod}. ${metricName}, ${mode === "total" ? "totals" : "averages"}.`}
         aria-describedby={descriptionId}
       >
@@ -496,6 +508,7 @@ function DistributionChart({
             />
             <YAxis allowDecimals={mode === "average"} tick={{ fontSize: 12 }} />
             <Tooltip
+              active={tooltipInteraction.active}
               content={
                 <DistributionTooltip
                   chartRef={chartRef}

@@ -1,70 +1,51 @@
 # Frontend styling
 
-- `tokens.css` is the single source for reusable semantic colors and surface
-  depth. Name tokens by purpose, not by hue, and add one only when it expresses
-  a meaning that can be reused.
-- `components.css` holds shared React component styles. Use explicit component
-  classes for shared primitives; `.app :where(button:not(.ui-button))` remains a
-  transitional compatibility rule for unmigrated native buttons.
-  Cross-route layout and text utilities (`.page-heading`, `.section-heading`,
-  `.muted`, `.panel-explanation`, and `.button-link`), screen-reader-only text,
-  and shared Recharts presentation also live here.
-- Modal backdrops share the semantic `--color-overlay` token.
-- `../styles.css` retains the global reset, shell layout, and unrelated
-  compatibility rules for PR 8. Shared component rules need a component scope;
-  route rules need a route scope. Analytics and heatmap presentation lives in
-  `pages/Analytics.css`; keep its selectors under `.analytics-page`. Table
-  sizing and cell behavior belong to their owning route.
-- Put route-specific styles beside their page component (for example,
-  `pages/Inventory.css`) and import them from that page.
-- Dashboard and login presentation rules live beside their page components in
-  `pages/Dashboard.css` and `pages/Login.css`; use tokens there so complete
-  surfaces inherit both palettes.
-- The root palette and native controls stay light for compatibility. A page or
-  complete surface opts into the shared automatic light/dark palette by adding
-  `.theme-aware` to its root and using semantic tokens for both foregrounds and
-  backgrounds. Dark tokens are applied only inside that boundary when the
-  operating system requests dark mode. Do not opt in a component that still
-  relies on un-themed light backgrounds.
-- The shell header and authentication views own separate `.theme-aware`
-  boundaries. `App.tsx` keeps an explicit allowlist for complete route surfaces:
-  Dashboard, Inventory, Locations, Imports, Milestones (including detail
-  pages), Analytics (including its URL-selected Drinking Trends view), and the
-  implemented Explorer beer catalogue. Wildcard or unfinished routes stay on
-  the root light compatibility palette. Keep a route off the list until its
-  full visible surface is migrated.
-- Explorer's implemented beer catalogue inherits the route theme from the
-  allowlisted `/explore/beers` route. The Breweries and Styles placeholders
-  remain on the compatibility palette; do not add a broad `/explore/*` theme
-  match while those child routes are unfinished.
-- Existing routes may keep their scoped `prefers-color-scheme` rules until
-  migrated together. New shared primitives should use semantic tokens and
-  inherit the nearest `.theme-aware` palette.
-- Portaled chart tooltips sit under `body`, outside the route boundary. Their
-  content must carry its own `.theme-aware` scope so semantic tooltip tokens
-  follow the operating system preference without theming the document.
-- Put reusable controls and surfaces in `components/ui/` when their behavior,
-  accessibility wiring, and visual variants should stay consistent across
-  routes. Keep one-off layout or presentation rules beside the route.
-- Name component variants by purpose (for example `primary`, `muted`, or
-  `success`), and keep their visual rules under component classes in
-  `components.css`. Shared components should use semantic tokens for colors,
-  borders, focus, and surfaces; add a token only when it has a reusable
-  meaning.
-- Use `className` for small route layout adjustments, not to replace a
-  component variant or redefine its core appearance. Give focus-visible states
-  a clear token-based indicator and give disabled controls an explicit
-  readable style.
-- Shared primitives inherit the nearest token context. They keep the root
-  light palette on compatibility routes and use the automatic light/dark
-  palette only inside `.theme-aware`. Migrate a complete route surface before
-  opting it into dark colors.
-- Avoid broad element selectors for shared visuals. Component CSS belongs to
-  `.ui-*` classes; route CSS should be scoped to that route. The remaining
-  `.app :where(button:not(.ui-button))` rule is transitional styling for
-  unmigrated controls and deliberately excludes shared buttons.
+## Ownership
 
-Global stylesheets are imported from `main.tsx`, in token, shared component,
-then legacy application order. Route stylesheets are imported beside their
-page component and stay inside a route class. Keep the global order and avoid
-importing styles back into `tokens.css` or `components.css`.
+- `tokens.css` owns semantic colors, focus indicators, chart series, heatmap
+  levels, and shared surface shadows. Add tokens only for meanings reused
+  across components; chart-series and ordered heatmap colors stay distinct from
+  status colors.
+- `components.css` owns shared UI primitives, cross-route text/layout helpers,
+  shared Recharts presentation, and tooltip presentation.
+- Route stylesheets sit beside their page and scope route presentation beneath
+  the route root. Keep one-off layout and specialized table or heatmap rules
+  with their owning route.
+- `styles.css` owns the reset, app shell width and spacing, global focus outline,
+  and the light compatibility placeholder surface.
+
+Global styles load from `main.tsx` in token, shared component, then application
+order. Route stylesheets load beside their page component.
+
+## Themes
+
+The document and native controls retain the light compatibility palette.
+Complete migrated pages opt into the automatic OS light/dark palette with a
+`.theme-aware` boundary. `App.tsx` keeps an explicit route allowlist for
+Dashboard, Inventory, Locations, Imports, Milestones and detail pages,
+Analytics (including Drinking Trends), and the implemented Explorer beer
+catalogue. Unfinished Explorer placeholders and wildcard routes remain on the
+compatibility palette. The shell header and login/authentication surfaces own
+separate boundaries. No manual theme preference is stored.
+
+Chart tooltips render under `body`, outside route boundaries. Their content
+owns a `.theme-aware` boundary so tooltip tokens follow the OS preference
+without theming the document. Shared Recharts axes, grids, and legends use
+semantic chart tokens. A reusable chart interaction hook keeps touch-selected
+tooltips visible until another point, an outside tap, or a chart-context
+change; mouse hover and keyboard chart navigation remain available.
+
+## Intentional compatibility styling
+
+`.app :where(button:not(.ui-button))` and the corresponding login rule style
+native buttons that have not migrated to the shared Button primitive. New
+shared controls should use `ui-*` component classes. `.placeholder-panel` is a
+light compatibility surface for unfinished and wildcard routes. These rules
+remain intentionally scoped and are the remaining legacy presentation rules.
+
+Native `<dialog>.showModal()` provides Inventory modality, focus containment,
+Escape behavior, and background inertness in the supported Chromium, Firefox,
+and WebKit baseline. The Inventory detail component restores focus to its
+invoking control after close; there is no non-modal `open` fallback or custom
+Tab trap. Browser coverage for native dialog behavior lives in the responsive
+Playwright suite.

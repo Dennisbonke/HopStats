@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
-  PointerEvent as ReactPointerEvent,
   RefObject,
   ReactNode,
 } from "react";
@@ -28,6 +27,7 @@ import LayoutDiagnostics from "../components/LayoutDiagnostics";
 import AnalyticsChartTooltip, {
   ANALYTICS_TOOLTIP_WRAPPER_STYLE,
 } from "../components/AnalyticsChartTooltip";
+import { useChartTooltipInteraction } from "../components/useChartTooltipInteraction";
 import { Button, Card } from "../components/ui";
 import {
   AnalyticsApiError,
@@ -336,24 +336,34 @@ export default function Analytics() {
   const requestSequence = useRef(0);
   const [mode, setMode] = useState<"activity" | "cumulative">("activity");
   const [visible, setVisible] = useState({ total: true, discoveries: true });
-  // `false` suppresses stale tooltip state during resize; `undefined` leaves
-  // normal active-state management to Recharts for the chart under the pointer.
-  const [activeTooltipChart, setActiveTooltipChart] = useState<
-    "breakdown" | "trend" | null
-  >(null);
-  const tooltipDismissedByResize = useRef(false);
-  const tooltipDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
-  const lastChartPointer = useRef<{ x: number; y: number } | null>(null);
   const breakdownChartRef = useRef<HTMLDivElement>(null);
   const trendChartRef = useRef<HTMLDivElement>(null);
+  const touchTapPending = useRef(false);
   const [zoom, setZoom] = useState<Zoom>(() =>
     parseZoom(searchParams.get("zoom")),
   );
   const [pageIndex, setPageIndex] = useState(() =>
     parseWindowPage(searchParams.get("window")),
   );
+  const chartContext = [
+    view,
+    period,
+    start,
+    end,
+    granularity,
+    zoom?.kind ?? "",
+    zoom?.value ?? "",
+    pageIndex,
+    mode,
+    visible.total,
+    visible.discoveries,
+    metric,
+  ].join("|");
+  const breakdownTooltip = useChartTooltipInteraction(
+    breakdownChartRef,
+    chartContext,
+  );
+  const trendTooltip = useChartTooltipInteraction(trendChartRef, chartContext);
   const overviewTabRef = useRef<HTMLButtonElement>(null);
   const trendsTabRef = useRef<HTMLButtonElement>(null);
   // React Router exposes the POP URL before the restoration effect updates the
@@ -367,33 +377,6 @@ export default function Analytics() {
       JSON.stringify(zoom) !== JSON.stringify(locationZoom) ||
       pageIndex !== locationPage);
 
-  useEffect(() => {
-    const dismissTooltip = () => {
-      tooltipDismissedByResize.current = true;
-      setActiveTooltipChart(null);
-      if (tooltipDismissTimer.current) {
-        clearTimeout(tooltipDismissTimer.current);
-      }
-      // Safari can emit hover updates for the stationary pointer while it
-      // relayouts the chart. Keep those from reopening the tooltip until the
-      // orientation/resize event burst has settled.
-      tooltipDismissTimer.current = setTimeout(() => {
-        tooltipDismissedByResize.current = false;
-        // A synthetic move during resize may have recorded the same coordinates
-        // as the user's next real hover. Treat that first post-resize move as
-        // fresh so it can reopen the tooltip.
-        lastChartPointer.current = null;
-        tooltipDismissTimer.current = null;
-      }, 250);
-    };
-    window.addEventListener("resize", dismissTooltip);
-    return () => {
-      window.removeEventListener("resize", dismissTooltip);
-      if (tooltipDismissTimer.current) {
-        clearTimeout(tooltipDismissTimer.current);
-      }
-    };
-  }, []);
   const reportStart =
     period === "all" ? (allRange?.start ?? data?.start ?? null) : start;
   const reportEnd =
@@ -837,43 +820,6 @@ export default function Analytics() {
   const discoveryKey =
     mode === "activity" ? "activity_discoveries" : "cumulative_discoveries";
 
-  function enableTooltipOnPointerMove(
-    chart: "breakdown" | "trend",
-    event: ReactPointerEvent<HTMLDivElement>,
-  ) {
-    const { clientX: x, clientY: y } = event;
-    const previous = lastChartPointer.current;
-    lastChartPointer.current = { x, y };
-    // WebKit can synthesize pointer moves while a viewport is being resized.
-    // Ignore stationary moves, but let an actual pointer movement immediately
-    // re-enable the tooltip instead of requiring the resize timer to expire.
-    if (tooltipDismissedByResize.current) {
-      if (!previous || (previous.x === x && previous.y === y)) return;
-      tooltipDismissedByResize.current = false;
-      if (tooltipDismissTimer.current) {
-        clearTimeout(tooltipDismissTimer.current);
-        tooltipDismissTimer.current = null;
-      }
-    }
-    if (previous && previous.x === x && previous.y === y) return;
-    setActiveTooltipChart(chart);
-  }
-
-  function enableTooltipFromInteraction(chart: "breakdown" | "trend") {
-    tooltipDismissedByResize.current = false;
-    if (tooltipDismissTimer.current) {
-      clearTimeout(tooltipDismissTimer.current);
-      tooltipDismissTimer.current = null;
-    }
-    setActiveTooltipChart(chart);
-  }
-
-  function dismissTooltipOnPointerLeave(chart: "breakdown" | "trend") {
-    setActiveTooltipChart((activeChart) =>
-      activeChart === chart ? null : activeChart,
-    );
-  }
-
   return (
     <div className="analytics-page">
       <div className="page-heading">
@@ -1206,27 +1152,29 @@ export default function Analytics() {
                         className="chart-scroll"
                         role="group"
                         aria-label="Stacked bar chart of new discovery and repeat check-ins"
-                        onPointerMove={(event) =>
-                          enableTooltipOnPointerMove("breakdown", event)
-                        }
-                        onPointerLeave={() =>
-                          dismissTooltipOnPointerLeave("breakdown")
-                        }
-                        onPointerDown={() =>
-                          enableTooltipFromInteraction("breakdown")
-                        }
-                        onTouchMove={() =>
-                          enableTooltipFromInteraction("breakdown")
-                        }
-                        onFocus={() =>
-                          enableTooltipFromInteraction("breakdown")
-                        }
+                        onClick={() => {
+                          touchTapPending.current = false;
+                        }}
+                        onPointerMove={breakdownTooltip.onPointerMove}
+                        onPointerLeave={breakdownTooltip.onPointerLeave}
+                        onPointerDown={breakdownTooltip.onPointerDown}
+                        onPointerDownCapture={(event) => {
+                          if (event.pointerType === "touch") {
+                            touchTapPending.current = true;
+                          }
+                        }}
+                        onPointerCancel={(event) => {
+                          breakdownTooltip.onPointerCancel(event);
+                          touchTapPending.current = false;
+                        }}
+                        onPointerUp={breakdownTooltip.onPointerUp}
+                        onFocus={breakdownTooltip.onFocus}
                         onBlur={(event) => {
                           if (
                             !(event.relatedTarget instanceof Node) ||
                             !event.currentTarget.contains(event.relatedTarget)
                           ) {
-                            dismissTooltipOnPointerLeave("breakdown");
+                            breakdownTooltip.onBlur();
                           }
                         }}
                       >
@@ -1240,11 +1188,7 @@ export default function Analytics() {
                               <XAxis dataKey="label" minTickGap={28} />
                               <YAxis allowDecimals={false} />
                               <Tooltip
-                                active={
-                                  activeTooltipChart === "breakdown"
-                                    ? undefined
-                                    : false
-                                }
+                                active={breakdownTooltip.active}
                                 content={
                                   <ExactTooltip
                                     chartRef={breakdownChartRef}
@@ -1261,9 +1205,13 @@ export default function Analytics() {
                                 stackId="checkins"
                                 fill="var(--color-chart-primary)"
                                 cursor={canDrill ? "pointer" : "default"}
-                                onClick={(entry) =>
-                                  drillTo(entry.payload as AnalyticsBucket)
-                                }
+                                onClick={(entry) => {
+                                  if (touchTapPending.current) {
+                                    touchTapPending.current = false;
+                                    return;
+                                  }
+                                  drillTo(entry.payload as AnalyticsBucket);
+                                }}
                               />
                               <Bar
                                 dataKey="repeat_checkins"
@@ -1271,9 +1219,13 @@ export default function Analytics() {
                                 stackId="checkins"
                                 fill="var(--color-chart-secondary)"
                                 cursor={canDrill ? "pointer" : "default"}
-                                onClick={(entry) =>
-                                  drillTo(entry.payload as AnalyticsBucket)
-                                }
+                                onClick={(entry) => {
+                                  if (touchTapPending.current) {
+                                    touchTapPending.current = false;
+                                    return;
+                                  }
+                                  drillTo(entry.payload as AnalyticsBucket);
+                                }}
                               />
                             </BarChart>
                           </ResponsiveContainer>
@@ -1343,25 +1295,29 @@ export default function Analytics() {
                         className="chart-scroll"
                         role="group"
                         aria-label={`${mode} line chart of check-ins and discoveries`}
-                        onPointerMove={(event) =>
-                          enableTooltipOnPointerMove("trend", event)
-                        }
-                        onPointerLeave={() =>
-                          dismissTooltipOnPointerLeave("trend")
-                        }
-                        onPointerDown={() =>
-                          enableTooltipFromInteraction("trend")
-                        }
-                        onTouchMove={() =>
-                          enableTooltipFromInteraction("trend")
-                        }
-                        onFocus={() => enableTooltipFromInteraction("trend")}
+                        onClick={() => {
+                          touchTapPending.current = false;
+                        }}
+                        onPointerMove={trendTooltip.onPointerMove}
+                        onPointerLeave={trendTooltip.onPointerLeave}
+                        onPointerDown={trendTooltip.onPointerDown}
+                        onPointerDownCapture={(event) => {
+                          if (event.pointerType === "touch") {
+                            touchTapPending.current = true;
+                          }
+                        }}
+                        onPointerCancel={(event) => {
+                          trendTooltip.onPointerCancel(event);
+                          touchTapPending.current = false;
+                        }}
+                        onPointerUp={trendTooltip.onPointerUp}
+                        onFocus={trendTooltip.onFocus}
                         onBlur={(event) => {
                           if (
                             !(event.relatedTarget instanceof Node) ||
                             !event.currentTarget.contains(event.relatedTarget)
                           ) {
-                            dismissTooltipOnPointerLeave("trend");
+                            trendTooltip.onBlur();
                           }
                         }}
                       >
@@ -1373,17 +1329,19 @@ export default function Analytics() {
                             <LineChart
                               data={lineData}
                               accessibilityLayer
-                              onClick={drillFromChart}
+                              onClick={(state) => {
+                                if (touchTapPending.current) {
+                                  touchTapPending.current = false;
+                                  return;
+                                }
+                                drillFromChart(state);
+                              }}
                             >
                               <CartesianGrid strokeDasharray="3 3" />
                               <XAxis dataKey="label" minTickGap={28} />
                               <YAxis allowDecimals={false} />
                               <Tooltip
-                                active={
-                                  activeTooltipChart === "trend"
-                                    ? undefined
-                                    : false
-                                }
+                                active={trendTooltip.active}
                                 content={
                                   <ExactTooltip chartRef={trendChartRef} />
                                 }
