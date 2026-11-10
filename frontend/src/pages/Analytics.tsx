@@ -27,10 +27,7 @@ import LayoutDiagnostics from "../components/LayoutDiagnostics";
 import AnalyticsChartTooltip, {
   ANALYTICS_TOOLTIP_WRAPPER_STYLE,
 } from "../components/AnalyticsChartTooltip";
-import {
-  isTouchGeneratedClick,
-  useChartTooltipInteraction,
-} from "../components/useChartTooltipInteraction";
+import { useChartTooltipInteraction } from "../components/useChartTooltipInteraction";
 import { Button, Card } from "../components/ui";
 import {
   AnalyticsApiError,
@@ -1204,7 +1201,12 @@ export default function Analytics() {
                                 fill="var(--color-chart-primary)"
                                 cursor={canDrill ? "pointer" : "default"}
                                 onClick={(entry, _index, event) => {
-                                  if (isTouchGeneratedClick(event)) return;
+                                  if (
+                                    breakdownTooltip.shouldIgnoreChartClick(
+                                      event,
+                                    )
+                                  )
+                                    return;
                                   drillTo(entry.payload as AnalyticsBucket);
                                 }}
                               />
@@ -1215,7 +1217,12 @@ export default function Analytics() {
                                 fill="var(--color-chart-secondary)"
                                 cursor={canDrill ? "pointer" : "default"}
                                 onClick={(entry, _index, event) => {
-                                  if (isTouchGeneratedClick(event)) return;
+                                  if (
+                                    breakdownTooltip.shouldIgnoreChartClick(
+                                      event,
+                                    )
+                                  )
+                                    return;
                                   drillTo(entry.payload as AnalyticsBucket);
                                 }}
                               />
@@ -1311,7 +1318,8 @@ export default function Analytics() {
                               data={lineData}
                               accessibilityLayer
                               onClick={(state, event) => {
-                                if (isTouchGeneratedClick(event)) return;
+                                if (trendTooltip.shouldIgnoreChartClick(event))
+                                  return;
                                 drillFromChart(state);
                               }}
                             >

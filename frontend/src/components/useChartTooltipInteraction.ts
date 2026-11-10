@@ -1,15 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent, RefObject } from "react";
 
-/** Identify a touch-generated click without mistaking a later mouse click for one. */
-export function isTouchGeneratedClick(
-  event: Event | { nativeEvent: Event },
-): boolean {
-  const nativeEvent = "nativeEvent" in event ? event.nativeEvent : event;
-  const pointerType = (nativeEvent as PointerEvent).pointerType;
-  return pointerType === "touch";
-}
-
 /** Keep a touch-selected Recharts point open until dismissal or context change. */
 export function useChartTooltipInteraction(
   chartRef: RefObject<HTMLElement | null>,
@@ -17,6 +8,8 @@ export function useChartTooltipInteraction(
 ) {
   const [pinned, setPinned] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const lastPointerType = useRef<string | null>(null);
+  const touchClickPending = useRef(false);
   const touchStart = useRef<{
     pointerId: number;
     x: number;
@@ -26,6 +19,8 @@ export function useChartTooltipInteraction(
   useEffect(() => {
     setPinned(false);
     setHovered(false);
+    touchClickPending.current = false;
+    touchStart.current = null;
   }, [contextKey]);
 
   useEffect(() => {
@@ -61,6 +56,11 @@ export function useChartTooltipInteraction(
   }
 
   function onPointerDown(event: ReactPointerEvent<HTMLElement>) {
+    lastPointerType.current = event.pointerType;
+    touchClickPending.current = false;
+    if (event.pointerType === "mouse") {
+      touchStart.current = null;
+    }
     if (event.pointerType === "touch" && event.isPrimary) {
       touchStart.current = {
         pointerId: event.pointerId,
@@ -83,6 +83,7 @@ export function useChartTooltipInteraction(
         Math.abs(event.clientY - start.y) > 8;
       if (!moved) setPinned(true);
       else setHovered(false);
+      touchClickPending.current = !moved;
       touchStart.current = null;
     }
   }
@@ -93,8 +94,20 @@ export function useChartTooltipInteraction(
       touchStart.current?.pointerId === event.pointerId
     ) {
       setHovered(false);
+      touchClickPending.current = false;
       touchStart.current = null;
     }
+  }
+
+  function shouldIgnoreChartClick(event: Event | { nativeEvent: Event }) {
+    const nativeEvent = "nativeEvent" in event ? event.nativeEvent : event;
+    const detail = (nativeEvent as MouseEvent).detail;
+    if (detail === 0 || lastPointerType.current === "mouse") return false;
+
+    const pointerType = (nativeEvent as PointerEvent).pointerType;
+    const ignore = pointerType === "touch" || touchClickPending.current;
+    touchClickPending.current = false;
+    return ignore;
   }
 
   function onFocus() {
@@ -112,6 +125,7 @@ export function useChartTooltipInteraction(
     onPointerDown,
     onPointerUp,
     onPointerCancel,
+    shouldIgnoreChartClick,
     onFocus,
     onBlur,
   };
