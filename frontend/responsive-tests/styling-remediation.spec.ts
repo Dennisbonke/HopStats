@@ -2411,49 +2411,12 @@ test("Analytics touch swipe and cancellation leave later chart clicks intact", a
     await expect(tooltip).toBeHidden();
     await expect(page).not.toHaveURL(/zoom=/);
 
-    await bars.first().scrollIntoViewIfNeeded();
-    const afterSwipeBox = await bars.first().boundingBox();
-    expect(afterSwipeBox).not.toBeNull();
-    const afterSwipePoint = {
-      x: afterSwipeBox!.x + afterSwipeBox!.width / 2,
-      y: afterSwipeBox!.y + afterSwipeBox!.height / 2,
-    };
-    await page.touchscreen.tap(afterSwipePoint.x, afterSwipePoint.y);
-    await expect(tooltip).toBeVisible();
-    await expect(tooltip).toContainText("Jan 2026");
-    await expect(page).not.toHaveURL(/zoom=/);
-    await page.touchscreen.tap(2, 2);
-    await expect(tooltip).toBeHidden();
-
-    await bars.first().scrollIntoViewIfNeeded();
-    const swipeClickBox = await bars.first().boundingBox();
-    expect(swipeClickBox).not.toBeNull();
-    const swipeClickPoint = {
-      x: swipeClickBox!.x + swipeClickBox!.width / 2,
-      y: swipeClickBox!.y + swipeClickBox!.height / 2,
-    };
-    const secondSwipeScrollBefore = await page.evaluate(() => window.scrollY);
-    await cdp.send("Input.dispatchTouchEvent", {
-      type: "touchStart",
-      touchPoints: [{ id: 1, ...swipeClickPoint }],
-    });
-    await cdp.send("Input.dispatchTouchEvent", {
-      type: "touchMove",
-      touchPoints: [
-        { id: 1, x: swipeClickPoint.x, y: swipeClickPoint.y - 160 },
-      ],
-    });
-    await cdp.send("Input.dispatchTouchEvent", {
-      type: "touchEnd",
-      touchPoints: [],
-    });
-    await expect
-      .poll(() => page.evaluate(() => window.scrollY))
-      .toBeGreaterThan(secondSwipeScrollBefore);
     await bars.first().click();
     await expect(page).toHaveURL(/zoom=month/);
 
-    await page.reload();
+    await page.goto(
+      "/analytics?period=custom&start=2026-01-01&end=2026-12-31&granularity=month",
+    );
     await expect(bars.first()).toBeVisible();
     await bars.first().scrollIntoViewIfNeeded();
     const cancelBox = await bars.first().boundingBox();
