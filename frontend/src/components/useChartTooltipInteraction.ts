@@ -103,15 +103,24 @@ export function useChartTooltipInteraction(
 
   function shouldIgnoreChartClick(event: Event | { nativeEvent: Event }) {
     const nativeEvent = "nativeEvent" in event ? event.nativeEvent : event;
-    const detail = (nativeEvent as MouseEvent).detail;
     const pointerType = (nativeEvent as PointerEvent).pointerType;
     if (lastPointerType.current === "mouse") return false;
-    if (pointerType === "touch") return true;
-    if (detail === 0) return false;
+    if (pointerType === "touch") {
+      touchClickPending.current = false;
+      return true;
+    }
+    if (touchClickPending.current) {
+      touchClickPending.current = false;
+      return true;
+    }
+    return false;
+  }
 
-    const ignore = touchClickPending.current;
-    touchClickPending.current = false;
-    return ignore;
+  function onKeyDown(event: React.KeyboardEvent<HTMLElement>) {
+    if (event.key === "Enter" || event.key === " ") {
+      lastPointerType.current = null;
+      touchClickPending.current = false;
+    }
   }
 
   function onFocus() {
@@ -130,6 +139,7 @@ export function useChartTooltipInteraction(
     onPointerUp,
     onPointerCancel,
     shouldIgnoreChartClick,
+    onKeyDown,
     onFocus,
     onBlur,
   };

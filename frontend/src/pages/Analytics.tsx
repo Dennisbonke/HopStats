@@ -1163,6 +1163,7 @@ export default function Analytics() {
                         onPointerDown={breakdownTooltip.onPointerDown}
                         onPointerCancel={breakdownTooltip.onPointerCancel}
                         onPointerUp={breakdownTooltip.onPointerUp}
+                        onKeyDown={breakdownTooltip.onKeyDown}
                         onFocus={breakdownTooltip.onFocus}
                         onBlur={(event) => {
                           if (
@@ -1299,6 +1300,7 @@ export default function Analytics() {
                         onPointerDown={trendTooltip.onPointerDown}
                         onPointerCancel={trendTooltip.onPointerCancel}
                         onPointerUp={trendTooltip.onPointerUp}
+                        onKeyDown={trendTooltip.onKeyDown}
                         onFocus={trendTooltip.onFocus}
                         onBlur={(event) => {
                           if (

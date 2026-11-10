@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useRef } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 import { useChartTooltipInteraction } from "./components/useChartTooltipInteraction";
@@ -16,6 +16,7 @@ function mountChart(onDrilldown: (event: Event) => void) {
         onPointerDown={interaction.onPointerDown}
         onPointerUp={interaction.onPointerUp}
         onPointerCancel={interaction.onPointerCancel}
+        onKeyDown={interaction.onKeyDown}
         onClick={(event) => {
           if (!interaction.shouldIgnoreChartClick(event)) {
             onDrilldown(event.nativeEvent);
@@ -55,7 +56,7 @@ test("touch click is ignored but a later mouse click drills down", () => {
 
   chart.dispatchEvent(pointerEvent("pointerdown", "touch"));
   chart.dispatchEvent(pointerEvent("pointerup", "touch"));
-  chart.dispatchEvent(clickEvent("touch", 0));
+  chart.dispatchEvent(clickEvent("", 0));
   expect(onDrilldown).not.toHaveBeenCalled();
 
   chart.dispatchEvent(pointerEvent("pointerdown", "mouse"));
@@ -75,6 +76,7 @@ test("cancelled touch and keyboard clicks do not leave stale suppression", () =>
 
   chart.dispatchEvent(pointerEvent("pointerdown", "touch"));
   chart.dispatchEvent(pointerEvent("pointerup", "touch"));
+  fireEvent.keyDown(chart, { key: "Enter" });
   chart.dispatchEvent(clickEvent("", 0));
   expect(onDrilldown).toHaveBeenCalledTimes(2);
 });
