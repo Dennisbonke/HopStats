@@ -25,6 +25,10 @@ export function useChartTooltipInteraction(
 
   useEffect(() => {
     const dismissOutside = (event: PointerEvent) => {
+      if (event.pointerType === "mouse") {
+        lastPointerType.current = "mouse";
+        touchClickPending.current = false;
+      }
       if (!chartRef.current?.contains(event.target as Node)) {
         setPinned(false);
         setHovered(false);
