@@ -2237,6 +2237,10 @@ test("touch taps pin Analytics and Drinking Trends tooltips without breaking hov
       await page.waitForTimeout(1200);
       await expect(tooltip).toBeVisible();
       await expect(tooltip).toContainText("Jan 2026");
+      await expect(page).not.toHaveURL(/zoom=/);
+      await page.mouse.move(8, 8);
+      await page.waitForTimeout(100);
+      await expect(tooltip).toContainText("Jan 2026");
       await expect(tooltip).toHaveCSS(
         "background-color",
         colorScheme === "dark" ? "rgb(11, 18, 26)" : "rgb(23, 32, 51)",
@@ -2270,11 +2274,6 @@ test("touch taps pin Analytics and Drinking Trends tooltips without breaking hov
       await page.getByLabel("Reporting period").selectOption("last_90");
       await expect(tooltip).toBeHidden();
 
-      const scrollBefore = await page.evaluate(() => window.scrollY);
-      await page.mouse.wheel(0, 500);
-      await expect
-        .poll(() => page.evaluate(() => window.scrollY))
-        .toBeGreaterThan(scrollBefore);
       await expect(page.locator(".distribution-canvas")).toHaveCSS(
         "touch-action",
         "auto",
@@ -2297,6 +2296,184 @@ test("touch taps pin Analytics and Drinking Trends tooltips without breaking hov
       await context.close();
     }
   }
+});
+
+test("Analytics touch swipe and cancellation leave later chart clicks intact", async ({
+  browser,
+  browserName,
+}) => {
+  test.skip(
+    browserName !== "chromium",
+    "Touch swipe injection uses Chromium CDP",
+  );
+
+  const context = await browser.newContext({
+    baseURL: "http://127.0.0.1:5173",
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+  });
+  const page = await context.newPage();
+
+  try {
+    await stubApplication(
+      page,
+      analyticsResponsiveCheckins,
+      analyticsResponsiveTrends,
+    );
+    await page.goto(
+      "/analytics?period=custom&start=2026-01-01&end=2026-12-31&granularity=month",
+    );
+    const chart = page
+      .locator(".analytics-chart-panel")
+      .filter({ hasText: "Check-in Breakdown" });
+    const bars = chart.locator(".recharts-bar-rectangle");
+    const tooltip = page.locator(
+      "body > .recharts-tooltip-wrapper:visible .analytics-tooltip",
+    );
+    await expect(bars.first()).toBeVisible();
+    await chart.scrollIntoViewIfNeeded();
+    const box = await bars.first().boundingBox();
+    expect(box).not.toBeNull();
+    const point = {
+      x: box!.x + box!.width / 2,
+      y: box!.y + box!.height / 2,
+    };
+    const cdp = await context.newCDPSession(page);
+    const scrollBefore = await page.evaluate(() => window.scrollY);
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ id: 1, ...point }],
+    });
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ id: 1, x: point.x, y: point.y - 160 }],
+    });
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY))
+      .toBeGreaterThan(scrollBefore);
+    await expect(tooltip).toBeHidden();
+    await expect(page).not.toHaveURL(/zoom=/);
+
+    await bars.first().scrollIntoViewIfNeeded();
+    const afterSwipeBox = await bars.first().boundingBox();
+    expect(afterSwipeBox).not.toBeNull();
+    const afterSwipePoint = {
+      x: afterSwipeBox!.x + afterSwipeBox!.width / 2,
+      y: afterSwipeBox!.y + afterSwipeBox!.height / 2,
+    };
+    await page.touchscreen.tap(afterSwipePoint.x, afterSwipePoint.y);
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toContainText("Jan 2026");
+    await expect(page).not.toHaveURL(/zoom=/);
+    await page.touchscreen.tap(18, 115);
+    await expect(tooltip).toBeHidden();
+
+    await bars.first().scrollIntoViewIfNeeded();
+    const swipeClickBox = await bars.first().boundingBox();
+    expect(swipeClickBox).not.toBeNull();
+    const swipeClickPoint = {
+      x: swipeClickBox!.x + swipeClickBox!.width / 2,
+      y: swipeClickBox!.y + swipeClickBox!.height / 2,
+    };
+    const secondSwipeScrollBefore = await page.evaluate(() => window.scrollY);
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ id: 1, ...swipeClickPoint }],
+    });
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [
+        { id: 1, x: swipeClickPoint.x, y: swipeClickPoint.y - 160 },
+      ],
+    });
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY))
+      .toBeGreaterThan(secondSwipeScrollBefore);
+    await bars.first().scrollIntoViewIfNeeded();
+    const postSwipeClickBox = await bars.first().boundingBox();
+    expect(postSwipeClickBox).not.toBeNull();
+    await page.mouse.click(
+      postSwipeClickBox!.x + postSwipeClickBox!.width / 2,
+      postSwipeClickBox!.y + postSwipeClickBox!.height / 2,
+    );
+    await expect(page).toHaveURL(/zoom=month/);
+
+    await page.reload();
+    await expect(bars.first()).toBeVisible();
+    await bars.first().scrollIntoViewIfNeeded();
+    const cancelBox = await bars.first().boundingBox();
+    expect(cancelBox).not.toBeNull();
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [
+        {
+          id: 1,
+          x: cancelBox!.x + cancelBox!.width / 2,
+          y: cancelBox!.y + cancelBox!.height / 2,
+        },
+      ],
+    });
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchCancel",
+      touchPoints: [],
+    });
+    await expect(tooltip).toBeHidden();
+    await expect(page).not.toHaveURL(/zoom=/);
+
+    await bars.first().scrollIntoViewIfNeeded();
+    const clickBox = await bars.first().boundingBox();
+    expect(clickBox).not.toBeNull();
+    await page.mouse.click(
+      clickBox!.x + clickBox!.width / 2,
+      clickBox!.y + clickBox!.height / 2,
+    );
+    await expect(page).toHaveURL(/zoom=month/);
+  } finally {
+    await context.close();
+  }
+});
+
+test("Analytics mouse and keyboard drilldown remain available", async ({
+  page,
+}) => {
+  await stubApplication(
+    page,
+    analyticsResponsiveCheckins,
+    analyticsResponsiveTrends,
+  );
+  await page.goto(
+    "/analytics?period=custom&start=2026-01-01&end=2026-12-31&granularity=month",
+  );
+
+  const chart = page
+    .locator(".analytics-chart-panel")
+    .filter({ hasText: "Check-in Breakdown" });
+  const firstBar = chart.locator(".recharts-bar-rectangle").first();
+  await expect(firstBar).toBeVisible();
+  await firstBar.scrollIntoViewIfNeeded();
+  const box = await firstBar.boundingBox();
+  expect(box).not.toBeNull();
+  await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  await expect(page).toHaveURL(/zoom=month/);
+
+  await page.goto(
+    "/analytics?period=custom&start=2026-01-01&end=2026-12-31&granularity=month",
+  );
+  const openBucket = page
+    .locator(".bucket-actions")
+    .getByRole("button", { name: "Jan 2026" });
+  await expect(openBucket).toBeVisible();
+  await openBucket.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/zoom=month/);
 });
 
 test("Analytics tooltips stay readable and inside the viewport at chart edges", async ({

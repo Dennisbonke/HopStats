@@ -27,7 +27,10 @@ import LayoutDiagnostics from "../components/LayoutDiagnostics";
 import AnalyticsChartTooltip, {
   ANALYTICS_TOOLTIP_WRAPPER_STYLE,
 } from "../components/AnalyticsChartTooltip";
-import { useChartTooltipInteraction } from "../components/useChartTooltipInteraction";
+import {
+  isTouchGeneratedClick,
+  useChartTooltipInteraction,
+} from "../components/useChartTooltipInteraction";
 import { Button, Card } from "../components/ui";
 import {
   AnalyticsApiError,
@@ -338,7 +341,6 @@ export default function Analytics() {
   const [visible, setVisible] = useState({ total: true, discoveries: true });
   const breakdownChartRef = useRef<HTMLDivElement>(null);
   const trendChartRef = useRef<HTMLDivElement>(null);
-  const touchTapPending = useRef(false);
   const [zoom, setZoom] = useState<Zoom>(() =>
     parseZoom(searchParams.get("zoom")),
   );
@@ -359,11 +361,18 @@ export default function Analytics() {
     visible.discoveries,
     metric,
   ].join("|");
+  const tooltipContext = useMemo(
+    () => ({ chartContext, data }),
+    [chartContext, data],
+  );
   const breakdownTooltip = useChartTooltipInteraction(
     breakdownChartRef,
-    chartContext,
+    tooltipContext,
   );
-  const trendTooltip = useChartTooltipInteraction(trendChartRef, chartContext);
+  const trendTooltip = useChartTooltipInteraction(
+    trendChartRef,
+    tooltipContext,
+  );
   const overviewTabRef = useRef<HTMLButtonElement>(null);
   const trendsTabRef = useRef<HTMLButtonElement>(null);
   // React Router exposes the POP URL before the restoration effect updates the
@@ -1152,21 +1161,10 @@ export default function Analytics() {
                         className="chart-scroll"
                         role="group"
                         aria-label="Stacked bar chart of new discovery and repeat check-ins"
-                        onClick={() => {
-                          touchTapPending.current = false;
-                        }}
                         onPointerMove={breakdownTooltip.onPointerMove}
                         onPointerLeave={breakdownTooltip.onPointerLeave}
                         onPointerDown={breakdownTooltip.onPointerDown}
-                        onPointerDownCapture={(event) => {
-                          if (event.pointerType === "touch") {
-                            touchTapPending.current = true;
-                          }
-                        }}
-                        onPointerCancel={(event) => {
-                          breakdownTooltip.onPointerCancel(event);
-                          touchTapPending.current = false;
-                        }}
+                        onPointerCancel={breakdownTooltip.onPointerCancel}
                         onPointerUp={breakdownTooltip.onPointerUp}
                         onFocus={breakdownTooltip.onFocus}
                         onBlur={(event) => {
@@ -1205,11 +1203,8 @@ export default function Analytics() {
                                 stackId="checkins"
                                 fill="var(--color-chart-primary)"
                                 cursor={canDrill ? "pointer" : "default"}
-                                onClick={(entry) => {
-                                  if (touchTapPending.current) {
-                                    touchTapPending.current = false;
-                                    return;
-                                  }
+                                onClick={(entry, _index, event) => {
+                                  if (isTouchGeneratedClick(event)) return;
                                   drillTo(entry.payload as AnalyticsBucket);
                                 }}
                               />
@@ -1219,11 +1214,8 @@ export default function Analytics() {
                                 stackId="checkins"
                                 fill="var(--color-chart-secondary)"
                                 cursor={canDrill ? "pointer" : "default"}
-                                onClick={(entry) => {
-                                  if (touchTapPending.current) {
-                                    touchTapPending.current = false;
-                                    return;
-                                  }
+                                onClick={(entry, _index, event) => {
+                                  if (isTouchGeneratedClick(event)) return;
                                   drillTo(entry.payload as AnalyticsBucket);
                                 }}
                               />
@@ -1295,21 +1287,10 @@ export default function Analytics() {
                         className="chart-scroll"
                         role="group"
                         aria-label={`${mode} line chart of check-ins and discoveries`}
-                        onClick={() => {
-                          touchTapPending.current = false;
-                        }}
                         onPointerMove={trendTooltip.onPointerMove}
                         onPointerLeave={trendTooltip.onPointerLeave}
                         onPointerDown={trendTooltip.onPointerDown}
-                        onPointerDownCapture={(event) => {
-                          if (event.pointerType === "touch") {
-                            touchTapPending.current = true;
-                          }
-                        }}
-                        onPointerCancel={(event) => {
-                          trendTooltip.onPointerCancel(event);
-                          touchTapPending.current = false;
-                        }}
+                        onPointerCancel={trendTooltip.onPointerCancel}
                         onPointerUp={trendTooltip.onPointerUp}
                         onFocus={trendTooltip.onFocus}
                         onBlur={(event) => {
@@ -1329,11 +1310,8 @@ export default function Analytics() {
                             <LineChart
                               data={lineData}
                               accessibilityLayer
-                              onClick={(state) => {
-                                if (touchTapPending.current) {
-                                  touchTapPending.current = false;
-                                  return;
-                                }
+                              onClick={(state, event) => {
+                                if (isTouchGeneratedClick(event)) return;
                                 drillFromChart(state);
                               }}
                             >

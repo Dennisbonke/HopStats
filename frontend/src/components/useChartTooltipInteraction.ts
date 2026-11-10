@@ -1,10 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent, RefObject } from "react";
 
+/** Identify the synthesized click belonging to a touch without retaining gesture state. */
+export function isTouchGeneratedClick(
+  event: Event | { nativeEvent: Event },
+): boolean {
+  const nativeEvent = "nativeEvent" in event ? event.nativeEvent : event;
+  const pointerType = (nativeEvent as PointerEvent).pointerType;
+  return (
+    pointerType === "touch" ||
+    (
+      nativeEvent as MouseEvent & {
+        sourceCapabilities?: { firesTouchEvents?: boolean } | null;
+      }
+    ).sourceCapabilities?.firesTouchEvents === true
+  );
+}
+
 /** Keep a touch-selected Recharts point open until dismissal or context change. */
 export function useChartTooltipInteraction(
   chartRef: RefObject<HTMLElement | null>,
-  contextKey: string,
+  contextKey: unknown,
 ) {
   const [pinned, setPinned] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -63,7 +79,14 @@ export function useChartTooltipInteraction(
 
   function onPointerUp(event: ReactPointerEvent<HTMLElement>) {
     if (event.pointerType === "touch") {
-      if (!touchMoved.current) setPinned(true);
+      const bounds = chartRef.current?.getBoundingClientRect();
+      const releasedInsideChart =
+        bounds !== undefined &&
+        event.clientX >= bounds.left &&
+        event.clientX <= bounds.right &&
+        event.clientY >= bounds.top &&
+        event.clientY <= bounds.bottom;
+      if (!touchMoved.current && releasedInsideChart) setPinned(true);
       else setHovered(false);
       touchStart.current = null;
       touchMoved.current = false;
