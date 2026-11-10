@@ -208,6 +208,7 @@ export default function DashboardDiscoveriesChart({
                 <YAxis allowDecimals={false} width={38} />
                 <Tooltip
                   active={tooltipInteraction.active}
+                  trigger={tooltipInteraction.trigger}
                   content={
                     <DashboardTooltip
                       chartRef={chartRef}

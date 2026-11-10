@@ -8,6 +8,7 @@ export function useChartTooltipInteraction(
 ) {
   const [pinned, setPinned] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const [touchMode, setTouchMode] = useState(false);
   const lastPointerType = useRef<string | null>(null);
   const touchClickPending = useRef(false);
   const touchStart = useRef<{
@@ -19,6 +20,7 @@ export function useChartTooltipInteraction(
   useEffect(() => {
     setPinned(false);
     setHovered(false);
+    setTouchMode(false);
     touchClickPending.current = false;
     touchStart.current = null;
   }, [contextKey]);
@@ -32,11 +34,13 @@ export function useChartTooltipInteraction(
       if (!chartRef.current?.contains(event.target as Node)) {
         setPinned(false);
         setHovered(false);
+        setTouchMode(false);
       }
     };
     const dismissOnResize = () => {
       setPinned(false);
       setHovered(false);
+      setTouchMode(false);
     };
     document.addEventListener("pointerdown", dismissOutside, true);
     window.addEventListener("resize", dismissOnResize);
@@ -52,6 +56,7 @@ export function useChartTooltipInteraction(
       touchClickPending.current = false;
       setPinned(false);
       setHovered(true);
+      setTouchMode(false);
     } else if (event.pointerType === "touch") {
       setHovered(true);
     }
@@ -66,8 +71,10 @@ export function useChartTooltipInteraction(
     touchClickPending.current = false;
     if (event.pointerType === "mouse") {
       touchStart.current = null;
+      setTouchMode(false);
     }
     if (event.pointerType === "touch" && event.isPrimary) {
+      setTouchMode(true);
       touchStart.current = {
         pointerId: event.pointerId,
         x: event.clientX,
@@ -90,6 +97,7 @@ export function useChartTooltipInteraction(
       if (!moved) setPinned(true);
       else setHovered(false);
       touchClickPending.current = !moved;
+      setTouchMode(!moved);
       touchStart.current = null;
     }
   }
@@ -101,6 +109,7 @@ export function useChartTooltipInteraction(
     ) {
       setHovered(false);
       touchClickPending.current = false;
+      setTouchMode(false);
       touchStart.current = null;
     }
   }
@@ -124,6 +133,7 @@ export function useChartTooltipInteraction(
     if (event.key === "Enter" || event.key === " ") {
       lastPointerType.current = null;
       touchClickPending.current = false;
+      setTouchMode(false);
     }
   }
 
@@ -137,6 +147,7 @@ export function useChartTooltipInteraction(
 
   return {
     active: pinned ? true : hovered ? undefined : false,
+    trigger: touchMode ? ("click" as const) : ("hover" as const),
     onPointerMove,
     onPointerLeave,
     onPointerDown,

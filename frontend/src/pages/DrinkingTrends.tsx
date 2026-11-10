@@ -509,6 +509,7 @@ function DistributionChart({
             <YAxis allowDecimals={mode === "average"} tick={{ fontSize: 12 }} />
             <Tooltip
               active={tooltipInteraction.active}
+              trigger={tooltipInteraction.trigger}
               content={
                 <DistributionTooltip
                   chartRef={chartRef}

@@ -1185,6 +1185,7 @@ export default function Analytics() {
                               <YAxis allowDecimals={false} />
                               <Tooltip
                                 active={breakdownTooltip.active}
+                                trigger={breakdownTooltip.trigger}
                                 content={
                                   <ExactTooltip
                                     chartRef={breakdownChartRef}
@@ -1330,6 +1331,7 @@ export default function Analytics() {
                               <YAxis allowDecimals={false} />
                               <Tooltip
                                 active={trendTooltip.active}
+                                trigger={trendTooltip.trigger}
                                 content={
                                   <ExactTooltip chartRef={trendChartRef} />
                                 }

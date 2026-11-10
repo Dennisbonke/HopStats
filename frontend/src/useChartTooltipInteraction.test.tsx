@@ -13,6 +13,7 @@ function mountChart(onDrilldown: (event: Event) => void) {
       <div
         ref={chartRef}
         data-testid="chart"
+        data-trigger={interaction.trigger}
         onPointerDown={interaction.onPointerDown}
         onPointerUp={interaction.onPointerUp}
         onPointerCancel={interaction.onPointerCancel}
@@ -54,13 +55,15 @@ test("touch click is ignored but a later mouse click drills down", () => {
   const onDrilldown = vi.fn();
   const chart = mountChart(onDrilldown);
 
-  chart.dispatchEvent(pointerEvent("pointerdown", "touch"));
-  chart.dispatchEvent(pointerEvent("pointerup", "touch"));
-  chart.dispatchEvent(clickEvent("", 0));
+  fireEvent(chart, pointerEvent("pointerdown", "touch"));
+  expect(chart).toHaveAttribute("data-trigger", "click");
+  fireEvent(chart, pointerEvent("pointerup", "touch"));
+  fireEvent(chart, clickEvent("", 0));
   expect(onDrilldown).not.toHaveBeenCalled();
 
-  chart.dispatchEvent(pointerEvent("pointerdown", "mouse"));
-  chart.dispatchEvent(clickEvent("touch", 1));
+  fireEvent(chart, pointerEvent("pointerdown", "mouse"));
+  expect(chart).toHaveAttribute("data-trigger", "hover");
+  fireEvent(chart, clickEvent("touch", 1));
   expect(onDrilldown).toHaveBeenCalledTimes(1);
 });
 
@@ -68,15 +71,15 @@ test("cancelled touch and keyboard clicks do not leave stale suppression", () =>
   const onDrilldown = vi.fn();
   const chart = mountChart(onDrilldown);
 
-  chart.dispatchEvent(pointerEvent("pointerdown", "touch"));
-  chart.dispatchEvent(pointerEvent("pointercancel", "touch"));
-  chart.dispatchEvent(pointerEvent("pointerdown", "mouse"));
-  chart.dispatchEvent(clickEvent("mouse", 1));
+  fireEvent(chart, pointerEvent("pointerdown", "touch"));
+  fireEvent(chart, pointerEvent("pointercancel", "touch"));
+  fireEvent(chart, pointerEvent("pointerdown", "mouse"));
+  fireEvent(chart, clickEvent("mouse", 1));
   expect(onDrilldown).toHaveBeenCalledTimes(1);
 
-  chart.dispatchEvent(pointerEvent("pointerdown", "touch"));
-  chart.dispatchEvent(pointerEvent("pointerup", "touch"));
+  fireEvent(chart, pointerEvent("pointerdown", "touch"));
+  fireEvent(chart, pointerEvent("pointerup", "touch"));
   fireEvent.keyDown(chart, { key: "Enter" });
-  chart.dispatchEvent(clickEvent("", 0));
+  fireEvent(chart, clickEvent("", 0));
   expect(onDrilldown).toHaveBeenCalledTimes(2);
 });
