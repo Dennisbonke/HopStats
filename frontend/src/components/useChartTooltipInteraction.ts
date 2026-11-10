@@ -44,6 +44,8 @@ export function useChartTooltipInteraction(
 
   function onPointerMove(event: ReactPointerEvent<HTMLElement>) {
     if (event.pointerType === "mouse") {
+      lastPointerType.current = "mouse";
+      touchClickPending.current = false;
       setPinned(false);
       setHovered(true);
     } else if (event.pointerType === "touch") {

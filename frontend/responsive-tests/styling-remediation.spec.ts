@@ -2199,13 +2199,13 @@ test("touch taps pin Analytics and Drinking Trends tooltips without breaking hov
             block: "center",
           }),
         );
+        let box = await locator.boundingBox();
         await expect
           .poll(async () => {
-            const box = await locator.boundingBox();
+            box = await locator.boundingBox();
             return !!box && box.width > 0 && box.height > 0;
           })
           .toBe(true);
-        const box = await locator.boundingBox();
         expect(box, "chart point has a touch target").not.toBeNull();
         await page.touchscreen.tap(
           box!.x + box!.width / 2,
