@@ -43,9 +43,10 @@ shared controls should use `ui-*` component classes. `.placeholder-panel` is a
 light compatibility surface for unfinished and wildcard routes. These rules
 remain intentionally scoped and are the remaining legacy presentation rules.
 
-Native `<dialog>.showModal()` provides Inventory modality, focus containment,
-Escape behavior, and background inertness in the supported Chromium, Firefox,
-and WebKit baseline. The Inventory detail component restores focus to its
-invoking control after close; there is no non-modal `open` fallback or custom
-Tab trap. Browser coverage for native dialog behavior lives in the responsive
-Playwright suite.
+Native `<dialog>.showModal()` provides Inventory modality, Escape behavior,
+and background inertness in the supported Chromium, Firefox, and WebKit
+baseline. Browser regression checks found that Tab can leave the modal when
+its only focusable control is reached, so the detail component keeps a small
+Tab wrap guard in addition to native modality. It restores focus to the
+invoking control after close; there is no non-modal `open` fallback. Browser
+coverage for dialog behavior lives in the responsive Playwright suite.

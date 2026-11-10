@@ -159,6 +159,24 @@ function DetailPanel({
       className="inventory-dialog"
       aria-labelledby="inventory-detail-title"
       onCancel={onClose}
+      onKeyDown={(event) => {
+        if (event.key !== "Tab") return;
+        const controls = event.currentTarget.querySelectorAll<HTMLElement>(
+          'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+        );
+        const first = controls.item(0);
+        const last = controls.item(controls.length - 1);
+        if (controls.length === 0) {
+          event.preventDefault();
+          event.currentTarget.focus();
+        } else if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }}
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}

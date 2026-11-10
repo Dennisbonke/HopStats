@@ -79,14 +79,7 @@ export function useChartTooltipInteraction(
 
   function onPointerUp(event: ReactPointerEvent<HTMLElement>) {
     if (event.pointerType === "touch") {
-      const bounds = chartRef.current?.getBoundingClientRect();
-      const releasedInsideChart =
-        bounds !== undefined &&
-        event.clientX >= bounds.left &&
-        event.clientX <= bounds.right &&
-        event.clientY >= bounds.top &&
-        event.clientY <= bounds.bottom;
-      if (!touchMoved.current && releasedInsideChart) setPinned(true);
+      if (!touchMoved.current) setPinned(true);
       else setHovered(false);
       touchStart.current = null;
       touchMoved.current = false;

@@ -2207,6 +2207,32 @@ test("touch taps pin Analytics and Drinking Trends tooltips without breaking hov
           box!.y + box!.height / 2,
         );
       };
+      const tapOutsideChart = async (chart: Locator) => {
+        const box = await chart.boundingBox();
+        const viewport = page.viewportSize();
+        expect(box).not.toBeNull();
+        expect(viewport).not.toBeNull();
+        const candidates = [
+          [2, 2],
+          [2, viewport!.height - 2],
+          [viewport!.width - 2, 2],
+          [viewport!.width - 2, viewport!.height - 2],
+          [viewport!.width / 2, 2],
+          [viewport!.width / 2, viewport!.height - 2],
+        ];
+        const point = candidates.find(
+          ([x, y]) =>
+            x < box!.x ||
+            x > box!.x + box!.width ||
+            y < box!.y ||
+            y > box!.y + box!.height,
+        );
+        expect(
+          point,
+          "a viewport point outside the chart is available",
+        ).toBeDefined();
+        await page.touchscreen.tap(point![0], point![1]);
+      };
 
       await page.goto("/");
       const dashboardChart = page.locator(".dashboard-chart");
@@ -2221,7 +2247,7 @@ test("touch taps pin Analytics and Drinking Trends tooltips without breaking hov
         "background-color",
         colorScheme === "dark" ? "rgb(11, 18, 26)" : "rgb(23, 32, 51)",
       );
-      await page.touchscreen.tap(18, 115);
+      await tapOutsideChart(dashboardChart);
       await expect(tooltip).toBeHidden();
 
       await page.goto(
@@ -2249,11 +2275,14 @@ test("touch taps pin Analytics and Drinking Trends tooltips without breaking hov
       await tap(breakdownBars.nth(4));
       await expect.poll(() => tooltip.textContent()).not.toBe(firstPointText);
 
-      await page.touchscreen.tap(18, 115);
+      await tapOutsideChart(breakdown.locator(".chart-canvas"));
       await expect(tooltip).toBeHidden();
       await tap(breakdownBars.nth(0));
       await expect(tooltip).toContainText("Jan 2026");
-      await page.getByLabel("Reporting period").selectOption("last_30");
+      await page
+        .locator(".analytics-filters")
+        .getByLabel("Reporting period")
+        .selectOption("last_30");
       await expect(tooltip).toBeHidden();
 
       await page.getByRole("tab", { name: "Drinking Trends" }).click();
@@ -2267,11 +2296,14 @@ test("touch taps pin Analytics and Drinking Trends tooltips without breaking hov
       await expect(tooltip).toContainText("00:00");
       await tap(hourlyBars.nth(2));
       await expect(tooltip).toContainText("02:00");
-      await page.touchscreen.tap(18, 115);
+      await tapOutsideChart(hourly.locator(".distribution-canvas"));
       await expect(tooltip).toBeHidden();
       await tap(hourlyBars.nth(0));
       await expect(tooltip).toContainText("00:00");
-      await page.getByLabel("Reporting period").selectOption("last_90");
+      await page
+        .locator(".analytics-filters")
+        .getByLabel("Reporting period")
+        .selectOption("last_90");
       await expect(tooltip).toBeHidden();
 
       await expect(page.locator(".distribution-canvas")).toHaveCSS(
@@ -2369,7 +2401,7 @@ test("Analytics touch swipe and cancellation leave later chart clicks intact", a
     await expect(tooltip).toBeVisible();
     await expect(tooltip).toContainText("Jan 2026");
     await expect(page).not.toHaveURL(/zoom=/);
-    await page.touchscreen.tap(18, 115);
+    await page.touchscreen.tap(2, 2);
     await expect(tooltip).toBeHidden();
 
     await bars.first().scrollIntoViewIfNeeded();
@@ -2458,18 +2490,27 @@ test("Analytics mouse and keyboard drilldown remain available", async ({
     .filter({ hasText: "Check-in Breakdown" });
   const firstBar = chart.locator(".recharts-bar-rectangle").first();
   await expect(firstBar).toBeVisible();
-  await firstBar.scrollIntoViewIfNeeded();
-  const box = await firstBar.boundingBox();
-  expect(box).not.toBeNull();
-  await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  await chart.scrollIntoViewIfNeeded();
+  await expect
+    .poll(async () => {
+      const box = await firstBar.boundingBox();
+      return !!box && box.width > 0 && box.height > 0;
+    })
+    .toBe(true);
+  await firstBar.hover();
+  await expect(
+    page.locator("body > .recharts-tooltip-wrapper:visible .analytics-tooltip"),
+  ).toContainText("Jan 2026");
+  await firstBar.click();
   await expect(page).toHaveURL(/zoom=month/);
 
   await page.goto(
     "/analytics?period=custom&start=2026-01-01&end=2026-12-31&granularity=month",
   );
-  const openBucket = page
+  const openBucket = chart
     .locator(".bucket-actions")
-    .getByRole("button", { name: "Jan 2026" });
+    .getByRole("button", { name: "Jan 2026" })
+    .first();
   await expect(openBucket).toBeVisible();
   await openBucket.focus();
   await page.keyboard.press("Enter");
