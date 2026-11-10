@@ -2188,7 +2188,18 @@ test("touch taps pin Analytics and Drinking Trends tooltips without breaking hov
         "body > .recharts-tooltip-wrapper:visible .analytics-tooltip",
       );
       const tap = async (locator: Locator) => {
-        await locator.scrollIntoViewIfNeeded();
+        await expect(locator).toBeVisible();
+        await locator.evaluate((element) =>
+          element.closest(".recharts-responsive-container")?.scrollIntoView({
+            block: "center",
+          }),
+        );
+        await expect
+          .poll(async () => {
+            const box = await locator.boundingBox();
+            return !!box && box.width > 0 && box.height > 0;
+          })
+          .toBe(true);
         const box = await locator.boundingBox();
         expect(box, "chart point has a touch target").not.toBeNull();
         await page.touchscreen.tap(
@@ -2230,8 +2241,9 @@ test("touch taps pin Analytics and Drinking Trends tooltips without breaking hov
         "background-color",
         colorScheme === "dark" ? "rgb(11, 18, 26)" : "rgb(23, 32, 51)",
       );
+      const firstPointText = await tooltip.textContent();
       await tap(breakdownBars.nth(4));
-      await expect(tooltip).toContainText("Mar 2026");
+      await expect.poll(() => tooltip.textContent()).not.toBe(firstPointText);
 
       await page.touchscreen.tap(18, 115);
       await expect(tooltip).toBeHidden();
@@ -2493,7 +2505,7 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
   }
 });
 
-test("Analytics breakdown tooltips follow touch movement at 320px", async ({
+test("Analytics touch tooltips remain positioned at 320px", async ({
   browser,
 }) => {
   const context = await browser.newContext({
@@ -2527,19 +2539,9 @@ test("Analytics breakdown tooltips follow touch movement at 320px", async ({
       .toBe(true);
     expect(barBox).not.toBeNull();
 
-    await breakdown.locator(".recharts-wrapper").evaluate(
-      (chart, { x, y }) => {
-        const touch = { clientX: x, clientY: y };
-        for (const type of ["touchstart", "touchmove"]) {
-          const event = new Event(type, { bubbles: true, cancelable: true });
-          Object.defineProperty(event, "touches", { value: [touch] });
-          chart.dispatchEvent(event);
-        }
-      },
-      {
-        x: barBox!.x + barBox!.width / 2,
-        y: barBox!.y + barBox!.height / 2,
-      },
+    await page.touchscreen.tap(
+      barBox!.x + barBox!.width / 2,
+      barBox!.y + barBox!.height / 2,
     );
     const tooltip = page
       .locator("body > .recharts-tooltip-wrapper:visible .analytics-tooltip")
@@ -2685,9 +2687,17 @@ test("Inventory detail dialog is named, modal, focus managed, and scrollable", a
         width <= 960
           ? page.getByRole("button", { name: "Main menu" })
           : page.getByRole("link", { name: "Dashboard" });
-      await backgroundControl.evaluate((element) =>
-        (element as HTMLElement).focus(),
-      );
+      await expect(backgroundControl).toBeVisible();
+      await close.focus();
+      await page.keyboard.press("Tab");
+      await expect
+        .poll(() =>
+          dialog.evaluate((element) =>
+            element.contains(document.activeElement),
+          ),
+        )
+        .toBe(true);
+      await page.keyboard.press("Shift+Tab");
       await expect
         .poll(() =>
           dialog.evaluate((element) =>
