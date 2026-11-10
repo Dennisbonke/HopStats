@@ -1,22 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent, RefObject } from "react";
 
-/** Identify the synthesized click belonging to a touch without retaining gesture state. */
+/** Identify a touch-generated click without mistaking a later mouse click for one. */
 export function isTouchGeneratedClick(
   event: Event | { nativeEvent: Event },
 ): boolean {
   const nativeEvent = "nativeEvent" in event ? event.nativeEvent : event;
   const pointerType = (nativeEvent as PointerEvent).pointerType;
-  if (typeof pointerType === "string" && pointerType.length > 0) {
-    return pointerType === "touch";
-  }
-  return (
-    (
-      nativeEvent as MouseEvent & {
-        sourceCapabilities?: { firesTouchEvents?: boolean } | null;
-      }
-    ).sourceCapabilities?.firesTouchEvents === true
-  );
+  return pointerType === "touch";
 }
 
 /** Keep a touch-selected Recharts point open until dismissal or context change. */

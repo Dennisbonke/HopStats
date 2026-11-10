@@ -2166,7 +2166,12 @@ test("Analytics charts keep controls, labels, and legends usable across viewport
 
 test("touch taps pin Analytics and Drinking Trends tooltips without breaking hover or scroll", async ({
   browser,
+  browserName,
 }) => {
+  test.skip(
+    browserName !== "chromium",
+    "Playwright touchscreen input is supported only by Chromium; Firefox and WebKit remain covered by mouse and keyboard chart tests",
+  );
   for (const colorScheme of ["light", "dark"] as const) {
     const context = await browser.newContext({
       baseURL: "http://127.0.0.1:5173",
@@ -2725,7 +2730,12 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
 
 test("Analytics touch tooltips remain positioned at 320px", async ({
   browser,
+  browserName,
 }) => {
+  test.skip(
+    browserName !== "chromium",
+    "Playwright touchscreen input is supported only by Chromium",
+  );
   const context = await browser.newContext({
     viewport: { width: 320, height: 844 },
     hasTouch: true,
