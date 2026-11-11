@@ -26,6 +26,13 @@ export function useChartTooltipInteraction(
   }, [contextKey]);
 
   useEffect(() => {
+    const clearTouchGesture = (pointerId: number) => {
+      if (touchStart.current?.pointerId !== pointerId) return;
+      touchStart.current = null;
+      touchClickPending.current = false;
+      setHovered(false);
+      setTouchMode(false);
+    };
     const dismissOutside = (event: PointerEvent) => {
       if (event.pointerType === "mouse") {
         lastPointerType.current = "mouse";
@@ -37,15 +44,33 @@ export function useChartTooltipInteraction(
         setTouchMode(false);
       }
     };
+    const trackTouchMovement = (event: PointerEvent) => {
+      const start = touchStart.current;
+      if (
+        event.pointerType === "touch" &&
+        start?.pointerId === event.pointerId &&
+        (Math.abs(event.clientX - start.x) > 8 ||
+          Math.abs(event.clientY - start.y) > 8)
+      ) {
+        clearTouchGesture(event.pointerId);
+      }
+    };
+    const cancelTouchGesture = (event: PointerEvent) => {
+      if (event.pointerType === "touch") clearTouchGesture(event.pointerId);
+    };
     const dismissOnResize = () => {
       setPinned(false);
       setHovered(false);
       setTouchMode(false);
     };
     document.addEventListener("pointerdown", dismissOutside, true);
+    document.addEventListener("pointermove", trackTouchMovement, true);
+    document.addEventListener("pointercancel", cancelTouchGesture, true);
     window.addEventListener("resize", dismissOnResize);
     return () => {
       document.removeEventListener("pointerdown", dismissOutside, true);
+      document.removeEventListener("pointermove", trackTouchMovement, true);
+      document.removeEventListener("pointercancel", cancelTouchGesture, true);
       window.removeEventListener("resize", dismissOnResize);
     };
   }, [chartRef]);
@@ -59,18 +84,7 @@ export function useChartTooltipInteraction(
       setTouchMode(false);
     } else if (event.pointerType === "touch") {
       const start = touchStart.current;
-      if (
-        start?.pointerId === event.pointerId &&
-        (Math.abs(event.clientX - start.x) > 8 ||
-          Math.abs(event.clientY - start.y) > 8)
-      ) {
-        touchClickPending.current = false;
-        touchStart.current = null;
-        setHovered(false);
-        setTouchMode(false);
-        return;
-      }
-      setHovered(true);
+      if (start?.pointerId === event.pointerId) setHovered(true);
     }
   }
 
