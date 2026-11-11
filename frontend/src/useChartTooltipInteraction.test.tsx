@@ -111,3 +111,16 @@ test("a swipe does not leave touch-click suppression for later chart clicks", ()
   fireEvent(chart, clickEvent("mouse", 1));
   expect(onDrilldown).toHaveBeenCalledTimes(2);
 });
+
+test("a lost touch pointerup suppresses only its own click", () => {
+  const onDrilldown = vi.fn();
+  const chart = mountChart(onDrilldown);
+
+  fireEvent(chart, pointerEvent("pointerdown", "touch"));
+  fireEvent(chart, clickEvent("", 0));
+  expect(onDrilldown).not.toHaveBeenCalled();
+
+  fireEvent(chart, pointerEvent("pointerdown", "mouse"));
+  fireEvent(chart, clickEvent("mouse", 1));
+  expect(onDrilldown).toHaveBeenCalledTimes(1);
+});

@@ -75,6 +75,7 @@ export function useChartTooltipInteraction(
     }
     if (event.pointerType === "touch" && event.isPrimary) {
       setTouchMode(true);
+      touchClickPending.current = true;
       touchStart.current = {
         pointerId: event.pointerId,
         x: event.clientX,
