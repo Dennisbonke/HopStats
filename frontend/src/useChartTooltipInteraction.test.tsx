@@ -50,9 +50,18 @@ function pointerEvent(
   });
 }
 
-function clickEvent(pointerType: string, detail: number) {
+function clickEvent(
+  pointerType: string,
+  detail: number,
+  firesTouchEvents?: boolean,
+) {
   const event = new MouseEvent("click", { bubbles: true, detail });
   Object.defineProperty(event, "pointerType", { value: pointerType });
+  if (firesTouchEvents !== undefined) {
+    Object.defineProperty(event, "sourceCapabilities", {
+      value: { firesTouchEvents },
+    });
+  }
   return event;
 }
 
@@ -132,5 +141,14 @@ test("a mouse pointer transition clears pending touch suppression", () => {
   fireEvent(chart, pointerEvent("pointerdown", "touch"));
   fireEvent(document, pointerEvent("pointermove", "mouse"));
   fireEvent(chart, clickEvent("", 1));
+  expect(onDrilldown).toHaveBeenCalledTimes(1);
+});
+
+test("a direct mouse click clears suppression when pointer type is missing", () => {
+  const onDrilldown = vi.fn();
+  const chart = mountChart(onDrilldown);
+
+  fireEvent(chart, pointerEvent("pointerdown", "touch"));
+  fireEvent(chart, clickEvent("", 1, false));
   expect(onDrilldown).toHaveBeenCalledTimes(1);
 });
