@@ -102,7 +102,7 @@ test("a swipe does not leave touch-click suppression for later chart clicks", ()
 
   fireEvent(chart, pointerEvent("pointerdown", "touch"));
   fireEvent(chart, pointerEvent("pointermove", "touch", 60));
-  fireEvent(chart, pointerEvent("pointerup", "touch", 60));
+  expect(chart).toHaveAttribute("data-trigger", "hover");
   expect(chart).toHaveAttribute("data-active", "false");
   fireEvent(chart, clickEvent("touch", 1));
   expect(onDrilldown).toHaveBeenCalledTimes(1);

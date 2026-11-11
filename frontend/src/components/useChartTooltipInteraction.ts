@@ -58,6 +58,18 @@ export function useChartTooltipInteraction(
       setHovered(true);
       setTouchMode(false);
     } else if (event.pointerType === "touch") {
+      const start = touchStart.current;
+      if (
+        start?.pointerId === event.pointerId &&
+        (Math.abs(event.clientX - start.x) > 8 ||
+          Math.abs(event.clientY - start.y) > 8)
+      ) {
+        touchClickPending.current = false;
+        touchStart.current = null;
+        setHovered(false);
+        setTouchMode(false);
+        return;
+      }
       setHovered(true);
     }
   }
