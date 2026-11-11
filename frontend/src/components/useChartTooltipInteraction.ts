@@ -45,6 +45,11 @@ export function useChartTooltipInteraction(
       }
     };
     const trackTouchMovement = (event: PointerEvent) => {
+      if (event.pointerType === "mouse") {
+        lastPointerType.current = "mouse";
+        touchClickPending.current = false;
+        return;
+      }
       const start = touchStart.current;
       if (
         event.pointerType === "touch" &&

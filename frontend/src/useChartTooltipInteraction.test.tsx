@@ -124,3 +124,13 @@ test("a lost touch pointerup suppresses only its own click", () => {
   fireEvent(chart, clickEvent("mouse", 1));
   expect(onDrilldown).toHaveBeenCalledTimes(1);
 });
+
+test("a mouse pointer transition clears pending touch suppression", () => {
+  const onDrilldown = vi.fn();
+  const chart = mountChart(onDrilldown);
+
+  fireEvent(chart, pointerEvent("pointerdown", "touch"));
+  fireEvent(document, pointerEvent("pointermove", "mouse"));
+  fireEvent(chart, clickEvent("", 1));
+  expect(onDrilldown).toHaveBeenCalledTimes(1);
+});
