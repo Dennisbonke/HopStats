@@ -146,7 +146,7 @@ export function useChartTooltipInteraction(
   }
 
   return {
-    active: pinned ? true : hovered ? undefined : false,
+    active: pinned ? true : hovered || touchMode ? undefined : false,
     trigger: touchMode ? ("click" as const) : ("hover" as const),
     onPointerMove,
     onPointerLeave,

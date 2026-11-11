@@ -14,6 +14,9 @@ function mountChart(onDrilldown: (event: Event) => void) {
         ref={chartRef}
         data-testid="chart"
         data-trigger={interaction.trigger}
+        data-active={
+          interaction.active === undefined ? "auto" : String(interaction.active)
+        }
         onPointerDown={interaction.onPointerDown}
         onPointerUp={interaction.onPointerUp}
         onPointerCancel={interaction.onPointerCancel}
@@ -57,7 +60,9 @@ test("touch click is ignored but a later mouse click drills down", () => {
 
   fireEvent(chart, pointerEvent("pointerdown", "touch"));
   expect(chart).toHaveAttribute("data-trigger", "click");
+  expect(chart).toHaveAttribute("data-active", "auto");
   fireEvent(chart, pointerEvent("pointerup", "touch"));
+  expect(chart).toHaveAttribute("data-active", "true");
   fireEvent(chart, clickEvent("", 0));
   expect(onDrilldown).not.toHaveBeenCalled();
 
