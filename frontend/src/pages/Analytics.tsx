@@ -766,7 +766,14 @@ export default function Analytics() {
     state: { activeTooltipIndex?: number | string | null } | undefined,
   ) {
     const index = state?.activeTooltipIndex;
-    const bucket = typeof index === "number" ? chartData[index] : undefined;
+    const numericIndex =
+      typeof index === "number"
+        ? index
+        : typeof index === "string" && /^\d+$/.test(index)
+          ? Number(index)
+          : undefined;
+    const bucket =
+      numericIndex === undefined ? undefined : chartData[numericIndex];
     if (bucket) drillTo(bucket);
   }
 
@@ -1179,7 +1186,17 @@ export default function Analytics() {
                           ref={breakdownChartRef}
                         >
                           <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={chartData} accessibilityLayer>
+                            <BarChart
+                              data={chartData}
+                              accessibilityLayer
+                              onClick={(state, event) => {
+                                if (
+                                  breakdownTooltip.shouldIgnoreChartClick(event)
+                                )
+                                  return;
+                                drillFromChart(state);
+                              }}
+                            >
                               <CartesianGrid strokeDasharray="3 3" />
                               <XAxis dataKey="label" minTickGap={28} />
                               <YAxis allowDecimals={false} />
@@ -1202,15 +1219,6 @@ export default function Analytics() {
                                 stackId="checkins"
                                 fill="var(--color-chart-primary)"
                                 cursor={canDrill ? "pointer" : "default"}
-                                onClick={(entry, _index, event) => {
-                                  if (
-                                    breakdownTooltip.shouldIgnoreChartClick(
-                                      event,
-                                    )
-                                  )
-                                    return;
-                                  drillTo(entry.payload as AnalyticsBucket);
-                                }}
                               />
                               <Bar
                                 dataKey="repeat_checkins"
@@ -1218,15 +1226,6 @@ export default function Analytics() {
                                 stackId="checkins"
                                 fill="var(--color-chart-secondary)"
                                 cursor={canDrill ? "pointer" : "default"}
-                                onClick={(entry, _index, event) => {
-                                  if (
-                                    breakdownTooltip.shouldIgnoreChartClick(
-                                      event,
-                                    )
-                                  )
-                                    return;
-                                  drillTo(entry.payload as AnalyticsBucket);
-                                }}
                               />
                             </BarChart>
                           </ResponsiveContainer>
