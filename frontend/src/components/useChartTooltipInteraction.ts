@@ -123,10 +123,6 @@ export function useChartTooltipInteraction(
       return false;
     }
     if (lastPointerType.current === "mouse") return false;
-    if (pointerType === "touch") {
-      touchClickPending.current = false;
-      return true;
-    }
     if (touchClickPending.current) {
       touchClickPending.current = false;
       return true;

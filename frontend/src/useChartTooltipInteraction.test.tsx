@@ -18,6 +18,7 @@ function mountChart(onDrilldown: (event: Event) => void) {
           interaction.active === undefined ? "auto" : String(interaction.active)
         }
         onPointerDown={interaction.onPointerDown}
+        onPointerMove={interaction.onPointerMove}
         onPointerUp={interaction.onPointerUp}
         onPointerCancel={interaction.onPointerCancel}
         onKeyDown={interaction.onKeyDown}
@@ -35,8 +36,9 @@ function mountChart(onDrilldown: (event: Event) => void) {
 }
 
 function pointerEvent(
-  type: "pointerdown" | "pointerup" | "pointercancel",
+  type: "pointerdown" | "pointermove" | "pointerup" | "pointercancel",
   pointerType: string,
+  clientY = 20,
 ) {
   return new PointerEvent(type, {
     bubbles: true,
@@ -44,7 +46,7 @@ function pointerEvent(
     pointerType,
     isPrimary: true,
     clientX: 20,
-    clientY: 20,
+    clientY,
   });
 }
 
@@ -91,5 +93,21 @@ test("cancelled touch and keyboard clicks do not leave stale suppression", () =>
   fireEvent(chart, pointerEvent("pointerup", "touch"));
   fireEvent.keyDown(chart, { key: "Enter" });
   fireEvent(chart, clickEvent("", 0));
+  expect(onDrilldown).toHaveBeenCalledTimes(2);
+});
+
+test("a swipe does not leave touch-click suppression for later chart clicks", () => {
+  const onDrilldown = vi.fn();
+  const chart = mountChart(onDrilldown);
+
+  fireEvent(chart, pointerEvent("pointerdown", "touch"));
+  fireEvent(chart, pointerEvent("pointermove", "touch", 60));
+  fireEvent(chart, pointerEvent("pointerup", "touch", 60));
+  expect(chart).toHaveAttribute("data-active", "false");
+  fireEvent(chart, clickEvent("touch", 1));
+  expect(onDrilldown).toHaveBeenCalledTimes(1);
+
+  fireEvent(chart, pointerEvent("pointerdown", "mouse"));
+  fireEvent(chart, clickEvent("mouse", 1));
   expect(onDrilldown).toHaveBeenCalledTimes(2);
 });
