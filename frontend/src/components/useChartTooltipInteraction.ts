@@ -117,6 +117,11 @@ export function useChartTooltipInteraction(
   function shouldIgnoreChartClick(event: Event | { nativeEvent: Event }) {
     const nativeEvent = "nativeEvent" in event ? event.nativeEvent : event;
     const pointerType = (nativeEvent as PointerEvent).pointerType;
+    if (pointerType === "mouse") {
+      lastPointerType.current = "mouse";
+      touchClickPending.current = false;
+      return false;
+    }
     if (lastPointerType.current === "mouse") return false;
     if (pointerType === "touch") {
       touchClickPending.current = false;
