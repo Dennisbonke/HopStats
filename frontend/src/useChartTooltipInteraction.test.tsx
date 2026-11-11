@@ -152,3 +152,15 @@ test("a direct mouse click clears suppression when pointer type is missing", () 
   fireEvent(chart, clickEvent("", 1, false));
   expect(onDrilldown).toHaveBeenCalledTimes(1);
 });
+
+test("touch scrolling clears suppression even when pointer end is missing", () => {
+  const onDrilldown = vi.fn();
+  const chart = mountChart(onDrilldown);
+
+  fireEvent(chart, pointerEvent("pointerdown", "touch"));
+  fireEvent.scroll(window);
+  expect(chart).toHaveAttribute("data-trigger", "hover");
+  expect(chart).toHaveAttribute("data-active", "false");
+  fireEvent(chart, clickEvent("", 1));
+  expect(onDrilldown).toHaveBeenCalledTimes(1);
+});

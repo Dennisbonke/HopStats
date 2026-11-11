@@ -63,6 +63,9 @@ export function useChartTooltipInteraction(
     const cancelTouchGesture = (event: PointerEvent) => {
       if (event.pointerType === "touch") clearTouchGesture(event.pointerId);
     };
+    const cancelTouchOnScroll = () => {
+      if (touchStart.current) clearTouchGesture(touchStart.current.pointerId);
+    };
     const dismissOnResize = () => {
       setPinned(false);
       setHovered(false);
@@ -71,11 +74,13 @@ export function useChartTooltipInteraction(
     document.addEventListener("pointerdown", dismissOutside, true);
     document.addEventListener("pointermove", trackTouchMovement, true);
     document.addEventListener("pointercancel", cancelTouchGesture, true);
+    window.addEventListener("scroll", cancelTouchOnScroll, true);
     window.addEventListener("resize", dismissOnResize);
     return () => {
       document.removeEventListener("pointerdown", dismissOutside, true);
       document.removeEventListener("pointermove", trackTouchMovement, true);
       document.removeEventListener("pointercancel", cancelTouchGesture, true);
+      window.removeEventListener("scroll", cancelTouchOnScroll, true);
       window.removeEventListener("resize", dismissOnResize);
     };
   }, [chartRef]);
