@@ -2411,7 +2411,13 @@ test("Analytics touch swipe and cancellation leave later chart clicks intact", a
     await expect(tooltip).toBeHidden();
     await expect(page).not.toHaveURL(/zoom=/);
 
-    await bars.first().click();
+    await bars.first().scrollIntoViewIfNeeded();
+    const postSwipeBox = await bars.first().boundingBox();
+    expect(postSwipeBox).not.toBeNull();
+    await page.mouse.click(
+      postSwipeBox!.x + postSwipeBox!.width / 2,
+      postSwipeBox!.y + postSwipeBox!.height / 2,
+    );
     await expect(page).toHaveURL(/zoom=month/);
 
     await page.goto(
