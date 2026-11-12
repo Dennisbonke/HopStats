@@ -2412,12 +2412,7 @@ test("Analytics touch swipe and cancellation leave later chart clicks intact", a
     await expect(page).not.toHaveURL(/zoom=/);
 
     await bars.first().scrollIntoViewIfNeeded();
-    const postSwipeBox = await bars.first().boundingBox();
-    expect(postSwipeBox).not.toBeNull();
-    await page.mouse.click(
-      postSwipeBox!.x + postSwipeBox!.width / 2,
-      postSwipeBox!.y + postSwipeBox!.height / 2,
-    );
+    await bars.first().click();
     await expect(page).toHaveURL(/zoom=month/);
 
     await page.goto(
@@ -2445,12 +2440,7 @@ test("Analytics touch swipe and cancellation leave later chart clicks intact", a
     await expect(page).not.toHaveURL(/zoom=/);
 
     await bars.first().scrollIntoViewIfNeeded();
-    const clickBox = await bars.first().boundingBox();
-    expect(clickBox).not.toBeNull();
-    await page.mouse.click(
-      clickBox!.x + clickBox!.width / 2,
-      clickBox!.y + clickBox!.height / 2,
-    );
+    await bars.first().click();
     await expect(page).toHaveURL(/zoom=month/);
   } finally {
     await context.close();
