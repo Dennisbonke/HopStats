@@ -2412,7 +2412,51 @@ test("Analytics touch swipe and cancellation leave later chart clicks intact", a
     await expect(page).not.toHaveURL(/zoom=/);
 
     await bars.first().scrollIntoViewIfNeeded();
+    await page.evaluate(() => {
+      const traceWindow = window as Window & { __chartInputTrace?: string[] };
+      const trace = (traceWindow.__chartInputTrace = []);
+      const record = (event: Event) => {
+        const target = event.target;
+        const targetName =
+          target instanceof Element
+            ? `${target.tagName}.${target.getAttribute("class") ?? ""}`
+            : "outside-element";
+        const pointerType =
+          "pointerType" in event ? String(event.pointerType) : "";
+        const firesTouchEvents =
+          "sourceCapabilities" in event
+            ? String(event.sourceCapabilities?.firesTouchEvents)
+            : "";
+        trace.push(
+          `${event.type}:${targetName}:pointer=${pointerType}:touchSource=${firesTouchEvents}`,
+        );
+      };
+      for (const type of [
+        "pointerdown",
+        "pointermove",
+        "pointerup",
+        "pointercancel",
+        "mousedown",
+        "mouseup",
+        "click",
+      ]) {
+        document.addEventListener(type, record, true);
+      }
+    });
     await bars.first().click();
+    const clickDiagnostic = await page.evaluate(() => {
+      const traceWindow = window as Window & { __chartInputTrace?: string[] };
+      return {
+        zoom: new URL(window.location.href).searchParams.get("zoom"),
+        events: traceWindow.__chartInputTrace,
+      };
+    });
+    if (!clickDiagnostic.zoom) {
+      console.log(
+        "chart-drilldown-input-trace",
+        JSON.stringify(clickDiagnostic),
+      );
+    }
     await expect(page).toHaveURL(/zoom=month/);
 
     await page.goto(
