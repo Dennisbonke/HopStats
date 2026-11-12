@@ -37,6 +37,8 @@ export function useChartTooltipInteraction(
       if (event.pointerType === "mouse") {
         lastPointerType.current = "mouse";
         touchClickPending.current = false;
+        touchStart.current = null;
+        setTouchMode(false);
       }
       if (!chartRef.current?.contains(event.target as Node)) {
         setPinned(false);
@@ -48,6 +50,8 @@ export function useChartTooltipInteraction(
       if (event.pointerType === "mouse") {
         lastPointerType.current = "mouse";
         touchClickPending.current = false;
+        touchStart.current = null;
+        setTouchMode(false);
         return;
       }
       const start = touchStart.current;
@@ -63,6 +67,25 @@ export function useChartTooltipInteraction(
     const cancelTouchGesture = (event: PointerEvent) => {
       if (event.pointerType === "touch") clearTouchGesture(event.pointerId);
     };
+    const finishTouchGesture = (event: PointerEvent) => {
+      const start = touchStart.current;
+      if (event.pointerType !== "touch" || start?.pointerId !== event.pointerId)
+        return;
+      const rect = chartRef.current?.getBoundingClientRect();
+      const moved =
+        Math.abs(event.clientX - start.x) > 8 ||
+        Math.abs(event.clientY - start.y) > 8;
+      const hasBounds = !!rect && rect.width > 0 && rect.height > 0;
+      const releasedOutside =
+        !rect ||
+        !chartRef.current?.contains(event.target as Node) ||
+        (hasBounds &&
+          (event.clientX < rect.left ||
+            event.clientX > rect.right ||
+            event.clientY < rect.top ||
+            event.clientY > rect.bottom));
+      if (moved || releasedOutside) clearTouchGesture(event.pointerId);
+    };
     const cancelTouchOnScroll = () => {
       if (touchStart.current) clearTouchGesture(touchStart.current.pointerId);
     };
@@ -74,12 +97,14 @@ export function useChartTooltipInteraction(
     document.addEventListener("pointerdown", dismissOutside, true);
     document.addEventListener("pointermove", trackTouchMovement, true);
     document.addEventListener("pointercancel", cancelTouchGesture, true);
+    document.addEventListener("pointerup", finishTouchGesture, true);
     window.addEventListener("scroll", cancelTouchOnScroll, true);
     window.addEventListener("resize", dismissOnResize);
     return () => {
       document.removeEventListener("pointerdown", dismissOutside, true);
       document.removeEventListener("pointermove", trackTouchMovement, true);
       document.removeEventListener("pointercancel", cancelTouchGesture, true);
+      document.removeEventListener("pointerup", finishTouchGesture, true);
       window.removeEventListener("scroll", cancelTouchOnScroll, true);
       window.removeEventListener("resize", dismissOnResize);
     };

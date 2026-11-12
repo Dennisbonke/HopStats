@@ -164,3 +164,17 @@ test("touch scrolling clears suppression even when pointer end is missing", () =
   fireEvent(chart, clickEvent("", 1));
   expect(onDrilldown).toHaveBeenCalledTimes(1);
 });
+
+test("a touch released outside the chart cannot leave state for a later mouse click", () => {
+  const onDrilldown = vi.fn();
+  const chart = mountChart(onDrilldown);
+
+  fireEvent(chart, pointerEvent("pointerdown", "touch"));
+  fireEvent(document, pointerEvent("pointerup", "touch"));
+  expect(chart).toHaveAttribute("data-trigger", "hover");
+  expect(chart).toHaveAttribute("data-active", "false");
+
+  fireEvent(chart, pointerEvent("pointerdown", "mouse"));
+  fireEvent(chart, clickEvent("mouse", 1));
+  expect(onDrilldown).toHaveBeenCalledTimes(1);
+});
