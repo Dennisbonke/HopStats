@@ -2412,6 +2412,8 @@ test("Analytics touch swipe and cancellation leave later chart clicks intact", a
     await expect(page).not.toHaveURL(/zoom=/);
 
     await bars.first().scrollIntoViewIfNeeded();
+    await bars.first().hover();
+    await expect(tooltip).toBeVisible();
     await page.evaluate(() => {
       const traceWindow = window as Window & { __chartInputTrace?: string[] };
       const trace = (traceWindow.__chartInputTrace = []);
@@ -2484,6 +2486,8 @@ test("Analytics touch swipe and cancellation leave later chart clicks intact", a
     await expect(page).not.toHaveURL(/zoom=/);
 
     await bars.first().scrollIntoViewIfNeeded();
+    await bars.first().hover();
+    await expect(tooltip).toBeVisible();
     await bars.first().click();
     await expect(page).toHaveURL(/zoom=month/);
   } finally {
