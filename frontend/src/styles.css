@@ -22,17 +22,6 @@ body {
   background: var(--color-canvas);
   color: var(--color-text-primary);
 }
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
 :focus-visible {
   outline: 3px solid var(--color-focus);
   outline-offset: 2px;
@@ -45,10 +34,10 @@ body {
   color: var(--color-text-primary);
 }
 .placeholder-panel {
-  background: white;
+  background: var(--color-surface);
   padding: 2rem;
   border-radius: 0.7rem;
-  box-shadow: 0 1px 3px #0001;
+  box-shadow: var(--shadow-surface);
 }
 .app :where(h2) {
   margin-top: 0;

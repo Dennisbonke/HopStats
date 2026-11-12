@@ -143,13 +143,11 @@ function DetailPanel({
     const dialog = dialogRef.current;
     if (!dialog) return;
     previousFocus.current = document.activeElement as HTMLElement | null;
-    if (typeof dialog.showModal === "function") dialog.showModal();
-    else dialog.setAttribute("open", "");
+    dialog.showModal();
 
     return () => {
       if (dialog.open) {
-        if (typeof dialog.close === "function") dialog.close();
-        else dialog.removeAttribute("open");
+        dialog.close();
       }
       previousFocus.current?.focus();
     };
@@ -160,23 +158,17 @@ function DetailPanel({
       ref={dialogRef}
       className="inventory-dialog"
       aria-labelledby="inventory-detail-title"
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
+      onCancel={onClose}
       onKeyDown={(event) => {
         if (event.key !== "Tab") return;
-        const dialog = event.currentTarget;
-        const focusable = Array.from(
-          dialog.querySelectorAll<HTMLElement>(
-            'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-          ),
-        ).filter((element) => element.getClientRects().length > 0);
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (!first || !last) {
+        const controls = event.currentTarget.querySelectorAll<HTMLElement>(
+          'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+        );
+        const first = controls.item(0);
+        const last = controls.item(controls.length - 1);
+        if (controls.length === 0) {
           event.preventDefault();
-          dialog.focus();
+          event.currentTarget.focus();
         } else if (event.shiftKey && document.activeElement === first) {
           event.preventDefault();
           last.focus();

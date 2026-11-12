@@ -535,7 +535,7 @@ export default function Locations() {
                       className="inline-form"
                       onSubmit={(event) => void submitAlias(event)}
                     >
-                      <label className="visually-hidden" htmlFor="new-alias">
+                      <label className="sr-only" htmlFor="new-alias">
                         New alias
                       </label>
                       <input

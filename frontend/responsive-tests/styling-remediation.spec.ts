@@ -2164,6 +2164,337 @@ test("Analytics charts keep controls, labels, and legends usable across viewport
   }
 });
 
+test("touch taps pin Analytics and Drinking Trends tooltips without breaking hover or scroll", async ({
+  browser,
+  browserName,
+}) => {
+  test.skip(
+    browserName !== "chromium",
+    "Playwright touchscreen input is supported only by Chromium; Firefox and WebKit remain covered by mouse and keyboard chart tests",
+  );
+  for (const colorScheme of ["light", "dark"] as const) {
+    const context = await browser.newContext({
+      baseURL: "http://127.0.0.1:5173",
+      viewport: { width: 390, height: 844 },
+      hasTouch: true,
+      colorScheme,
+    });
+    const page = await context.newPage();
+    try {
+      await stubApplication(
+        page,
+        analyticsResponsiveCheckins,
+        analyticsResponsiveTrends,
+      );
+      await page.goto(
+        "/analytics?period=custom&start=2026-01-01&end=2026-12-31&granularity=month",
+      );
+      const tooltip = page.locator(
+        "body > .recharts-tooltip-wrapper:visible .analytics-tooltip",
+      );
+      const tap = async (locator: Locator) => {
+        await expect(locator).toBeVisible();
+        await locator.evaluate((element) =>
+          element.closest(".recharts-responsive-container")?.scrollIntoView({
+            block: "center",
+          }),
+        );
+        let box = await locator.boundingBox();
+        await expect
+          .poll(async () => {
+            box = await locator.boundingBox();
+            return !!box && box.width > 0 && box.height > 0;
+          })
+          .toBe(true);
+        expect(box, "chart point has a touch target").not.toBeNull();
+        await page.touchscreen.tap(
+          box!.x + box!.width / 2,
+          box!.y + box!.height / 2,
+        );
+      };
+      const tapOutsideChart = async (chart: Locator) => {
+        const box = await chart.boundingBox();
+        const viewport = page.viewportSize();
+        expect(box).not.toBeNull();
+        expect(viewport).not.toBeNull();
+        const candidates = [
+          [2, 2],
+          [2, viewport!.height - 2],
+          [viewport!.width - 2, 2],
+          [viewport!.width - 2, viewport!.height - 2],
+          [viewport!.width / 2, 2],
+          [viewport!.width / 2, viewport!.height - 2],
+        ];
+        const point = candidates.find(
+          ([x, y]) =>
+            x < box!.x ||
+            x > box!.x + box!.width ||
+            y < box!.y ||
+            y > box!.y + box!.height,
+        );
+        expect(
+          point,
+          "a viewport point outside the chart is available",
+        ).toBeDefined();
+        await page.touchscreen.tap(point![0], point![1]);
+      };
+
+      await page.goto("/");
+      const dashboardChart = page.locator(".dashboard-chart");
+      const dashboardBar = dashboardChart
+        .locator(".recharts-bar-rectangle")
+        .first();
+      await expect(dashboardBar).toBeVisible();
+      await tap(dashboardBar);
+      await expect(tooltip).toBeVisible();
+      await expect(tooltip).toContainText("discoveries");
+      await expect(tooltip).toHaveCSS(
+        "background-color",
+        colorScheme === "dark" ? "rgb(11, 18, 26)" : "rgb(23, 32, 51)",
+      );
+      await tapOutsideChart(dashboardChart);
+      await expect(tooltip).toBeHidden();
+
+      await page.goto(
+        "/analytics?period=custom&start=2026-01-01&end=2026-12-31&granularity=month",
+      );
+
+      const breakdown = page
+        .locator(".analytics-chart-panel")
+        .filter({ hasText: "Check-in Breakdown" });
+      const breakdownBars = breakdown.locator(".recharts-bar-rectangle");
+      await expect(breakdownBars.first()).toBeVisible();
+      await tap(breakdownBars.nth(0));
+      await page.waitForTimeout(1200);
+      await expect(tooltip).toBeVisible();
+      await expect(tooltip).toContainText("Jan 2026");
+      await expect(page).not.toHaveURL(/zoom=/);
+      await page.mouse.move(8, 8);
+      await page.waitForTimeout(100);
+      await expect(tooltip).toContainText("Jan 2026");
+      await expect(tooltip).toHaveCSS(
+        "background-color",
+        colorScheme === "dark" ? "rgb(11, 18, 26)" : "rgb(23, 32, 51)",
+      );
+      const firstPointText = await tooltip.textContent();
+      await tap(breakdownBars.nth(4));
+      await expect.poll(() => tooltip.textContent()).not.toBe(firstPointText);
+
+      await tapOutsideChart(breakdown.locator(".chart-canvas"));
+      await expect(tooltip).toBeHidden();
+      await tap(breakdownBars.nth(0));
+      await expect(tooltip).toContainText("Jan 2026");
+      await page
+        .locator(".analytics-filters")
+        .getByLabel("Reporting period")
+        .selectOption("last_30");
+      await expect(tooltip).toBeHidden();
+
+      await page.getByRole("tab", { name: "Drinking Trends" }).click();
+      const hourly = page
+        .locator(".distribution-chart")
+        .filter({ hasText: "Check-ins by Hour of Day" });
+      const hourlyBars = hourly.locator(".recharts-bar-rectangle");
+      await expect(hourlyBars.first()).toBeVisible();
+      await tap(hourlyBars.nth(0));
+      await expect(tooltip).toBeVisible();
+      await expect(tooltip).toContainText("00:00");
+      await tap(hourlyBars.nth(2));
+      await expect(tooltip).toContainText("02:00");
+      await tapOutsideChart(hourly.locator(".distribution-canvas"));
+      await expect(tooltip).toBeHidden();
+      await tap(hourlyBars.nth(0));
+      await expect(tooltip).toContainText("00:00");
+      await page
+        .locator(".analytics-filters")
+        .getByLabel("Reporting period")
+        .selectOption("last_90");
+      await expect(tooltip).toBeHidden();
+
+      await expect(hourly.locator(".distribution-canvas")).toHaveCSS(
+        "touch-action",
+        "auto",
+      );
+
+      await page.setViewportSize({ width: 1280, height: 800 });
+      const hoverBar = page
+        .locator(".distribution-chart")
+        .filter({ hasText: "Check-ins by Hour of Day" })
+        .locator(".recharts-bar-rectangle")
+        .first();
+      await expect(hoverBar).toBeVisible();
+      await hoverBar.scrollIntoViewIfNeeded();
+      const hoverBox = await hoverBar.boundingBox();
+      expect(hoverBox).not.toBeNull();
+      await page.mouse.move(
+        hoverBox!.x + hoverBox!.width / 2,
+        hoverBox!.y + hoverBox!.height / 2,
+      );
+      await expect(tooltip).toBeVisible();
+      await expect(tooltip).toContainText("00:00");
+      await page.mouse.move(5, 5);
+      await expect(tooltip).toBeHidden();
+    } finally {
+      await context.close();
+    }
+  }
+});
+
+test("Analytics touch swipe and cancellation leave later chart clicks intact", async ({
+  browser,
+  browserName,
+}) => {
+  test.skip(
+    browserName !== "chromium",
+    "Touch swipe injection uses Chromium CDP",
+  );
+
+  const context = await browser.newContext({
+    baseURL: "http://127.0.0.1:5173",
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+  });
+  const page = await context.newPage();
+
+  try {
+    await stubApplication(
+      page,
+      analyticsResponsiveCheckins,
+      analyticsResponsiveTrends,
+    );
+    await page.goto(
+      "/analytics?period=custom&start=2026-01-01&end=2026-12-31&granularity=month",
+    );
+    const chart = page
+      .locator(".analytics-chart-panel")
+      .filter({ hasText: "Check-in Breakdown" });
+    const bars = chart.locator(".recharts-bar-rectangle");
+    const tooltip = page.locator(
+      "body > .recharts-tooltip-wrapper:visible .analytics-tooltip",
+    );
+    await expect(bars.first()).toBeVisible();
+    await chart.scrollIntoViewIfNeeded();
+    let stableBox: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    } | null = null;
+    await expect
+      .poll(async () => {
+        stableBox = await bars.first().boundingBox();
+        return !!stableBox && stableBox.width > 0 && stableBox.height > 0;
+      })
+      .toBe(true);
+    expect(stableBox).not.toBeNull();
+    const point = {
+      x: stableBox!.x + stableBox!.width / 2,
+      y: stableBox!.y + stableBox!.height / 2,
+    };
+    const cdp = await context.newCDPSession(page);
+    const scrollBefore = await page.evaluate(() => window.scrollY);
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ id: 1, ...point }],
+    });
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ id: 1, x: point.x, y: point.y - 160 }],
+    });
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY))
+      .toBeGreaterThan(scrollBefore);
+    await expect(tooltip).toBeHidden();
+    await expect(page).not.toHaveURL(/zoom=/);
+
+    await bars.first().scrollIntoViewIfNeeded();
+    await bars.first().hover();
+    await expect(tooltip).toBeVisible();
+    await bars.first().click();
+    await expect(page).toHaveURL(/zoom=month/);
+
+    await page.goto(
+      "/analytics?period=custom&start=2026-01-01&end=2026-12-31&granularity=month",
+    );
+    await expect(bars.first()).toBeVisible();
+    await bars.first().scrollIntoViewIfNeeded();
+    const cancelBox = await bars.first().boundingBox();
+    expect(cancelBox).not.toBeNull();
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [
+        {
+          id: 1,
+          x: cancelBox!.x + cancelBox!.width / 2,
+          y: cancelBox!.y + cancelBox!.height / 2,
+        },
+      ],
+    });
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchCancel",
+      touchPoints: [],
+    });
+    await expect(tooltip).toBeHidden();
+    await expect(page).not.toHaveURL(/zoom=/);
+
+    await bars.first().scrollIntoViewIfNeeded();
+    await bars.first().hover();
+    await expect(tooltip).toBeVisible();
+    await bars.first().click();
+    await expect(page).toHaveURL(/zoom=month/);
+  } finally {
+    await context.close();
+  }
+});
+
+test("Analytics mouse and keyboard drilldown remain available", async ({
+  page,
+}) => {
+  await stubApplication(
+    page,
+    analyticsResponsiveCheckins,
+    analyticsResponsiveTrends,
+  );
+  await page.goto(
+    "/analytics?period=custom&start=2026-01-01&end=2026-12-31&granularity=month",
+  );
+
+  const chart = page
+    .locator(".analytics-chart-panel")
+    .filter({ hasText: "Check-in Breakdown" });
+  const firstBar = chart.locator(".recharts-bar-rectangle").first();
+  await expect(firstBar).toBeVisible();
+  await chart.scrollIntoViewIfNeeded();
+  await expect
+    .poll(async () => {
+      const box = await firstBar.boundingBox();
+      return !!box && box.width > 0 && box.height > 0;
+    })
+    .toBe(true);
+  await firstBar.hover();
+  await expect(
+    page.locator("body > .recharts-tooltip-wrapper:visible .analytics-tooltip"),
+  ).toContainText("Jan 2026");
+  await firstBar.click();
+  await expect(page).toHaveURL(/zoom=month/);
+
+  await page.goto(
+    "/analytics?period=custom&start=2026-01-01&end=2026-12-31&granularity=month",
+  );
+  const openBucket = chart
+    .locator(".bucket-actions")
+    .getByRole("button", { name: "Jan 2026" })
+    .first();
+  await expect(openBucket).toBeVisible();
+  await openBucket.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/zoom=month/);
+});
+
 test("Analytics tooltips stay readable and inside the viewport at chart edges", async ({
   page,
 }) => {
@@ -2370,9 +2701,14 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
   }
 });
 
-test("Analytics breakdown tooltips follow touch movement at 320px", async ({
+test("Analytics touch tooltips remain positioned at 320px", async ({
   browser,
+  browserName,
 }) => {
+  test.skip(
+    browserName !== "chromium",
+    "Playwright touchscreen input is supported only by Chromium",
+  );
   const context = await browser.newContext({
     viewport: { width: 320, height: 844 },
     hasTouch: true,
@@ -2404,19 +2740,9 @@ test("Analytics breakdown tooltips follow touch movement at 320px", async ({
       .toBe(true);
     expect(barBox).not.toBeNull();
 
-    await breakdown.locator(".recharts-wrapper").evaluate(
-      (chart, { x, y }) => {
-        const touch = { clientX: x, clientY: y };
-        for (const type of ["touchstart", "touchmove"]) {
-          const event = new Event(type, { bubbles: true, cancelable: true });
-          Object.defineProperty(event, "touches", { value: [touch] });
-          chart.dispatchEvent(event);
-        }
-      },
-      {
-        x: barBox!.x + barBox!.width / 2,
-        y: barBox!.y + barBox!.height / 2,
-      },
+    await page.touchscreen.tap(
+      barBox!.x + barBox!.width / 2,
+      barBox!.y + barBox!.height / 2,
     );
     const tooltip = page
       .locator("body > .recharts-tooltip-wrapper:visible .analytics-tooltip")
@@ -2562,9 +2888,17 @@ test("Inventory detail dialog is named, modal, focus managed, and scrollable", a
         width <= 960
           ? page.getByRole("button", { name: "Main menu" })
           : page.getByRole("link", { name: "Dashboard" });
-      await backgroundControl.evaluate((element) =>
-        (element as HTMLElement).focus(),
-      );
+      await expect(backgroundControl).toBeVisible();
+      await close.focus();
+      await page.keyboard.press("Tab");
+      await expect
+        .poll(() =>
+          dialog.evaluate((element) =>
+            element.contains(document.activeElement),
+          ),
+        )
+        .toBe(true);
+      await page.keyboard.press("Shift+Tab");
       await expect
         .poll(() =>
           dialog.evaluate((element) =>
