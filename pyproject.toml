@@ -10,15 +10,15 @@ requires-python = ">=3.12"
 dependencies = [
   "alembic==1.20.1",
   "argon2-cffi==25.1.0",
-  "fastapi==0.162.0",
-  "python-multipart==0.0.33",
-  "pydantic-settings==2.16.2",
-  "sqlalchemy==2.1.8",
+  "fastapi==0.165.0",
+  "python-multipart==0.0.34",
+  "pydantic-settings==2.16.3",
+  "sqlalchemy==2.1.9",
   "uvicorn[standard]==0.54.0",
 ]
 
 [project.optional-dependencies]
-dev = ["httpx2==2.16.0", "pytest==9.2.0", "pytest-cov==7.1.0", "ruff==0.17.3"]
+dev = ["httpx2==2.16.2", "pytest==9.2.0", "pytest-cov==7.1.0", "ruff==0.17.5"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["backend/app"]
