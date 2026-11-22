@@ -11,6 +11,7 @@ import {
 import MilestoneFormDialog from "../components/MilestoneFormDialog";
 import { Button, Card, StatusBadge } from "../components/ui";
 import { displayDate, goalLabel, metricLabel } from "./Milestones";
+import { milestoneStatusVariant } from "../utils/milestones";
 
 const statusLabels: Record<MilestoneStatus, string> = {
   scheduled: "Scheduled",
@@ -20,15 +21,6 @@ const statusLabels: Record<MilestoneStatus, string> = {
   period_ended: "Period ended",
   archived: "Archived",
 };
-
-function statusVariant(
-  status: MilestoneStatus,
-): "success" | "warning" | "error" | "info" | "neutral" {
-  if (status === "overdue") return "error";
-  if (status === "scheduled") return "info";
-  if (status === "completed" || status === "active") return "success";
-  return "neutral";
-}
 
 const deadlineOutcomeLabels: Record<
   NonNullable<Milestone["deadline_outcome"]>,
@@ -186,7 +178,7 @@ export default function MilestoneDetail() {
           <div>
             <StatusBadge
               className={`milestone-status ${milestone.status}`}
-              variant={statusVariant(milestone.status)}
+              variant={milestoneStatusVariant(milestone.status)}
             >
               {statusLabels[milestone.status]}
             </StatusBadge>

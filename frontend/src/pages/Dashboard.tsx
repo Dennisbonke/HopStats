@@ -13,6 +13,7 @@ import { DashboardData, fetchDashboard } from "../api/dashboard";
 import { Insight, fetchInsights } from "../api/insights";
 import { fetchMilestones, Milestone } from "../api/milestones";
 import { Button, Card, StatusBadge } from "../components/ui";
+import { milestoneStatusVariant } from "../utils/milestones";
 import "./Dashboard.css";
 
 const countFormatter = new Intl.NumberFormat();
@@ -261,14 +262,7 @@ function SectionState({
 
 function FeaturedMilestone({ milestone }: { milestone: Milestone }) {
   const progress = Math.max(0, Math.min(100, milestone.progress_percent));
-  const statusVariant =
-    milestone.status === "overdue"
-      ? "error"
-      : milestone.status === "scheduled"
-        ? "info"
-        : milestone.status === "completed" || milestone.status === "active"
-          ? "success"
-          : "neutral";
+  const statusVariant = milestoneStatusVariant(milestone.status);
   return (
     <Link
       className="featured-milestone"

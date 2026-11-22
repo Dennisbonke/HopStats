@@ -165,7 +165,7 @@ export default function App() {
           aria-controls="main-navigation"
           onClick={() => setMobileMenuOpen((open) => !open)}
         >
-          <span className="visually-hidden">Main menu</span>
+          <span className="sr-only">Main menu</span>
           <span aria-hidden="true">{mobileMenuOpen ? "×" : "☰"}</span>
         </Button>
         <nav

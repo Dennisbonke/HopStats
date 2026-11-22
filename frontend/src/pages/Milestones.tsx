@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { fetchMilestones, Milestone, MilestoneStatus } from "../api/milestones";
 import MilestoneFormDialog from "../components/MilestoneFormDialog";
 import { Button, Card, StatusBadge } from "../components/ui";
+import { milestoneStatusVariant } from "../utils/milestones";
 
 type Filter =
   | "all"
@@ -32,15 +33,6 @@ const statusLabels: Record<MilestoneStatus, string> = {
   period_ended: "Period ended",
   archived: "Archived",
 };
-
-function statusVariant(
-  status: MilestoneStatus,
-): "success" | "warning" | "error" | "info" | "neutral" {
-  if (status === "overdue") return "error";
-  if (status === "scheduled") return "info";
-  if (status === "completed" || status === "active") return "success";
-  return "neutral";
-}
 
 export function metricLabel(metric: Milestone["metric"]): string {
   return metric === "checkins" ? "Total check-ins" : "Unique beer discoveries";
@@ -71,7 +63,7 @@ function ProgressCard({ milestone }: { milestone: Milestone }) {
         <h2>{milestone.name}</h2>
         <StatusBadge
           className={`milestone-status ${milestone.status}`}
-          variant={statusVariant(milestone.status)}
+          variant={milestoneStatusVariant(milestone.status)}
         >
           {statusLabels[milestone.status]}
         </StatusBadge>
