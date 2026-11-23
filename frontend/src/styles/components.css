@@ -328,7 +328,8 @@
 
 /* Shared Recharts presentation for Dashboard and Analytics canvases. */
 .ui-chart .recharts-cartesian-axis-tick-value {
-  fill: var(--color-chart-axis);
+  /* Recharts 3.11 sets a default inline fill; keep the app theme authoritative. */
+  fill: var(--color-chart-axis) !important;
 }
 .ui-chart .recharts-cartesian-grid line {
   stroke: var(--color-chart-grid);

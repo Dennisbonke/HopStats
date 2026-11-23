@@ -938,6 +938,51 @@ test("Back and Forward restore reporting period, custom dates, and granularity f
   expect(query.get("end")).toBe("2026-04-20");
 });
 
+test.each(["overview", "trends"])(
+  "%s reporting edits clear zoom and pagination without restoring stale URL state",
+  async (view) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => ({
+        ok: true,
+        json: async () =>
+          String(input).includes("drinking-trends") ? trendsSample : sample,
+      })),
+    );
+    renderAnalytics(
+      `/analytics?period=custom&start=2026-01-01&end=2026-12-31&granularity=auto&zoom=month:2026-08&window=1&view=${view}`,
+    );
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    fireEvent.change(screen.getByLabelText("Reporting period"), {
+      target: { value: "last_30" },
+    });
+    await waitFor(() => {
+      const query = new URLSearchParams(
+        screen.getByLabelText("Current query").textContent ?? "",
+      );
+      expect(query.get("period")).toBe("last_30");
+      expect(query.has("zoom")).toBe(false);
+      expect(query.has("window")).toBe(false);
+    });
+    for (const [label, value] of [
+      ["Start date", "2026-08-01"],
+      ["End date", "2026-08-31"],
+    ]) {
+      fireEvent.change(screen.getByLabelText(label), { target: { value } });
+      await waitFor(() => {
+        const query = new URLSearchParams(
+          screen.getByLabelText("Current query").textContent ?? "",
+        );
+        expect(query.get("period")).toBe("custom");
+        expect(query.get(label === "Start date" ? "start" : "end")).toBe(value);
+        expect(query.has("zoom")).toBe(false);
+        expect(query.has("window")).toBe(false);
+      });
+    }
+  },
+  15_000,
+);
+
 test("trends fetch is scoped to its active view and custom date changes preserve view and metric", async () => {
   vi.stubGlobal(
     "fetch",

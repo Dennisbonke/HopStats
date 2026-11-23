@@ -512,6 +512,12 @@ export default function Analytics() {
 
   useEffect(() => {
     if (popFiltersPending) return;
+    // Filter state can render before the router commits its URL replacement.
+    // Do not resurrect the old drilldown while publishing the edited range.
+    const reportingRangeChanged =
+      period !== locationFilters.period ||
+      (period !== "all" &&
+        (start !== locationFilters.start || end !== locationFilters.end));
     const urlParams = makeApiParams(period, start, end, granularity);
     urlParams.set("period", period);
     if (view === "trends") urlParams.set("view", "trends");
@@ -536,11 +542,17 @@ export default function Analytics() {
       urlParams.set("debugLayout", "1");
     }
     const currentZoom = searchParams.get("zoom");
-    if (currentZoom && parseZoom(currentZoom)) {
+    if (!reportingRangeChanged && currentZoom && parseZoom(currentZoom)) {
       urlParams.set("zoom", currentZoom);
     }
     const currentWindow = parseWindowPage(searchParams.get("window"));
-    if (currentWindow > 0) urlParams.set("window", String(currentWindow));
+    if (
+      !reportingRangeChanged &&
+      granularity === locationFilters.granularity &&
+      currentWindow > 0
+    ) {
+      urlParams.set("window", String(currentWindow));
+    }
     if (urlParams.toString() !== searchParams.toString()) {
       setSearchParams(urlParams, { replace: true });
     }
@@ -561,6 +573,10 @@ export default function Analytics() {
     searchParams,
     setSearchParams,
     popFiltersPending,
+    locationFilters.period,
+    locationFilters.start,
+    locationFilters.end,
+    locationFilters.granularity,
   ]);
 
   useEffect(() => {
