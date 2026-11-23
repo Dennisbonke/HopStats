@@ -41,6 +41,7 @@ jobs:
         with: { node-version: '22', cache: npm, cache-dependency-path: frontend/package-lock.json }
       - run: npm ci
       - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npx playwright test --project=webkit --grep 'touch taps pin|exact sparse.*320px' --max-failures=1
       - run: npm run test:responsive
       - uses: actions/upload-artifact@v7
         if: always()

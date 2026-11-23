@@ -763,6 +763,91 @@ async function stubApplication(
   });
 }
 
+/** Scroll HTML ports explicitly: SVG scrollIntoView differs across engines. */
+async function scrollChartTarget(target: Locator) {
+  await target.evaluate((element) => {
+    const scroller = element.closest(".chart-scroll, .dashboard-chart-scroll");
+    if (!scroller) throw new Error("Expected a chart scroll container");
+    const item = element.getBoundingClientRect();
+    const port = scroller.getBoundingClientRect();
+    scroller.scrollLeft +=
+      item.left + item.width / 2 - (port.left + port.width / 2);
+    scroller.scrollIntoView({ block: "center", inline: "nearest" });
+  });
+}
+
+/** Confirm the intended painted bar is actually under the input point. */
+async function visibleBarPoint(bar: Locator) {
+  let box: { x: number; y: number; width: number; height: number } | null =
+    null;
+  await expect(async () => {
+    await scrollChartTarget(bar);
+    box = await bar.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.width).toBeGreaterThan(0);
+    expect(box!.height).toBeGreaterThan(0);
+    const point = { x: box!.x + box!.width / 2, y: box!.y + box!.height / 2 };
+    expect(
+      await bar.evaluate((element, point) => {
+        const target = document.elementFromPoint(point.x, point.y);
+        return target !== null && element.contains(target);
+      }, point),
+      "Input point must hit the intended visible bar",
+    ).toBe(true);
+  }).toPass({ timeout: 5000 });
+  const bounds = box! as {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  return {
+    x: bounds.x + bounds.width / 2,
+    y: bounds.y + bounds.height / 2,
+    box: bounds,
+  };
+}
+
+async function recordChartInputs(page: Page) {
+  await page.addInitScript(() => {
+    const trace: unknown[] = [];
+    Object.assign(window, { chartInputTrace: trace });
+    for (const type of [
+      "pointerdown",
+      "pointermove",
+      "pointerup",
+      "pointercancel",
+      "touchstart",
+      "touchend",
+      "mousedown",
+      "mousemove",
+      "click",
+    ]) {
+      document.addEventListener(
+        type,
+        (event) => {
+          const input = event as PointerEvent;
+          if (
+            !(event.target instanceof Element) ||
+            !event.target.closest(".ui-chart")
+          )
+            return;
+          trace.push({
+            type,
+            pointerType: input.pointerType,
+            primary: input.isPrimary,
+            x: input.clientX,
+            y: input.clientY,
+            target: event.target.tagName,
+          });
+          if (trace.length > 40) trace.shift();
+        },
+        true,
+      );
+    }
+  });
+}
+
 async function renderedContrast(text: Locator) {
   return text.evaluate((node) => {
     type Color = { red: number; green: number; blue: number; alpha: number };
@@ -2008,7 +2093,7 @@ test("Analytics charts keep controls, labels, and legends usable across viewport
       await expect
         .poll(async () =>
           breakdown
-            .locator(".recharts-wrapper")
+            .locator(".chart-scroll")
             .evaluate((element) => element.getBoundingClientRect().width),
         )
         .toBeLessThanOrEqual(width);
@@ -2169,8 +2254,8 @@ test("touch taps pin Analytics and Drinking Trends tooltips without breaking hov
   browserName,
 }) => {
   test.skip(
-    browserName !== "chromium",
-    "Playwright touchscreen input is supported only by Chromium; Firefox and WebKit remain covered by mouse and keyboard chart tests",
+    browserName === "firefox",
+    "Firefox has no native Playwright touch emulation; pointer geometry, mouse and keyboard are tested separately",
   );
   for (const colorScheme of ["light", "dark"] as const) {
     const context = await browser.newContext({
@@ -2181,6 +2266,7 @@ test("touch taps pin Analytics and Drinking Trends tooltips without breaking hov
     });
     const page = await context.newPage();
     try {
+      await recordChartInputs(page);
       await stubApplication(
         page,
         analyticsResponsiveCheckins,
@@ -2193,24 +2279,8 @@ test("touch taps pin Analytics and Drinking Trends tooltips without breaking hov
         "body > .recharts-tooltip-wrapper:visible .analytics-tooltip",
       );
       const tap = async (locator: Locator) => {
-        await expect(locator).toBeVisible();
-        await locator.evaluate((element) =>
-          element.closest(".recharts-responsive-container")?.scrollIntoView({
-            block: "center",
-          }),
-        );
-        let box = await locator.boundingBox();
-        await expect
-          .poll(async () => {
-            box = await locator.boundingBox();
-            return !!box && box.width > 0 && box.height > 0;
-          })
-          .toBe(true);
-        expect(box, "chart point has a touch target").not.toBeNull();
-        await page.touchscreen.tap(
-          box!.x + box!.width / 2,
-          box!.y + box!.height / 2,
-        );
+        const point = await visibleBarPoint(locator);
+        await page.touchscreen.tap(point.x, point.y);
       };
       const tapOutsideChart = async (chart: Locator) => {
         const box = await chart.boundingBox();
@@ -2266,7 +2336,15 @@ test("touch taps pin Analytics and Drinking Trends tooltips without breaking hov
       await expect(breakdownBars.first()).toBeVisible();
       await tap(breakdownBars.nth(0));
       await page.waitForTimeout(1200);
-      await expect(tooltip).toBeVisible();
+      await expect(
+        tooltip,
+        await page.evaluate(() =>
+          JSON.stringify(
+            (window as unknown as { chartInputTrace: unknown[] })
+              .chartInputTrace,
+          ),
+        ),
+      ).toBeVisible();
       await expect(tooltip).toContainText("Jan 2026");
       await expect(page).not.toHaveURL(/zoom=/);
       await page.mouse.move(8, 8);
@@ -2323,15 +2401,12 @@ test("touch taps pin Analytics and Drinking Trends tooltips without breaking hov
         .locator(".recharts-bar-rectangle")
         .first();
       await expect(hoverBar).toBeVisible();
-      await hoverBar.scrollIntoViewIfNeeded();
-      const hoverBox = await hoverBar.boundingBox();
-      expect(hoverBox).not.toBeNull();
-      await page.mouse.move(
-        hoverBox!.x + hoverBox!.width / 2,
-        hoverBox!.y + hoverBox!.height / 2,
-      );
-      await expect(tooltip).toBeVisible();
-      await expect(tooltip).toContainText("00:00");
+      await expect(async () => {
+        const point = await visibleBarPoint(hoverBar);
+        await page.mouse.move(point.x, point.y);
+        await expect(tooltip).toBeVisible();
+        await expect(tooltip).toContainText("00:00");
+      }).toPass({ timeout: 5000 });
       await page.mouse.move(5, 5);
       await expect(tooltip).toBeHidden();
     } finally {
@@ -2411,7 +2486,43 @@ test("Analytics touch swipe and cancellation leave later chart clicks intact", a
     await expect(tooltip).toBeHidden();
     await expect(page).not.toHaveURL(/zoom=/);
 
-    await bars.first().scrollIntoViewIfNeeded();
+    const scroller = chart.locator(".chart-scroll");
+    await scroller.evaluate((element) =>
+      element.scrollIntoView({ block: "center" }),
+    );
+    const scrollBox = await scroller.boundingBox();
+    expect(scrollBox).not.toBeNull();
+    const horizontalStart = {
+      x: scrollBox!.x + scrollBox!.width - 20,
+      y: scrollBox!.y + 35,
+    };
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ id: 1, ...horizontalStart }],
+    });
+    for (const distance of [40, 80, 120]) {
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [
+          { id: 1, x: horizontalStart.x - distance, y: horizontalStart.y },
+        ],
+      });
+      await page.waitForTimeout(50);
+    }
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+    await expect
+      .poll(() => scroller.evaluate((element) => element.scrollLeft))
+      .toBeGreaterThan(20);
+    await expect(tooltip).toBeHidden();
+    await expect(page).not.toHaveURL(/zoom=/);
+
+    await expect(async () => {
+      await bars.first().scrollIntoViewIfNeeded();
+      await expect(bars.first()).toBeInViewport();
+    }).toPass();
     await bars.first().hover();
     await expect(tooltip).toBeVisible();
     await bars.first().click();
@@ -2421,7 +2532,10 @@ test("Analytics touch swipe and cancellation leave later chart clicks intact", a
       "/analytics?period=custom&start=2026-01-01&end=2026-12-31&granularity=month",
     );
     await expect(bars.first()).toBeVisible();
-    await bars.first().scrollIntoViewIfNeeded();
+    await expect(async () => {
+      await bars.first().scrollIntoViewIfNeeded();
+      await expect(bars.first()).toBeInViewport();
+    }).toPass();
     const cancelBox = await bars.first().boundingBox();
     expect(cancelBox).not.toBeNull();
     await cdp.send("Input.dispatchTouchEvent", {
@@ -2441,7 +2555,10 @@ test("Analytics touch swipe and cancellation leave later chart clicks intact", a
     await expect(tooltip).toBeHidden();
     await expect(page).not.toHaveURL(/zoom=/);
 
-    await bars.first().scrollIntoViewIfNeeded();
+    await expect(async () => {
+      await bars.first().scrollIntoViewIfNeeded();
+      await expect(bars.first()).toBeInViewport();
+    }).toPass();
     await bars.first().hover();
     await expect(tooltip).toBeVisible();
     await bars.first().click();
@@ -2512,14 +2629,9 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
     colorScheme: "light" | "dark",
     edge?: "top" | "bottom",
   ) => {
-    let barBox = await bar.boundingBox();
-    await expect
-      .poll(async () => {
-        barBox = await bar.boundingBox();
-        return !!barBox && barBox.width > 0 && barBox.height > 0;
-      })
-      .toBe(true);
-    expect(barBox).not.toBeNull();
+    let barBox: Awaited<ReturnType<Locator["boundingBox"]>> = (
+      await visibleBarPoint(bar)
+    ).box;
     if (edge) {
       const targetY = edge === "top" ? 18 : viewport.height - 18;
       await page.evaluate(
@@ -2631,7 +2743,7 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
       await expect
         .poll(async () =>
           breakdown
-            .locator(".recharts-wrapper")
+            .locator(".chart-scroll")
             .evaluate((element) => element.getBoundingClientRect().width),
         )
         .toBeLessThanOrEqual(width);
@@ -2706,8 +2818,8 @@ test("Analytics touch tooltips remain positioned at 320px", async ({
   browserName,
 }) => {
   test.skip(
-    browserName !== "chromium",
-    "Playwright touchscreen input is supported only by Chromium",
+    browserName === "firefox",
+    "Firefox has no native Playwright touch emulation",
   );
   const context = await browser.newContext({
     viewport: { width: 320, height: 844 },
@@ -2731,19 +2843,8 @@ test("Analytics touch tooltips remain positioned at 320px", async ({
     await expect(breakdown.locator(".recharts-bar-rectangle")).toHaveCount(24);
     await breakdown.scrollIntoViewIfNeeded();
     const firstBar = breakdown.locator(".recharts-bar-rectangle").first();
-    let barBox = await firstBar.boundingBox();
-    await expect
-      .poll(async () => {
-        barBox = await firstBar.boundingBox();
-        return !!barBox && barBox.width > 0 && barBox.height > 0;
-      })
-      .toBe(true);
-    expect(barBox).not.toBeNull();
-
-    await page.touchscreen.tap(
-      barBox!.x + barBox!.width / 2,
-      barBox!.y + barBox!.height / 2,
-    );
+    const tapPoint = await visibleBarPoint(firstBar);
+    await page.touchscreen.tap(tapPoint.x, tapPoint.y);
     const tooltip = page
       .locator("body > .recharts-tooltip-wrapper:visible .analytics-tooltip")
       .filter({ hasText: "Jan 2026" });
@@ -3194,3 +3295,397 @@ test("unfinished Explorer catalogues remain on the compatibility palette", async
     }
   }
 });
+
+// Sparse days expose selection bugs that fixtures with only visible bars conceal.
+const sparseDailyCheckins = (() => {
+  let total = 12;
+  let discoveries = 8;
+  const buckets = Array.from({ length: 45 }, (_, index) => {
+    const count =
+      ({ 2: 1, 4: 2, 5: 120, 6: 2, 44: 1 } as Record<number, number>)[index] ??
+      0;
+    const fresh = count > 0 ? 1 : 0;
+    total += count;
+    discoveries += fresh;
+    const date = new Date(Date.UTC(2026, 0, index + 1))
+      .toISOString()
+      .slice(0, 10);
+    return {
+      key: date,
+      label: date,
+      start: date,
+      end: date,
+      total_checkins: count,
+      new_discoveries: fresh,
+      repeat_checkins: count - fresh,
+      cumulative_checkins: total,
+      cumulative_discoveries: discoveries,
+    };
+  });
+  return {
+    ...checkins,
+    end: "2026-02-14",
+    granularity: "day",
+    buckets,
+    summary: {
+      total_checkins: total - 12,
+      new_discoveries: discoveries - 8,
+      repeat_checkins: total - 12 - (discoveries - 8),
+      distinct_beers: discoveries - 8,
+    },
+  };
+})();
+
+const sparseDashboardCheckins = (() => {
+  let checkins = dashboardCheckinsFixture.cumulative_baseline_checkins;
+  let discoveries = dashboardCheckinsFixture.cumulative_baseline_discoveries;
+  const buckets = dashboardCheckinsFixture.buckets.map((bucket, index) => {
+    const fresh = index === 0 || index === 5 ? 0 : bucket.new_discoveries;
+    const total = fresh + bucket.repeat_checkins;
+    checkins += total;
+    discoveries += fresh;
+    return {
+      ...bucket,
+      new_discoveries: fresh,
+      total_checkins: total,
+      cumulative_checkins: checkins,
+      cumulative_discoveries: discoveries,
+    };
+  });
+  return {
+    ...dashboardCheckinsFixture,
+    buckets,
+    summary: {
+      ...dashboardCheckinsFixture.summary,
+      total_checkins:
+        checkins - dashboardCheckinsFixture.cumulative_baseline_checkins,
+      new_discoveries:
+        discoveries - dashboardCheckinsFixture.cumulative_baseline_discoveries,
+    },
+  };
+})();
+
+for (const width of [320, 375, 390, 428]) {
+  test(`exact sparse bucket selection and nonoverlapping reporting filters at ${width}px`, async ({
+    browser,
+    browserName,
+  }) => {
+    for (const colorScheme of ["light", "dark"] as const) {
+      const context = await browser.newContext({
+        baseURL: "http://127.0.0.1:5173",
+        viewport: { width, height: 844 },
+        hasTouch: browserName !== "firefox",
+        colorScheme,
+      });
+      const page = await context.newPage();
+      page.setDefaultTimeout(10_000);
+      await recordChartInputs(page);
+      try {
+        await stubApplication(page, sparseDailyCheckins, drinkingTrends);
+        await page.goto(
+          "/analytics?period=custom&start=2026-01-01&end=2026-02-14&granularity=day",
+        );
+        const tooltip = page.locator(
+          "body > .recharts-tooltip-wrapper:visible .analytics-tooltip",
+        );
+        const checkFilters = async (
+          view: "Overview" | "Drinking Trends" = "Overview",
+        ) => {
+          await expect(
+            page.getByRole("tab", { name: view, exact: true }),
+          ).toHaveAttribute("aria-selected", "true");
+          const filters = page.locator(".analytics-filters");
+          await expect(filters.locator("input, select")).toHaveCount(
+            view === "Overview" ? 4 : 3,
+          );
+          const rects = await filters
+            .locator(":scope > *")
+            .evaluateAll((nodes) =>
+              nodes.map((node) => {
+                const rect = node.getBoundingClientRect();
+                return {
+                  left: rect.left,
+                  right: rect.right,
+                  top: rect.top,
+                  bottom: rect.bottom,
+                };
+              }),
+            );
+          // Phone controls have their own rows, leaving native date editors
+          // sufficient room even when browser emulation uses a narrower editor.
+          for (let index = 1; index < rects.length; index++) {
+            expect(rects[index].top).toBeGreaterThanOrEqual(
+              rects[index - 1].bottom,
+            );
+          }
+          for (let a = 0; a < rects.length; a++) {
+            for (let b = a + 1; b < rects.length; b++) {
+              expect(
+                rects[a].right <= rects[b].left ||
+                  rects[b].right <= rects[a].left ||
+                  rects[a].bottom <= rects[b].top ||
+                  rects[b].bottom <= rects[a].top,
+                `Reporting cells ${a} and ${b} must not intersect`,
+              ).toBe(true);
+            }
+          }
+          const controlBounds = await filters
+            .locator("input, select")
+            .evaluateAll((nodes) =>
+              nodes.map((node) => {
+                const rect = node.getBoundingClientRect();
+                const parent = node.parentElement!.getBoundingClientRect();
+                return {
+                  left: rect.left - parent.left,
+                  right: parent.right - rect.right,
+                };
+              }),
+            );
+          for (const bounds of controlBounds) {
+            expect(bounds.left).toBeGreaterThanOrEqual(-1);
+            expect(bounds.right).toBeGreaterThanOrEqual(-1);
+          }
+          await expectReadable(
+            filters.locator(".analytics-timezone"),
+            `${width}px ${colorScheme} timezone`,
+          );
+          await page.keyboard.press("Tab");
+          await page.getByLabel("End date", { exact: true }).focus();
+          await expect(
+            page.getByLabel("End date", { exact: true }),
+          ).toBeFocused();
+          await expect(page.getByLabel("End date", { exact: true })).toHaveCSS(
+            "outline-style",
+            "solid",
+          );
+          await page
+            .getByLabel("End date", { exact: true })
+            .evaluate((node) => (node as HTMLInputElement).blur());
+          await expectNoDocumentOverflow(page);
+        };
+        await checkFilters();
+        const breakdown = page
+          .locator(".analytics-chart-panel")
+          .filter({ hasText: "Check-in Breakdown" });
+        const select = async (chart: Locator, index: number) => {
+          const region = chart.locator(`[data-chart-bucket="${index}"]`);
+          await scrollChartTarget(region);
+          const box = await region.boundingBox();
+          expect(box).not.toBeNull();
+          expect(box!.width).toBeGreaterThanOrEqual(32);
+          const point = {
+            clientX: box!.x + box!.width / 2,
+            clientY: box!.y + 12,
+            pointerId: 1,
+            pointerType: "touch",
+            isPrimary: true,
+          };
+          expect(point.clientX).toBeGreaterThanOrEqual(0);
+          expect(point.clientX).toBeLessThan(width);
+          expect(point.clientY).toBeGreaterThanOrEqual(0);
+          expect(point.clientY).toBeLessThan(844);
+          expect(
+            await region.evaluate((element, point) => {
+              const target = document.elementFromPoint(
+                point.clientX,
+                point.clientY,
+              );
+              return (
+                target !== null &&
+                element.closest(".ui-chart")?.contains(target)
+              );
+            }, point),
+            "Selected bucket must be in the visible chart port",
+          ).toBe(true);
+          if (browserName !== "firefox") {
+            await page.touchscreen.tap(point.clientX, point.clientY);
+          } else {
+            await region.dispatchEvent("pointerdown", point);
+            await region.dispatchEvent("pointerup", point);
+          }
+          return point;
+        };
+        // The y coordinate is above short/zero bars: visible rectangles are irrelevant.
+        for (const index of [0, 1, 2, 3, 4, 5, 6, 44]) {
+          await select(breakdown, index);
+          const bucket = sparseDailyCheckins.buckets[index];
+          await expect(tooltip.locator("strong")).toHaveText(
+            `${bucket.label} · ${bucket.start} – ${bucket.end}`,
+          );
+          await expect(tooltip).toContainText(
+            `Total check-ins: ${bucket.total_checkins}`,
+          );
+          await expect(tooltip).toContainText(
+            `New discoveries: ${bucket.new_discoveries}`,
+          );
+          await expect(tooltip).toContainText(
+            `Repeat check-ins: ${bucket.repeat_checkins}`,
+          );
+          await expect(tooltip).not.toContainText(/NaN|Infinity/);
+          const box = await tooltip.boundingBox();
+          expect(box!.x).toBeGreaterThanOrEqual(0);
+          expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1);
+          await expect(page).not.toHaveURL(/zoom=/);
+        }
+        // A vertical/horizontal gesture must not select its release bucket.
+        for (const delta of [
+          { x: 0, y: 60 },
+          { x: 60, y: 0 },
+        ]) {
+          const point = await select(breakdown, 2);
+          await expect(
+            tooltip.locator("strong"),
+            await page.evaluate(() =>
+              JSON.stringify(
+                (window as unknown as { chartInputTrace: unknown[] })
+                  .chartInputTrace,
+              ),
+            ),
+          ).toContainText("2026-01-03");
+          await breakdown
+            .locator(".chart-canvas")
+            .dispatchEvent("pointerdown", point);
+          await breakdown
+            .locator(".chart-canvas")
+            .dispatchEvent("pointermove", {
+              ...point,
+              clientX: point.clientX + delta.x,
+              clientY: point.clientY + delta.y,
+            });
+          await breakdown.locator(".chart-canvas").dispatchEvent("pointerup", {
+            ...point,
+            clientX: point.clientX + delta.x,
+            clientY: point.clientY + delta.y,
+          });
+          await expect(
+            tooltip.locator("strong"),
+            await page.evaluate(() =>
+              JSON.stringify(
+                (window as unknown as { chartInputTrace: unknown[] })
+                  .chartInputTrace,
+              ),
+            ),
+          ).toContainText("2026-01-03");
+        }
+        // Axis/margin padding is outside the plotting region and clears selection.
+        await select(breakdown, 0);
+        const canvas = breakdown.locator(".chart-canvas");
+        const canvasBox = await canvas.boundingBox();
+        expect(canvasBox).not.toBeNull();
+        const paddingPoint = {
+          pointerType: "touch",
+          pointerId: 1,
+          isPrimary: true,
+          clientX: canvasBox!.x + 2,
+          clientY: canvasBox!.y + 12,
+        };
+        if (browserName === "firefox") {
+          await canvas.dispatchEvent("pointerdown", paddingPoint);
+          await canvas.dispatchEvent("pointerup", paddingPoint);
+        } else {
+          await page.touchscreen.tap(
+            paddingPoint.clientX,
+            paddingPoint.clientY,
+          );
+        }
+        await expect(tooltip).toBeHidden();
+        await select(breakdown, 0);
+        await page
+          .getByRole("heading", { name: "Check-in Analytics", exact: true })
+          .dispatchEvent("pointerdown", { pointerType: "touch" });
+        await expect(tooltip).toBeHidden();
+        const line = page
+          .locator(".analytics-chart-panel")
+          .filter({ hasText: "Check-in Trends" });
+        await line
+          .getByRole("button", { name: "Cumulative", exact: true })
+          .click();
+        await select(line, 0);
+        await expect(tooltip).toContainText("Cumulative check-ins: 12");
+        await expect(tooltip).toContainText("Cumulative discoveries: 8");
+        await page
+          .locator(".analytics-filters")
+          .getByLabel("Reporting period")
+          .selectOption("last_30");
+        await expect(tooltip).toBeHidden();
+        await page.getByRole("tab", { name: "Drinking Trends" }).click();
+        await checkFilters("Drinking Trends");
+        for (const title of [
+          "Check-ins by Hour of Day",
+          "Check-ins by Weekday",
+        ]) {
+          const chart = page
+            .locator(".distribution-chart")
+            .filter({ hasText: title });
+          await expect(chart).toBeVisible();
+          for (const index of [0, 1, title.includes("Hour") ? 23 : 6]) {
+            await select(chart, index);
+            await expect(tooltip.locator("strong")).toHaveText(
+              title.includes("Hour")
+                ? `${String(index).padStart(2, "0")}:00`
+                : [
+                    "Monday",
+                    "Tuesday",
+                    "Wednesday",
+                    "Thursday",
+                    "Friday",
+                    "Saturday",
+                    "Sunday",
+                  ][index],
+            );
+            await expect(tooltip).toContainText(
+              `Selected count: ${title.includes("Hour") ? index % 4 : index + 1}`,
+            );
+          }
+        }
+        const hourly = page
+          .locator(".distribution-chart")
+          .filter({ hasText: "Check-ins by Hour of Day" });
+        await page
+          .getByLabel("Distribution display mode")
+          .selectOption("average");
+        await expect(tooltip).toBeHidden();
+        await select(hourly, 0);
+        await expect(tooltip).toContainText("Average: 0.00");
+        await expect(tooltip).toContainText("Selected count: 0");
+        await page.getByLabel("Activity metric").selectOption("discoveries");
+        await expect(tooltip).toBeHidden();
+        const weekday = page
+          .locator(".distribution-chart")
+          .filter({ hasText: "Check-ins by Weekday" });
+        await select(weekday, 0);
+        await expect(tooltip.locator("strong")).toHaveText("Monday");
+        await expect(tooltip).toContainText("Selected count: 0");
+        await expect(tooltip).toContainText("Average: 0.00");
+        await select(hourly, 1);
+        await expect(tooltip.locator("strong")).toHaveText("01:00");
+        await expect(tooltip).toContainText("Selected count: 1");
+        await page.getByLabel("Activity metric").selectOption("repeats");
+        await expect(tooltip).toBeHidden();
+        await select(hourly, 2);
+        await expect(tooltip.locator("strong")).toHaveText("02:00");
+        await expect(tooltip).toContainText("Selected count: 2");
+        await page.getByRole("tab", { name: "Overview" }).focus();
+        await page.keyboard.press("Enter");
+        await expect(tooltip).toBeHidden();
+        await page.route("**/api/v1/analytics/checkins?*", (route) =>
+          route.fulfill({ json: sparseDashboardCheckins }),
+        );
+        await page.goto("/");
+        const dashboard = page.locator(".dashboard-chart");
+        for (const index of [0, 1, 5]) {
+          await select(dashboard, index);
+          const bucket = sparseDashboardCheckins.buckets[index];
+          await expect(tooltip.locator("strong")).toHaveText(
+            bucket.label + (index === 5 ? " (incomplete month)" : ""),
+          );
+          await expect(tooltip).toContainText(
+            `${bucket.new_discoveries} discoveries`,
+          );
+        }
+      } finally {
+        await context.close();
+      }
+    }
+  });
+}
