@@ -12,6 +12,7 @@ import {
 import type { RefObject } from "react";
 import ActivityMetricSelector from "../components/ActivityMetricSelector";
 import { Card } from "../components/ui";
+import ChartBucketSelection from "../components/ChartBucketSelection";
 import AnalyticsChartTooltip, {
   ANALYTICS_TOOLTIP_WRAPPER_STYLE,
 } from "../components/AnalyticsChartTooltip";
@@ -303,6 +304,7 @@ export default function DrinkingTrendsView({
         {currentDistribution && !distributionError && (
           <>
             <DistributionChart
+              active={active}
               title="Check-ins by Weekday"
               description="Monday through Sunday check-in distribution for the complete reporting period."
               reportingPeriod={`${currentDistribution.start}–${currentDistribution.end}`}
@@ -324,6 +326,7 @@ export default function DrinkingTrendsView({
               mode={distribution}
             />
             <DistributionChart
+              active={active}
               title="Check-ins by Hour of Day"
               description="Local check-in clock hour (00:00 to 23:00), aggregated across the complete reporting period."
               reportingPeriod={`${currentDistribution.start}–${currentDistribution.end}`}
@@ -422,6 +425,7 @@ function inclusiveDays(start: string, end: string) {
 }
 
 function DistributionChart({
+  active,
   title,
   description,
   reportingPeriod,
@@ -429,6 +433,7 @@ function DistributionChart({
   metric,
   mode,
 }: {
+  active: boolean;
   title: string;
   description: string;
   reportingPeriod: string;
@@ -463,7 +468,7 @@ function DistributionChart({
   const chartRef = useRef<HTMLDivElement>(null);
   const tooltipInteraction = useChartTooltipInteraction(
     chartRef,
-    `${title}|${reportingPeriod}|${metric}|${mode}`,
+    `${active}|${title}|${reportingPeriod}|${metric}|${mode}`,
   );
   return (
     <Card as="article" className="distribution-chart">
@@ -472,62 +477,90 @@ function DistributionChart({
         {description} Reporting period: {reportingPeriod}. Displaying{" "}
         {metricName} as {mode === "total" ? "totals" : "averages"}.
       </p>
-      <div
-        className="distribution-canvas ui-chart"
-        ref={chartRef}
-        role="group"
-        onPointerMove={tooltipInteraction.onPointerMove}
-        onPointerLeave={tooltipInteraction.onPointerLeave}
-        onPointerDown={tooltipInteraction.onPointerDown}
-        onPointerUp={tooltipInteraction.onPointerUp}
-        onPointerCancel={tooltipInteraction.onPointerCancel}
-        onFocus={tooltipInteraction.onFocus}
-        onBlur={tooltipInteraction.onBlur}
-        aria-label={`${title}. ${description} Reporting period: ${reportingPeriod}. ${metricName}, ${mode === "total" ? "totals" : "averages"}.`}
-        aria-describedby={descriptionId}
-      >
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={data}
-            accessibilityLayer
-            margin={{ top: 8, right: 12, left: 0, bottom: 8 }}
-          >
-            <CartesianGrid
-              stroke="var(--color-chart-grid)"
-              strokeDasharray="3 3"
-            />
-            <XAxis
-              dataKey={
-                rows.some((row) => row.axisLabel) ? "axisLabel" : "label"
-              }
-              interval={isHourly ? 2 : 0}
-              tick={{ fontSize: 12 }}
-              tickFormatter={
-                isHourly ? (value: string) => value.slice(0, 2) : undefined
-              }
-            />
-            <YAxis allowDecimals={mode === "average"} tick={{ fontSize: 12 }} />
-            <Tooltip
-              active={tooltipInteraction.active}
-              trigger={tooltipInteraction.trigger}
-              content={
-                <DistributionTooltip
-                  chartRef={chartRef}
-                  mode={mode}
-                  isHourly={isHourly}
-                />
-              }
-              portal={document.body}
-              wrapperStyle={ANALYTICS_TOOLTIP_WRAPPER_STYLE}
-            />
-            <Bar
-              dataKey="value"
-              name={mode === "total" ? "Check-ins" : "Average"}
-              fill="var(--color-chart-primary)"
-              isAnimationActive={false}
-            />
-          </BarChart>
-        </ResponsiveContainer>
+      <div className="chart-scroll">
+        <div
+          style={{ minWidth: `${data.length * 36 + 80}px` }}
+          className="distribution-canvas ui-chart"
+          ref={chartRef}
+          role="group"
+          onPointerMove={tooltipInteraction.onPointerMove}
+          onPointerLeave={tooltipInteraction.onPointerLeave}
+          onPointerDown={tooltipInteraction.onPointerDown}
+          onPointerUp={tooltipInteraction.onPointerUp}
+          onPointerCancel={tooltipInteraction.onPointerCancel}
+          onKeyDown={tooltipInteraction.onKeyDown}
+          onFocus={tooltipInteraction.onFocus}
+          onBlur={tooltipInteraction.onBlur}
+          aria-label={`${title}. ${description} Reporting period: ${reportingPeriod}. ${metricName}, ${mode === "total" ? "totals" : "averages"}.`}
+          aria-describedby={descriptionId}
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={data}
+              accessibilityLayer
+              margin={{ top: 8, right: 12, left: 0, bottom: 8 }}
+            >
+              <CartesianGrid
+                stroke="var(--color-chart-grid)"
+                strokeDasharray="3 3"
+              />
+              <XAxis
+                dataKey={
+                  rows.some((row) => row.axisLabel) ? "axisLabel" : "label"
+                }
+                interval={isHourly ? 2 : 0}
+                tick={{ fontSize: 12 }}
+                tickFormatter={
+                  isHourly ? (value: string) => value.slice(0, 2) : undefined
+                }
+              />
+              <YAxis
+                allowDecimals={mode === "average"}
+                tick={{ fontSize: 12 }}
+              />
+              <ChartBucketSelection
+                data={data}
+                axisKey={
+                  rows.some((row) => row.axisLabel) ? "axisLabel" : "label"
+                }
+                selection={tooltipInteraction.selection}
+                series={[
+                  {
+                    key: "value",
+                    name: mode === "total" ? "Check-ins" : "Average",
+                    color: "var(--color-chart-primary)",
+                  },
+                ]}
+                content={
+                  <DistributionTooltip
+                    chartRef={chartRef}
+                    mode={mode}
+                    isHourly={isHourly}
+                  />
+                }
+              />
+              <Tooltip
+                active={tooltipInteraction.active}
+                trigger={tooltipInteraction.trigger}
+                content={
+                  <DistributionTooltip
+                    chartRef={chartRef}
+                    mode={mode}
+                    isHourly={isHourly}
+                  />
+                }
+                portal={document.body}
+                wrapperStyle={ANALYTICS_TOOLTIP_WRAPPER_STYLE}
+              />
+              <Bar
+                dataKey="value"
+                name={mode === "total" ? "Check-ins" : "Average"}
+                fill="var(--color-chart-primary)"
+                isAnimationActive={false}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
       {data.every((row) => row.count === 0) && (
         <p className="analytics-state">

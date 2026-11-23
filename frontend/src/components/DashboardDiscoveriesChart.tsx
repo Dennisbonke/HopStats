@@ -12,6 +12,7 @@ import {
 import type { CSSProperties, RefObject } from "react";
 import { Link } from "react-router-dom";
 import { AnalyticsBucket } from "../api/analytics";
+import ChartBucketSelection from "./ChartBucketSelection";
 import AnalyticsChartTooltip, {
   ANALYTICS_TOOLTIP_WRAPPER_STYLE,
 } from "./AnalyticsChartTooltip";
@@ -183,50 +184,72 @@ export default function DashboardDiscoveriesChart({
               .join("; ")}
             .
           </p>
-          <div
-            className="dashboard-chart ui-chart"
-            ref={chartRef}
-            role="group"
-            aria-label="Unique beer discoveries over the last six months"
-            aria-describedby="dashboard-discoveries-summary"
-            onPointerMove={tooltipInteraction.onPointerMove}
-            onPointerLeave={tooltipInteraction.onPointerLeave}
-            onPointerDown={tooltipInteraction.onPointerDown}
-            onPointerUp={tooltipInteraction.onPointerUp}
-            onPointerCancel={tooltipInteraction.onPointerCancel}
-            onFocus={tooltipInteraction.onFocus}
-            onBlur={tooltipInteraction.onBlur}
-          >
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={chartData}
-                accessibilityLayer
-                aria-label="Monthly unique beer discoveries"
-              >
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="axis" />
-                <YAxis allowDecimals={false} width={38} />
-                <Tooltip
-                  active={tooltipInteraction.active}
-                  trigger={tooltipInteraction.trigger}
-                  content={
-                    <DashboardTooltip
-                      chartRef={chartRef}
-                      chartData={chartData}
-                    />
-                  }
-                  portal={document.body}
-                  wrapperStyle={ANALYTICS_TOOLTIP_WRAPPER_STYLE}
-                />
-                <Bar
-                  dataKey="new_discoveries"
-                  name="Unique beer discoveries"
-                  fill="var(--color-chart-primary)"
-                  radius={[4, 4, 0, 0]}
-                  isAnimationActive={false}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="dashboard-chart-scroll">
+            <div
+              style={{ minWidth: `${chartData.length * 36 + 48}px` }}
+              className="dashboard-chart ui-chart"
+              ref={chartRef}
+              role="group"
+              aria-label="Unique beer discoveries over the last six months"
+              aria-describedby="dashboard-discoveries-summary"
+              onPointerMove={tooltipInteraction.onPointerMove}
+              onPointerLeave={tooltipInteraction.onPointerLeave}
+              onPointerDown={tooltipInteraction.onPointerDown}
+              onPointerUp={tooltipInteraction.onPointerUp}
+              onPointerCancel={tooltipInteraction.onPointerCancel}
+              onKeyDown={tooltipInteraction.onKeyDown}
+              onFocus={tooltipInteraction.onFocus}
+              onBlur={tooltipInteraction.onBlur}
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={chartData}
+                  accessibilityLayer
+                  aria-label="Monthly unique beer discoveries"
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="axis" />
+                  <YAxis allowDecimals={false} width={38} />
+                  <ChartBucketSelection
+                    data={chartData}
+                    axisKey="axis"
+                    selection={tooltipInteraction.selection}
+                    series={[
+                      {
+                        key: "new_discoveries",
+                        name: "Unique beer discoveries",
+                        color: "var(--color-chart-primary)",
+                      },
+                    ]}
+                    content={
+                      <DashboardTooltip
+                        chartRef={chartRef}
+                        chartData={chartData}
+                      />
+                    }
+                  />
+                  <Tooltip
+                    active={tooltipInteraction.active}
+                    trigger={tooltipInteraction.trigger}
+                    content={
+                      <DashboardTooltip
+                        chartRef={chartRef}
+                        chartData={chartData}
+                      />
+                    }
+                    portal={document.body}
+                    wrapperStyle={ANALYTICS_TOOLTIP_WRAPPER_STYLE}
+                  />
+                  <Bar
+                    dataKey="new_discoveries"
+                    name="Unique beer discoveries"
+                    fill="var(--color-chart-primary)"
+                    radius={[4, 4, 0, 0]}
+                    isAnimationActive={false}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
           <p className="dashboard-chart-footnote">
             Discoveries count the first-ever imported check-in for each beer.

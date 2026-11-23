@@ -57,7 +57,7 @@
 
 .analytics-page .analytics-filters {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
   gap: 0.8rem;
   align-items: end;
 }
@@ -171,6 +171,8 @@
 }
 
 .analytics-page .chart-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
   margin-top: 1rem;
 }
 
@@ -762,4 +764,24 @@
   .analytics-page .metric-card strong {
     font-size: clamp(1.45rem, 7vw, 1.8rem);
   }
+}
+
+/* Native Safari date controls need room for their intrinsic editing UI. */
+@media (max-width: 600px) {
+  .analytics-page .analytics-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.analytics-page
+  .filter-control
+  input[type="date"]::-webkit-date-and-time-value {
+  min-width: 0;
+  text-align: start;
+}
+
+/* Safari's segmented date editor may focus an internal native field. */
+.analytics-page .filter-control:focus-within > input[type="date"] {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
 }

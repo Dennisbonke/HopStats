@@ -24,6 +24,7 @@ import {
   type Coordinate,
 } from "recharts";
 import LayoutDiagnostics from "../components/LayoutDiagnostics";
+import ChartBucketSelection from "../components/ChartBucketSelection";
 import AnalyticsChartTooltip, {
   ANALYTICS_TOOLTIP_WRAPPER_STYLE,
 } from "../components/AnalyticsChartTooltip";
@@ -269,6 +270,7 @@ function ExactTooltip({
       <strong>
         {bucket.label} · {bucket.start} – {bucket.end}
       </strong>
+      {showShare && <div>Total check-ins: {bucket.total_checkins}</div>}
       {payload.map((entry) => (
         <div
           key={entry.name}
@@ -1184,9 +1186,35 @@ export default function Analytics() {
                         <div
                           className="chart-canvas analytics-overview-chart ui-chart"
                           ref={breakdownChartRef}
+                          style={{
+                            minWidth: `${chartData.length * 36 + 80}px`,
+                          }}
                         >
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={chartData} accessibilityLayer>
+                              <ChartBucketSelection
+                                data={chartData}
+                                axisKey="label"
+                                selection={breakdownTooltip.selection}
+                                series={[
+                                  {
+                                    key: "new_discoveries",
+                                    name: "New discoveries",
+                                    color: "var(--color-chart-primary)",
+                                  },
+                                  {
+                                    key: "repeat_checkins",
+                                    name: "Repeat check-ins",
+                                    color: "var(--color-chart-secondary)",
+                                  },
+                                ]}
+                                content={
+                                  <ExactTooltip
+                                    chartRef={breakdownChartRef}
+                                    showShare
+                                  />
+                                }
+                              />
                               <CartesianGrid strokeDasharray="3 3" />
                               <XAxis dataKey="label" minTickGap={28} />
                               <YAxis allowDecimals={false} />
@@ -1322,6 +1350,7 @@ export default function Analytics() {
                         <div
                           className="chart-canvas analytics-overview-chart ui-chart"
                           ref={trendChartRef}
+                          style={{ minWidth: `${lineData.length * 36 + 80}px` }}
                         >
                           <ResponsiveContainer width="100%" height="100%">
                             <LineChart
@@ -1334,8 +1363,46 @@ export default function Analytics() {
                               }}
                             >
                               <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis dataKey="label" minTickGap={28} />
+                              <XAxis
+                                dataKey="label"
+                                minTickGap={28}
+                                padding={{ left: 18, right: 18 }}
+                              />
                               <YAxis allowDecimals={false} />
+                              <ChartBucketSelection
+                                data={lineData}
+                                axisKey="label"
+                                selection={trendTooltip.selection}
+                                series={[
+                                  ...(visible.total
+                                    ? [
+                                        {
+                                          key: totalKey as keyof (typeof lineData)[number],
+                                          name:
+                                            mode === "activity"
+                                              ? "All check-ins"
+                                              : "Cumulative check-ins",
+                                          color: "var(--color-chart-secondary)",
+                                        },
+                                      ]
+                                    : []),
+                                  ...(visible.discoveries
+                                    ? [
+                                        {
+                                          key: discoveryKey as keyof (typeof lineData)[number],
+                                          name:
+                                            mode === "activity"
+                                              ? "New discoveries"
+                                              : "Cumulative discoveries",
+                                          color: "var(--color-chart-primary)",
+                                        },
+                                      ]
+                                    : []),
+                                ]}
+                                content={
+                                  <ExactTooltip chartRef={trendChartRef} />
+                                }
+                              />
                               <Tooltip
                                 active={trendTooltip.active}
                                 trigger={trendTooltip.trigger}

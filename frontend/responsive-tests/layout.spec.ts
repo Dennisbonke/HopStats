@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const viewports = [
   [320, 568],
@@ -881,7 +881,17 @@ test("weekly chart tooltips stay within the document after orientation changes",
   );
   const bars = page.locator(".recharts-bar-rectangle");
   await expect(bars).toHaveCount(80);
-  await bars.last().hover();
+  const barChart = page.locator(".chart-canvas .recharts-wrapper").first();
+  const hoverBucket = async (chart: Locator, index: number) => {
+    const region = chart.locator(`[data-chart-bucket="${index}"]`);
+    await region.evaluate((element) =>
+      element.scrollIntoView({ block: "center", inline: "center" }),
+    );
+    const box = await region.boundingBox();
+    expect(box).not.toBeNull();
+    await page.mouse.move(box!.x + box!.width / 2, box!.y + 12);
+  };
+  await hoverBucket(barChart, 39);
   const tooltip = page.locator(".recharts-tooltip-wrapper").first();
   const lineTooltip = page.locator(".recharts-tooltip-wrapper").nth(1);
   await expect(tooltip).toBeVisible();
@@ -908,6 +918,7 @@ test("weekly chart tooltips stay within the document after orientation changes",
         bodyWidth: document.body.scrollWidth,
         visualViewportWidth: window.visualViewport?.width ?? null,
         visualViewportOffsetLeft: window.visualViewport?.offsetLeft ?? null,
+        chartScroll: bounds(".chart-scroll"),
         chartContainer: bounds(".chart-canvas .recharts-responsive-container"),
         chartSvg: bounds(".chart-canvas .recharts-wrapper"),
         // Analytics tooltips use a body portal to escape clipped chart cards.
@@ -923,24 +934,25 @@ test("weekly chart tooltips stay within the document after orientation changes",
   const lineChartLocator = page
     .locator(".chart-canvas .recharts-wrapper")
     .nth(1);
-  await lineChartLocator.scrollIntoViewIfNeeded();
-  const lineChart = await lineChartLocator.boundingBox();
-  await page.mouse.move(
-    lineChart!.x + lineChart!.width * 0.65,
-    lineChart!.y + 150,
+  const lineBucket = lineChartLocator.locator('[data-chart-bucket="25"]');
+  await lineBucket.evaluate((element) =>
+    element.scrollIntoView({ block: "center", inline: "center" }),
   );
+  const lineChart = await lineBucket.boundingBox();
+  await page.mouse.move(lineChart!.x + lineChart!.width / 2, lineChart!.y + 12);
   await expect(lineTooltip).toBeVisible();
+  await expect(lineTooltip).toContainText("Week 26, 2026");
   await expect(tooltip).toBeHidden();
   await page.mouse.move(5, 5);
   await expect(lineTooltip).toBeHidden();
-  await bars.last().hover();
+  await hoverBucket(barChart, 39);
   await expect(tooltip).toBeVisible();
   await expect(lineTooltip).toBeHidden();
 
   await page.setViewportSize({ width: 844, height: 390 });
   await expect
-    .poll(async () => (await measureLayout()).chartSvg!.width)
-    .toBeGreaterThan(before.chartSvg!.width);
+    .poll(async () => (await measureLayout()).chartScroll!.width)
+    .toBeGreaterThan(before.chartScroll!.width);
   const landscape = await measureLayout();
   expect(await tooltip.isVisible()).toBe(false);
   expect(landscape.documentWidth - landscape.clientWidth).toBeLessThanOrEqual(
@@ -949,9 +961,10 @@ test("weekly chart tooltips stay within the document after orientation changes",
   expect(landscape.bodyWidth - landscape.clientWidth).toBeLessThanOrEqual(1);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect
-    .poll(async () => (await measureLayout()).chartSvg!.width)
-    .toBeLessThan(landscape.chartSvg!.width);
+    .poll(async () => (await measureLayout()).chartScroll!.width)
+    .toBeLessThan(landscape.chartScroll!.width);
   const after = await measureLayout();
+  expect(after.chartSvg!.width).toBeGreaterThanOrEqual(40 * 36);
   expect(await tooltip.isVisible()).toBe(false);
   expect(after.documentWidth - after.clientWidth).toBeLessThanOrEqual(1);
   expect(after.bodyWidth - after.clientWidth).toBeLessThanOrEqual(1);
@@ -967,8 +980,9 @@ test("weekly chart tooltips stay within the document after orientation changes",
   expect(afterSwipe.bodyWidth - afterSwipe.clientWidth).toBeLessThanOrEqual(1);
   expect(await tooltip.isVisible()).toBe(false);
 
-  await bars.nth(10).hover();
+  await hoverBucket(barChart, 10);
   await expect(tooltip).toBeVisible();
+  await expect(tooltip).toContainText("Week 11, 2026");
   await expect(lineTooltip).toBeHidden();
   const nextTooltip = await tooltip.boundingBox();
   expect(nextTooltip!.x).toBeGreaterThanOrEqual(-1);
