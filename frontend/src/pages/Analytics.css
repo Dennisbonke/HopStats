@@ -86,6 +86,14 @@
   font-weight: 400;
 }
 
+/* iOS's native date appearance forces content-box sizing for percentage widths
+   (WebKit bug 301648), adding padding outside the grid cell. Opt out of that
+   appearance adjustment while retaining the native type="date" picker. */
+.analytics-page .filter-control input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 .analytics-page .analytics-state p {
   margin: 0;
 }

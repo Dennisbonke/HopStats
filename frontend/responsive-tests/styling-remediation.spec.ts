@@ -3365,6 +3365,367 @@ const sparseDashboardCheckins = (() => {
   };
 })();
 
+async function expectReportingDateContainment(page: Page) {
+  const filters = page.getByRole("region", { name: "Reporting filters" });
+  await expect(filters.locator('input[type="date"]')).toHaveCount(2);
+  const geometry = await filters.evaluate((card) => {
+    const rect = card.getBoundingClientRect();
+    const style = getComputedStyle(card);
+    const contentLeft =
+      rect.left +
+      parseFloat(style.borderLeftWidth) +
+      parseFloat(style.paddingLeft);
+    const contentRight =
+      rect.right -
+      parseFloat(style.borderRightWidth) -
+      parseFloat(style.paddingRight);
+    const fields = Array.from(card.children).map((field) =>
+      field.getBoundingClientRect().toJSON(),
+    );
+    return {
+      contentLeft,
+      contentRight,
+      overflow: card.scrollWidth - card.clientWidth,
+      dates: Array.from(card.querySelectorAll('input[type="date"]')).map(
+        (node) => {
+          const input = node as HTMLInputElement;
+          const inputStyle = getComputedStyle(input);
+          const cell = input.parentElement!;
+          const canvas = document.createElement("canvas");
+          const context = canvas.getContext("2d")!;
+          context.font = inputStyle.font;
+          // Approximation only: native editor formatting, segments and
+          // picker buttons can differ from Intl and are not exposed portably.
+          // Passing this estimate does not establish that native text is visible;
+          // retain focused screenshots and physical iPhone visual acceptance.
+          const dateText = new Intl.DateTimeFormat(navigator.language, {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+          }).format(new Date(`${input.value}T12:00:00`));
+          return {
+            label: input.getAttribute("aria-label"),
+            rect: input.getBoundingClientRect().toJSON(),
+            cell: cell.getBoundingClientRect().toJSON(),
+            others: fields.filter((_, index) => card.children[index] !== cell),
+            boxSizing: inputStyle.boxSizing,
+            appearance: inputStyle.appearance,
+            overflow: input.scrollWidth - input.clientWidth,
+            estimatedTextWidth: context.measureText(dateText).width,
+            innerWidth:
+              input.clientWidth -
+              parseFloat(inputStyle.paddingLeft) -
+              parseFloat(inputStyle.paddingRight),
+          };
+        },
+      ),
+    };
+  });
+  expect(
+    geometry.overflow,
+    "reporting card horizontal overflow",
+  ).toBeLessThanOrEqual(1);
+  for (const date of geometry.dates) {
+    const description = `${date.label}: ${JSON.stringify(date)}`;
+    expect(date.rect.left, description).toBeGreaterThanOrEqual(
+      geometry.contentLeft - 1,
+    );
+    expect(date.rect.right, description).toBeLessThanOrEqual(
+      geometry.contentRight + 1,
+    );
+    expect(date.rect.left, description).toBeGreaterThanOrEqual(
+      date.cell.left - 1,
+    );
+    expect(date.rect.right, description).toBeLessThanOrEqual(
+      date.cell.right + 1,
+    );
+    expect(date.rect.width, description).toBeGreaterThan(0);
+    expect(date.overflow, description).toBeLessThanOrEqual(1);
+    expect(date.innerWidth, description).toBeGreaterThan(
+      date.estimatedTextWidth,
+    );
+    // Linux WebKit lacks iOS's native theme override. Guard the opt-out too:
+    // appearance:auto lets iOS replace border-box with content-box (bug 301648).
+    expect(date.appearance, description).toBe("none");
+    expect(date.boxSizing, description).toBe("border-box");
+    for (const other of date.others) {
+      expect(
+        date.rect.right <= other.left + 1 ||
+          date.rect.left >= other.right - 1 ||
+          date.rect.bottom <= other.top + 1 ||
+          date.rect.top >= other.bottom - 1,
+        `${date.label} must not overlap another reporting field`,
+      ).toBe(true);
+    }
+  }
+  await expectNoDocumentOverflow(page);
+}
+
+for (const width of [320, 375, 390, 428, 768, 1280]) {
+  test(`native reporting dates fit the card and remain editable at ${width}px`, async ({
+    browser,
+  }, testInfo) => {
+    for (const colorScheme of ["light", "dark"] as const) {
+      const context = await browser.newContext({
+        baseURL: "http://127.0.0.1:5173",
+        viewport: { width, height: 844 },
+        locale: "nl-NL",
+        colorScheme,
+      });
+      const page = await context.newPage();
+      page.setDefaultTimeout(10_000);
+      try {
+        await stubApplication(page);
+        const requests: URL[] = [];
+        page.on("request", (request) => {
+          const url = new URL(request.url());
+          if (url.pathname.startsWith("/api/v1/analytics/")) requests.push(url);
+        });
+        for (const view of ["overview", "trends"] as const) {
+          await page.goto(
+            `/analytics?period=custom&start=2026-01-01&end=2026-12-31&granularity=auto&zoom=month:2026-08&view=${view}`,
+          );
+          await expect(
+            page.getByRole("tab", {
+              name: view === "overview" ? "Overview" : "Drinking Trends",
+              exact: true,
+            }),
+          ).toHaveAttribute("aria-selected", "true");
+          const filters = page.getByRole("region", {
+            name: "Reporting filters",
+          });
+          await expectReportingDateContainment(page);
+          for (const label of ["Start date", "End date"]) {
+            const input = page.getByLabel(label, { exact: true });
+            await input.click();
+            await expect(input).toBeFocused();
+            // A click can request platform UI that Playwright cannot inspect.
+            // Escape dismisses it before checking the focused input itself.
+            await page.keyboard.press("Escape");
+            await expect(input).toHaveCSS("outline-style", "solid");
+            const focus = await input.evaluate((node) => {
+              const style = getComputedStyle(node);
+              const rect = node.getBoundingClientRect();
+              const card = node
+                .closest(".analytics-filters")!
+                .getBoundingClientRect();
+              const ring =
+                parseFloat(style.outlineWidth) +
+                parseFloat(style.outlineOffset);
+              return {
+                left: rect.left - ring - card.left,
+                right: card.right - rect.right - ring,
+              };
+            });
+            expect(focus.left).toBeGreaterThanOrEqual(0);
+            expect(focus.right).toBeGreaterThanOrEqual(0);
+            await expectReadable(
+              input,
+              `${width}px ${colorScheme} ${view} ${label}`,
+            );
+            if (label === "Start date") {
+              await filters.screenshot({
+                path: testInfo.outputPath(
+                  `${colorScheme}-${view}-start-focused.png`,
+                ),
+              });
+            }
+          }
+          // Keep artifacts for review of native text, affordances and focus;
+          // closed native shadow editors cannot be measured directly by DOM APIs.
+          await filters.screenshot({
+            path: testInfo.outputPath(`${colorScheme}-${view}-dates.png`),
+          });
+          await page.setViewportSize({ width: 844, height: width });
+          await expectReportingDateContainment(page);
+          await page.setViewportSize({ width, height: 844 });
+          await filters.getByLabel("Reporting period").selectOption("last_30");
+          await expectReportingDateContainment(page);
+          await page
+            .getByLabel("Start date", { exact: true })
+            .fill("2026-08-01");
+          await expect(page).toHaveURL(/start=2026-08-01/);
+          await page.getByLabel("End date", { exact: true }).fill("2026-08-31");
+          await expect(page).toHaveURL(/end=2026-08-31/);
+          await expect(
+            page.getByLabel("Start date", { exact: true }),
+          ).toHaveValue("2026-08-01");
+          await expect(
+            page.getByLabel("End date", { exact: true }),
+          ).toHaveValue("2026-08-31");
+          await expect(filters.getByLabel("Reporting period")).toHaveValue(
+            "custom",
+          );
+          await expect
+            .poll(() => new URL(page.url()).searchParams.has("zoom"))
+            .toBe(false);
+          const endpoint = view === "overview" ? "checkins" : "drinking-trends";
+          await expect
+            .poll(() =>
+              requests.some(
+                (url) =>
+                  url.pathname === `/api/v1/analytics/${endpoint}` &&
+                  url.searchParams.get("start") === "2026-08-01" &&
+                  url.searchParams.get("end") === "2026-08-31",
+              ),
+            )
+            .toBe(true);
+          if (view === "overview") {
+            await filters.getByLabel("Granularity").selectOption("week");
+            await expect(page).toHaveURL(/granularity=week/);
+          }
+          await expectReportingDateContainment(page);
+          await filters.screenshot({
+            path: testInfo.outputPath(
+              `${colorScheme}-${view}-changed-dates.png`,
+            ),
+          });
+          await page.reload();
+          await expect(
+            page.getByLabel("Start date", { exact: true }),
+          ).toHaveValue("2026-08-01");
+          await expect(
+            page.getByLabel("End date", { exact: true }),
+          ).toHaveValue("2026-08-31");
+          await expectReportingDateContainment(page);
+        }
+      } finally {
+        await context.close();
+      }
+    }
+  });
+}
+
+test("native reporting date keyboard selections update shared filters", async ({
+  browser,
+  browserName,
+}, testInfo) => {
+  const context = await browser.newContext({
+    baseURL: "http://127.0.0.1:5173",
+    viewport: { width: 390, height: 844 },
+    locale: "nl-NL",
+    colorScheme: "dark",
+  });
+  const page = await context.newPage();
+  page.setDefaultTimeout(10_000);
+  try {
+    await stubApplication(page);
+    for (const view of ["overview", "trends"] as const) {
+      await page.goto(
+        `/analytics?period=last_30&start=2026-10-17&end=2026-11-15&view=${view}`,
+      );
+      const filters = page.getByRole("region", { name: "Reporting filters" });
+      await expect(filters.getByLabel("Reporting period")).toHaveValue(
+        "last_30",
+      );
+      // Expand the range whichever date segment this platform focuses first.
+      const labels =
+        browserName === "chromium"
+          ? ["Start date", "End date"]
+          : ["End date", "Start date"];
+      for (const label of labels) {
+        const input = filters.getByLabel(label, { exact: true });
+        const position = await input.evaluate((node) => {
+          const style = getComputedStyle(node);
+          return {
+            x:
+              parseFloat(style.borderLeftWidth) +
+              parseFloat(style.paddingLeft) +
+              4,
+            y: node.getBoundingClientRect().height / 2,
+          };
+        });
+        await input.click({ position });
+        await expect(input).toBeFocused();
+        await page.keyboard.press("Escape");
+        const before = await input.inputValue();
+        if (browserName === "chromium") {
+          // Click Chromium's visible trailing calendar affordance. Its hit
+          // point follows the input's actual padding and font size, not the card.
+          const affordance = await input.evaluate((node) => {
+            const style = getComputedStyle(node);
+            return {
+              x:
+                node.getBoundingClientRect().width -
+                parseFloat(style.borderRightWidth) -
+                parseFloat(style.paddingRight) -
+                parseFloat(style.fontSize) / 2,
+              y: node.getBoundingClientRect().height / 2,
+            };
+          });
+          await input.click({ position: affordance });
+          await page.screenshot({
+            path: testInfo.outputPath(`${view}-${label}-picker-request.png`),
+          });
+          await page.keyboard.press("ArrowRight");
+          await page.keyboard.press("Enter");
+          const nextDay = new Date(
+            Date.parse(`${before}T12:00:00Z`) + 86_400_000,
+          )
+            .toISOString()
+            .slice(0, 10);
+          await expect(input).toHaveValue(nextDay);
+        } else {
+          // WebKit/Firefox expose native segmented keyboard editing. This does
+          // not demonstrate that their OS-level calendar popup can be operated.
+          const direction = label === "End date" ? 1 : -1;
+          await input.press(direction === 1 ? "ArrowUp" : "ArrowDown");
+          await expect(input).not.toHaveValue(before);
+          // The focused segment varies by platform; exactly one of year,
+          // month or day must move by one. The fixture avoids date boundaries.
+          const candidates = [0, 1, 2].map((segment) =>
+            before
+              .split("-")
+              .map((value, index) =>
+                index === segment
+                  ? String(Number(value) + direction).padStart(
+                      value.length,
+                      "0",
+                    )
+                  : value,
+              )
+              .join("-"),
+          );
+          expect(candidates).toContain(await input.inputValue());
+        }
+        const selected = await input.inputValue();
+        expect(selected).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        const parameter = label === "Start date" ? "start" : "end";
+        await expect
+          .poll(() => new URL(page.url()).searchParams.get(parameter))
+          .toBe(selected);
+        await expect(filters.getByLabel("Reporting period")).toHaveValue(
+          "custom",
+        );
+        await expect(input).toHaveCSS("outline-style", "solid");
+        await expectReportingDateContainment(page);
+        await filters.screenshot({
+          path: testInfo.outputPath(`${view}-${label}-keyboard-selected.png`),
+        });
+      }
+      const start = await filters
+        .getByLabel("Start date", { exact: true })
+        .inputValue();
+      const end = await filters
+        .getByLabel("End date", { exact: true })
+        .inputValue();
+      await page.reload();
+      await expect(
+        filters.getByLabel("Start date", { exact: true }),
+      ).toHaveValue(start);
+      await expect(filters.getByLabel("End date", { exact: true })).toHaveValue(
+        end,
+      );
+      await expect(filters.getByLabel("Reporting period")).toHaveValue(
+        "custom",
+      );
+      await expectReportingDateContainment(page);
+    }
+  } finally {
+    await context.close();
+  }
+});
+
 for (const width of [320, 375, 390, 428]) {
   test(`exact sparse bucket selection and nonoverlapping reporting filters at ${width}px`, async ({
     browser,
