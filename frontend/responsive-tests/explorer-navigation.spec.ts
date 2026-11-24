@@ -354,6 +354,7 @@ for (const width of [320, 375, 390, 428, 768, 1280, 1440, 1920, 2560]) {
           results: box(".explorer-results"),
           table: box(".explorer-beer-table"),
           form: box(".explorer-controls"),
+          mobileFilters: box(".explorer-mobile-filters"),
           fields: [
             box(".explorer-search-control"),
             box(".explorer-sort-control"),
@@ -399,19 +400,22 @@ for (const width of [320, 375, 390, 428, 768, 1280, 1440, 1920, 2560]) {
           // A field is its label, label gap and control, never an 18rem/16rem height.
           expect(field.height).toBeLessThan(100);
         }
-        const group = [...geometry.fields, geometry.controls[2]];
-        for (let index = 1; index < group.length; index++) {
-          const gap = group[index].y - group[index - 1].bottom;
-          expect(gap).toBeGreaterThanOrEqual(8);
-          expect(gap).toBeLessThanOrEqual(16);
-          expect(Math.abs(gap - geometry.gap)).toBeLessThanOrEqual(1);
-        }
-        for (const control of geometry.controls) {
-          expect(
-            Math.abs(control.width - geometry.form.width),
-          ).toBeLessThanOrEqual(1);
-        }
-        expect(geometry.form.height).toBeLessThan(250);
+        // Search + submit share the first row; sort + Filters share the second.
+        expect(
+          Math.abs(geometry.controls[0].y - geometry.controls[2].y),
+        ).toBeLessThanOrEqual(1);
+        expect(
+          Math.abs(geometry.controls[1].bottom - geometry.mobileFilters.bottom),
+        ).toBeLessThanOrEqual(1);
+        expect(
+          geometry.fields[1].y - geometry.fields[0].bottom,
+        ).toBeGreaterThanOrEqual(8);
+        expect(geometry.form.height).toBeLessThan(140);
+        expect(
+          geometry.controls[0].width +
+            geometry.controls[2].width +
+            geometry.gap,
+        ).toBeLessThanOrEqual(geometry.form.width + 1);
       } else {
         await expect(table).toBeVisible();
         await expect(cards).toBeHidden();
@@ -577,9 +581,13 @@ for (const width of [320, 375, 390, 428, 768, 1280]) {
           exact: true,
         }),
       ).toHaveValue("3.70");
-      await panel
-        .getByRole("checkbox", { name: "A Brewery with a Long Name" })
-        .check();
+      // URL-backed desktop controls commit through React Router navigation.
+      // Wait for the controlled checkbox after that asynchronous commit.
+      const brewery = panel.getByRole("checkbox", {
+        name: "A Brewery with a Long Name",
+      });
+      await brewery.click();
+      await expect(brewery).toBeChecked();
       await panel
         .getByRole("searchbox", { name: "Search breweries" })
         .fill("another");

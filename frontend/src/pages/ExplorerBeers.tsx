@@ -361,16 +361,16 @@ export default function ExplorerBeers() {
               </select>
             </FormField>
             <Button type="submit">Search</Button>
+            <Button
+              className="explorer-mobile-filters"
+              type="button"
+              variant="secondary"
+              onClick={() => setSheetOpen(true)}
+            >
+              Filters ({activeGroups(filters)})
+            </Button>
           </form>
 
-          <Button
-            className="explorer-mobile-filters"
-            type="button"
-            variant="secondary"
-            onClick={() => setSheetOpen(true)}
-          >
-            Filters ({activeGroups(filters)})
-          </Button>
           {chips.length > 0 && (
             <div
               className="explorer-active-filters"

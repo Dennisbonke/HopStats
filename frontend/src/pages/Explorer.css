@@ -654,3 +654,65 @@
   cursor: pointer;
   text-decoration: underline;
 }
+
+@media (max-width: 700px) {
+  .explorer-page .explorer-tabs {
+    font-size: 0.8rem;
+    gap: 0.2rem;
+  }
+  .explorer-page .explorer-tabs a,
+  .explorer-page .explorer-tab-unavailable {
+    padding-inline: 0.4rem;
+    gap: 0.25rem;
+  }
+  .explorer-page .upcoming-label {
+    font-size: 0.6rem;
+    padding: 0.2rem 0.25rem;
+  }
+  .explorer-page .page-heading p {
+    font-size: 0.85rem;
+  }
+  .explorer-page .explorer-catalogue-heading > div {
+    display: none;
+  }
+  .explorer-page .explorer-catalogue-heading {
+    margin-bottom: 0.5rem;
+  }
+  .explorer-page .explorer-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+  .explorer-page .explorer-search-control {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .explorer-page .explorer-search-control > label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .explorer-page .explorer-controls > button[type="submit"] {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: end;
+  }
+  .explorer-page .explorer-sort-control {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .explorer-page .explorer-mobile-filters {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: end;
+    margin: 0;
+  }
+  .explorer-page .explorer-active-filters > span,
+  .explorer-page .explorer-active-filters > button:not(.explorer-chip) {
+    display: none;
+  }
+}
