@@ -196,13 +196,12 @@ function RangeFilter({
   const sliderValues = error ? [low, high] : draft;
   const lower = Number(sliderValues[0] || 0);
   const upper = Number(sliderValues[1] || max);
-  function commit(values: string[]) {
+  function commit(values: string[], slider = false) {
     if (!badInputRef.current.some(Boolean) && valid(values)) {
       const next =
-        values[0] !== "" &&
-        values[1] !== "" &&
-        Number(values[0]) === 0 &&
-        Number(values[1]) === max
+        (slider || (values[0] !== "" && values[1] !== "")) &&
+        Number(values[0] || 0) === 0 &&
+        Number(values[1] || max) === max
           ? ["", ""]
           : values;
       edit(next);
@@ -277,7 +276,7 @@ function RangeFilter({
           move(event);
           gesture.current = null;
           event.currentTarget.releasePointerCapture(event.pointerId);
-          commit(draftRef.current);
+          commit(draftRef.current, true);
         }}
         onPointerCancel={() => {
           if (gesture.current) edit(gesture.current.original);
@@ -307,7 +306,21 @@ function RangeFilter({
               );
               edit(next);
             }}
-            onKeyUp={() => commit(draftRef.current)}
+            onKeyUp={(event) => {
+              if (
+                [
+                  "ArrowLeft",
+                  "ArrowRight",
+                  "ArrowUp",
+                  "ArrowDown",
+                  "Home",
+                  "End",
+                  "PageUp",
+                  "PageDown",
+                ].includes(event.key)
+              )
+                commit(draftRef.current, true);
+            }}
             onBlur={() => {
               if (!gesture.current) commit(draftRef.current);
             }}

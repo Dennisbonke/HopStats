@@ -750,3 +750,33 @@ test.each(["3.755", "-0.01", "Infinity", "NaN", "5.01", "1e-3"])(
     ).toBe("");
   },
 );
+
+test("one-sided slider bounds reset fully while explicit zero survives focus traversal", async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={["/explore/beers?rating_max=4&future=kept"]}>
+      <RouterState />
+      <ExplorerBeers />
+    </MemoryRouter>,
+  );
+  await screen.findAllByText("First Page Stout");
+  const upper = screen.getByRole("slider", {
+    name: "My rating maximum slider",
+  });
+  fireEvent.change(upper, { target: { value: "5" } });
+  fireEvent.keyUp(upper, { key: "End" });
+  await waitFor(() => expect(requests.at(-1)).not.toContain("rating_max"));
+  const minimum = screen.getByRole("spinbutton", { name: "My rating minimum" });
+  await user.type(minimum, "0");
+  await user.tab();
+  await waitFor(() => expect(requests.at(-1)).toContain("rating_min=0"));
+  const lower = screen.getByRole("slider", {
+    name: "My rating minimum slider",
+  });
+  lower.focus();
+  await user.tab();
+  expect(screen.getByLabelText("Current URL")).toHaveTextContent(
+    "rating_min=0",
+  );
+  expect(screen.getByLabelText("Current URL")).toHaveTextContent("future=kept");
+});

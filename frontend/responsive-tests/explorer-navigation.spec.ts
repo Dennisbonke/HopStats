@@ -792,6 +792,31 @@ test("both range handles support pointer dragging and keyboard endpoints", async
   await maximum.press("End");
   await expect(maximum).toHaveValue("5");
   await expect(page).not.toHaveURL(/rating_min|rating_max/);
+  for (const [label, field, side, value, key] of [
+    ["My rating", "rating", "minimum", "1", "Home"],
+    ["My rating", "rating", "maximum", "4", "End"],
+    ["ABV", "abv", "minimum", "1", "Home"],
+    ["ABV", "abv", "maximum", "10", "End"],
+  ]) {
+    await page.goto(
+      `/explore/beers?${field}_${side === "minimum" ? "min" : "max"}=${value}`,
+    );
+    await expect(
+      page.getByRole("button", { name: "Next", exact: true }),
+    ).toBeEnabled();
+    const handle = page.getByRole("slider", {
+      name: `${label} ${side} slider`,
+    });
+    await handle.focus();
+    await handle.press(key);
+    await expect(page).not.toHaveURL(new RegExp(`${field}_min|${field}_max`));
+  }
+  // Tabbing through a restored, explicitly entered zero threshold must preserve it.
+  await page.goto("/explore/beers?rating_min=0");
+  const zero = page.getByRole("slider", { name: "My rating minimum slider" });
+  await zero.focus();
+  await zero.press("Tab");
+  await expect(page).toHaveURL(/rating_min=0/);
 });
 
 for (const colorScheme of ["light", "dark"] as const) {
