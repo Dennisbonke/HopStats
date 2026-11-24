@@ -1108,6 +1108,7 @@ test("Explorer review fixes: touch-capable slider gestures", async ({
   );
   const context = await browser.newContext({
     hasTouch: true,
+    isMobile: true,
     viewport: { width: 390, height: 844 },
   });
   try {
@@ -1131,6 +1132,10 @@ test("Explorer review fixes: touch-capable slider gestures", async ({
         "touchstart",
         "touchend",
         "click",
+        "mousedown",
+        "mouseup",
+        "focusin",
+        "focusout",
         "lostpointercapture",
       ])
         document.addEventListener(
@@ -1149,6 +1154,10 @@ test("Explorer review fixes: touch-capable slider gestures", async ({
           true,
         );
     });
+    // Verify native touch dismissal before and after the drag sequence.
+    await sheet.getByRole("button", { name: "Cancel" }).tap();
+    await expect(sheet).toHaveCount(0);
+    await page.getByRole("button", { name: "Filters (2)" }).tap();
     // Reuse one CDP session and explicit contact IDs for the native gesture
     // sequence, as in the existing chart swipe regressions.
     const cdp =
@@ -1262,6 +1271,13 @@ for (const width of [390, 1280]) {
         await expect(panel).toBeVisible();
       }
     }
+    // Native number inputs report incomplete exponents as value="", badInput=true.
+    // Preserve the applied bound rather than treating that state as a clear.
+    await min.fill("");
+    await min.pressSequentially("1e");
+    await min.press("Tab");
+    await expect(min).toHaveAttribute("aria-invalid", "true");
+    await expect(page).toHaveURL(/rating_min=3.70/);
     for (const value of ["3.70", "3.75", "4.10", "0", "5"]) {
       await min.fill(value);
       await min.press("Tab");
