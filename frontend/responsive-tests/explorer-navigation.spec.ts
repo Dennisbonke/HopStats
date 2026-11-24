@@ -419,8 +419,22 @@ for (const width of [320, 375, 390, 428, 768, 1280, 1440, 1920, 2560]) {
       });
       const sort = page.getByRole("combobox", { name: "Sort beers" });
       await search.fill("hoppy");
-      await page.getByRole("button", { name: "Search", exact: true }).click();
+      // URL changes can precede React's committed render. Wait for the request
+      // from the submitted search before interacting with the next control.
+      await Promise.all([
+        page.waitForResponse((response) => {
+          const url = new URL(response.url());
+          return (
+            url.pathname === "/api/v1/explore/beers" &&
+            url.searchParams.get("search") === "hoppy"
+          );
+        }),
+        page.getByRole("button", { name: "Search", exact: true }).click(),
+      ]);
       await expect(page).toHaveURL(/search=hoppy/);
+      await expect(
+        page.getByRole("button", { name: "Next", exact: true }),
+      ).toBeEnabled();
       await sort.selectOption("name_asc");
       await expect(page).toHaveURL(/search=hoppy&sort=name_asc/);
       await expect(

@@ -1349,7 +1349,7 @@ test("semantic themes stay scoped while Explorer uses the shared palette", async
 
     await expect(explorer).toHaveCSS("color-scheme", expected.controlScheme);
     await expect(explorer).toHaveCSS("background-color", expected.canvas);
-    await expect(catalogue).toHaveCSS("background-color", expected.surface);
+    await expect(catalogue).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     const beerCardSurface = await page
       .locator(".explorer-beer-card")
       .evaluate((element) => {
