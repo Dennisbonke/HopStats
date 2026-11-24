@@ -154,4 +154,201 @@ def test_explore_search_sort_and_pagination(client):
     assert len(filtered["items"]) == 1
     assert client.get("/api/v1/explore/beers?page=0").status_code == 422
     assert client.get("/api/v1/explore/beers?page_size=101").status_code == 422
-    assert client.get("/api/v1/explore/beers?sort=abv_desc").status_code == 422
+    assert client.get("/api/v1/explore/beers?sort=unknown_desc").status_code == 422
+
+
+def _set_beer(beer_id, **values):
+    with SessionLocal() as session:
+        row = session.get(Beer, beer_id)
+        for key, value in values.items():
+            setattr(row, key, value)
+        session.commit()
+
+
+def test_advanced_filters_precision_combination_and_missing_data(client):
+    user = _user_id()
+    ids = []
+    for index, rating in enumerate([0, 3.70, 3.75, 4.10, 5.00, None]):
+        beer_id = _beer(f"Beer {index}", brewery=f"Brewery {index}", style=f"Style {index}")
+        ids.append(beer_id)
+        _set_beer(beer_id, abv=Decimal(str(index + 4)))
+        _checkin(user, beer_id, f"advanced-{index}", index, rating)
+    missing = _beer("Missing")
+    _checkin(user, missing, "missing", 10)
+    precise = _beer("Precise")
+    _set_beer(precise, abv=Decimal("67.50"))
+    for index, rating in enumerate([4.00, 4.20, 4.50, None]):
+        _checkin(user, precise, f"precise-{index}", index, rating)
+    zero_average = _beer("Zero included")
+    _checkin(user, zero_average, "zero-0", 0, 0)
+    _checkin(user, zero_average, "zero-5", 1, 5)
+
+    def get(**params):
+        response = client.get("/api/v1/explore/beers", params=params)
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    for index, rating in enumerate([0, 3.70, 3.75, 4.10, 5.00]):
+        assert [i["id"] for i in get(rating_min=rating, rating_max=rating)["items"]] == [ids[index]]
+    assert [i["id"] for i in get(rating_min=4.23, rating_max=4.24)["items"]] == [precise]
+    assert precise not in [i["id"] for i in get(rating_max=4.23)["items"]]
+    result = get(search="Precise")["items"][0]
+    assert abs(result["personal_average_rating"] - 4.233333333333) < 1e-10
+    assert result["rated_checkin_count"] == 3 and result["checkin_count"] == 4
+    assert get(search="Zero included")["items"][0]["personal_average_rating"] == 2.5
+    assert get()["total"] == 9
+    assert get(abv_min=0)["total"] == 7
+    assert get(rating_min=0)["total"] == 7
+    assert [i["id"] for i in get(abv_min=5, abv_max=6)["items"]] == [ids[2], ids[1]]
+    assert get(abv_min=67.5, abv_max=67.5)["items"][0]["id"] == precise
+    with SessionLocal() as session:
+        rows = [session.get(Beer, id) for id in ids]
+        breweries = [b.brewery_id for b in rows]
+        styles = [b.style_id for b in rows]
+    assert get(brewery_id=breweries[:2])["total"] == 2
+    assert get(style_id=styles[:2])["total"] == 2
+    combined = get(
+        brewery_id=breweries[:3],
+        style_id=styles[1:4],
+        rating_min=3.7,
+        abv_max=6,
+        search="beer",
+        page_size=1,
+        page=2,
+    )
+    assert combined["total"] == 2 and combined["total_pages"] == 2
+    assert combined["items"][0]["id"] == ids[1]
+    assert get(brewery_id=breweries[:1], style_id=styles[1:2])["total"] == 0
+
+
+def test_advanced_sort_modes_nulls_and_ties(client):
+    user = _user_id()
+    a = _beer("alpha", brewery="alpha brewery", style="alpha style")
+    b = _beer("Beta", brewery="Beta brewery", style="Beta style")
+    missing = _beer("zz missing")
+    twin = _beer("ALPHA")
+    _set_beer(a, abv=Decimal("4.10"))
+    _set_beer(b, abv=Decimal("5.00"))
+    _checkin(user, a, "sort-a", 0, 3.7)
+    _checkin(user, b, "sort-b", 1, 4.1)
+    _checkin(user, b, "sort-b-repeat", 2, 5)
+    _checkin(user, missing, "sort-missing", 3)
+    _checkin(user, twin, "sort-twin", 4)
+    for field in [
+        "name",
+        "brewery",
+        "style",
+        "abv",
+        "rating",
+        "first_tried",
+        "last_tried",
+        "checkins",
+    ]:
+        for direction in ["asc", "desc"]:
+            data = client.get(f"/api/v1/explore/beers?sort={field}_{direction}").json()
+            items = data["items"]
+            key = {
+                "name": "name",
+                "brewery": "brewery",
+                "style": "style",
+                "abv": "abv",
+                "rating": "personal_average_rating",
+                "first_tried": "first_checked_in_at",
+                "last_tried": "last_checked_in_at",
+                "checkins": "checkin_count",
+            }[field]
+
+            def value(item, key=key):
+                v = item[key]
+                if isinstance(v, dict):
+                    v = v["name"]
+                return v.lower() if isinstance(v, str) else v
+
+            expected = sorted(items, key=lambda i: i["id"])
+            expected = sorted(
+                [i for i in expected if value(i) is not None],
+                key=value,
+                reverse=direction == "desc",
+            ) + [i for i in expected if value(i) is None]
+            assert [i["id"] for i in items] == [i["id"] for i in expected]
+
+
+def test_filter_dates_inclusive_amsterdam_and_dst(client):
+    user = _user_id()
+    ids = [_beer(f"Boundary {i}") for i in range(4)]
+    # Amsterdam DST start: local 2026-03-29 has 23 hours.
+    moments = [
+        "2026-03-28T22:59:59",
+        "2026-03-28T23:00:00",
+        "2026-03-29T21:59:59",
+        "2026-03-29T22:00:00",
+    ]
+    with SessionLocal() as session:
+        for id, moment in zip(ids, moments, strict=True):
+            session.add(
+                Checkin(
+                    user_id=user,
+                    source_system="test",
+                    external_id=f"boundary-{id}",
+                    beer_id=id,
+                    occurred_at_utc=datetime.fromisoformat(moment),
+                )
+            )
+        session.commit()
+    for field in ["first_tried", "last_tried"]:
+        result = client.get(
+            "/api/v1/explore/beers",
+            params={f"{field}_from": "2026-03-29", f"{field}_to": "2026-03-29"},
+        ).json()
+        assert {i["id"] for i in result["items"]} == set(ids[1:3])
+    _checkin(user, ids[1], "boundary-repeat", 200)
+    assert client.get("/api/v1/explore/beers?first_tried_to=2026-03-29").json()["total"] == 3
+    assert client.get("/api/v1/explore/beers?last_tried_to=2026-03-29").json()["total"] == 2
+
+
+def test_filter_options_scoped_bounded_searchable_and_authenticated(client):
+    local = _beer("Local", brewery="Local brewery", style="Local style")
+    _set_beer(local, abv=Decimal("67.50"))
+    _checkin(_user_id(), local, "options-local", 0)
+    with SessionLocal() as session:
+        other = User(username="other")
+        session.add(other)
+        session.commit()
+        other_id = other.id
+    other_beer = _beer("Other", brewery="Secret brewery", style="Secret style")
+    _checkin(other_id, other_beer, "options-other", 0)
+    for category in ["breweries", "styles"]:
+        url = f"/api/v1/explore/filter-options/{category}"
+        result = client.get(url).json()
+        assert len(result["items"]) == 1
+        assert result["items"][0]["name"].startswith("Local")
+        assert client.get(url, params={"search": "SECRET"}).json()["items"] == []
+        assert len(client.get(url, params={"search": "LOCAL"}).json()["items"]) == 1
+        assert client.get(url, params={"selected_id": 99999}).json()["items"] == []
+        assert client.get(url, params={"offset": 1}).json()["items"] == []
+        assert client.get(url, params={"limit": 101}).status_code == 422
+    assert client.get("/api/v1/explore/filter-bounds").json()["abv_max"] == 67.5
+    client.cookies.clear()
+    for path in ["beers", "filter-options/styles", "filter-options/breweries", "filter-bounds"]:
+        assert client.get(f"/api/v1/explore/{path}").status_code == 401
+
+
+def test_invalid_advanced_parameters(client):
+    for query in [
+        "brewery_id=0",
+        "style_id=-1",
+        "style_id=no",
+        "abv_min=-1",
+        "abv_min=nan",
+        "abv_max=inf",
+        "abv_min=10&abv_max=5",
+        "rating_min=-0.01",
+        "rating_max=5.01",
+        "rating_min=4&rating_max=3",
+        "first_tried_from=invalid",
+        "first_tried_from=2026-05-01&first_tried_to=2026-01-01",
+        "last_tried_from=2026-05-01&last_tried_to=2026-01-01",
+        "last_tried_to=9999-12-31",
+        "sort=invalid",
+    ]:
+        assert client.get(f"/api/v1/explore/beers?{query}").status_code == 422, query

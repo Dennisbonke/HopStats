@@ -1,8 +1,44 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { within } from "@testing-library/react";
 import ExplorerBeers from "./pages/ExplorerBeers";
+
+vi.mock("./api/explore", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./api/explore")>()),
+  fetchExploreBounds: async () => ({ abv_max: 67.5 }),
+  fetchExploreOptions: async (category: string, params: URLSearchParams) => {
+    const items =
+      category === "breweries"
+        ? [
+            { id: 1, name: "Cloudwater" },
+            { id: 2, name: "Moersleutel" },
+          ]
+        : [
+            { id: 3, name: "Imperial IPA" },
+            { id: 4, name: "Stout" },
+          ];
+    const selected = params.getAll("selected_id");
+    return {
+      items: items.filter(
+        (i) =>
+          (!selected.length || selected.includes(String(i.id))) &&
+          i.name
+            .toLowerCase()
+            .includes((params.get("search") ?? "").toLowerCase()),
+      ),
+      has_more: false,
+    };
+  },
+}));
 
 const requests: string[] = [];
 
@@ -303,4 +339,179 @@ test("uses an accessible artwork fallback for missing beer images", async () => 
     screen.getAllByRole("img", { name: "No Photo Ale artwork unavailable" })
       .length,
   ).toBeGreaterThan(0);
+});
+
+test("restores filters, removes chips, preserves unrelated parameters and browser history", async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter
+      initialEntries={[
+        "/explore/beers?search=ipa&brewery_id=1&brewery_id=2&style_id=3&rating_min=3.70&abv_max=8.5&first_tried_from=2026-01-01&page=2&future=preserved",
+      ]}
+    >
+      <RouterState />
+      <ExplorerBeers />
+    </MemoryRouter>,
+  );
+  await screen.findAllByText("Second Page Pilsner");
+  expect(requests.at(-1)).toContain("rating_min=3.70");
+  expect(
+    new URL(requests.at(-1)!, "http://localhost").searchParams.getAll(
+      "brewery_id",
+    ),
+  ).toEqual(["1", "2"]);
+  const chips = screen.getByLabelText("Active filters");
+  await user.click(
+    await within(chips).findByRole("button", { name: "Remove Cloudwater" }),
+  );
+  await waitFor(() => expect(requests.at(-1)).not.toContain("brewery_id=1"));
+  expect(requests.at(-1)).toContain("brewery_id=2");
+  expect(screen.getByLabelText("Current URL")).toHaveTextContent(
+    "future=preserved",
+  );
+  expect(requests.at(-1)).toContain("page=1");
+  await user.click(screen.getByRole("button", { name: "Browser back" }));
+  await waitFor(() => expect(requests.at(-1)).toContain("brewery_id=1"));
+  await user.click(screen.getByRole("button", { name: "Clear all filters" }));
+  await waitFor(() => expect(requests.at(-1)).not.toContain("rating_min"));
+  expect(requests.at(-1)).toContain("search=ipa");
+  expect(screen.getByLabelText("Current URL")).toHaveTextContent(
+    "future=preserved",
+  );
+});
+
+test("multi-select retains selections during option search and uses OR IDs", async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter>
+      <ExplorerBeers />
+    </MemoryRouter>,
+  );
+  await user.click(await screen.findByRole("checkbox", { name: "Cloudwater" }));
+  await user.type(
+    screen.getByRole("searchbox", { name: "Search breweries" }),
+    "moers",
+  );
+  await user.click(
+    await screen.findByRole("checkbox", { name: "Moersleutel" }),
+  );
+  await waitFor(() =>
+    expect(
+      new URL(requests.at(-1)!, "http://localhost").searchParams.getAll(
+        "brewery_id",
+      ),
+    ).toEqual(["1", "2"]),
+  );
+  expect(screen.getByLabelText("Active filters")).toHaveTextContent(
+    "Active filters (1)",
+  );
+});
+
+test("exact numeric thresholds synchronize sliders and sortable headers", async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={["/explore/beers?sort=rating_desc"]}>
+      <ExplorerBeers />
+    </MemoryRouter>,
+  );
+  const minimum = screen.getByRole("spinbutton", { name: "My rating minimum" });
+  await user.type(minimum, "3.70");
+  await user.tab();
+  await waitFor(() => expect(requests.at(-1)).toContain("rating_min=3.70"));
+  expect(
+    screen.getByRole("slider", { name: "My rating minimum slider" }),
+  ).toHaveValue("3.7");
+  await user.click(screen.getByRole("button", { name: /^My rating/ }));
+  expect(screen.getByRole("combobox", { name: "Sort beers" })).toHaveValue(
+    "rating_asc",
+  );
+  expect(
+    screen.getByRole("columnheader", { name: /^My rating/ }),
+  ).toHaveAttribute("aria-sort", "ascending");
+  await user.clear(minimum);
+  await user.type(minimum, "5.01");
+  await user.tab();
+  expect(screen.getByRole("alert")).toHaveTextContent("ordered 0–5 range");
+  expect(requests.at(-1)).toContain("rating_min=3.70");
+});
+
+test("mobile sheet cancels, applies atomically, clears only drafts and restores focus", async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={["/explore/beers?rating_min=3.7"]}>
+      <ExplorerBeers />
+    </MemoryRouter>,
+  );
+  await screen.findAllByText("First Page Stout");
+  const open = screen.getByRole("button", { name: "Filters (1)" });
+  await user.click(open);
+  let dialog = screen.getByRole("dialog");
+  await user.click(within(dialog).getByRole("button", { name: "Clear all" }));
+  expect(requests.at(-1)).toContain("rating_min=3.7");
+  await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(open).toHaveFocus();
+  await user.click(open);
+  dialog = screen.getByRole("dialog");
+  expect(
+    within(dialog).getByRole("spinbutton", { name: "My rating minimum" }),
+  ).toHaveValue(3.7);
+  await user.click(within(dialog).getByRole("button", { name: "Clear all" }));
+  // Happy DOM incorrectly flags fractional range steps as stepMismatch.
+  // Exercise submission directly here; Playwright clicks the actual button.
+  fireEvent.submit(dialog.querySelector("form")!);
+  await waitFor(() => expect(requests.at(-1)).not.toContain("rating_min"));
+  expect(document.body.style.overflow).toBe("");
+});
+
+test("formats precise averages, zero and missing values", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        items: [
+          { ...beer(1, "Precise"), personal_average_rating: 4.2333333333 },
+          { ...beer(2, "Zero"), personal_average_rating: 0 },
+          beer(3, "Unrated"),
+        ],
+        total: 3,
+        total_pages: 1,
+        page: 1,
+        page_size: 25,
+      }),
+    })),
+  );
+  render(
+    <MemoryRouter>
+      <ExplorerBeers />
+    </MemoryRouter>,
+  );
+  expect((await screen.findAllByText("4.23")).length).toBe(2);
+  expect(screen.getAllByText("0.00").length).toBe(2);
+  expect(screen.getAllByText("Not rated").length).toBe(2);
+});
+
+test("invalid URL filters are ignored and errors have an accessible state", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      requests.push(url);
+      return { ok: false, status: 503 };
+    }),
+  );
+  render(
+    <MemoryRouter
+      initialEntries={[
+        "/explore/beers?rating_min=6&abv_min=10&abv_max=5&style_id=-1&last_tried_from=bogus",
+      ]}
+    >
+      <ExplorerBeers />
+    </MemoryRouter>,
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "temporarily unavailable",
+  );
+  expect(requests[0]).not.toContain("rating_min");
+  expect(requests[0]).not.toContain("abv_min");
 });

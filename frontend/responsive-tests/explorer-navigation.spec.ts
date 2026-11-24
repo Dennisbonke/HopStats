@@ -60,6 +60,15 @@ async function stubExplorer(
         created_at: "2026-01-01T00:00:00Z",
       },
       "/api/v1/health": { status: "ok" },
+      "/api/v1/explore/filter-bounds": { abv_max: 67.5 },
+      "/api/v1/explore/filter-options/breweries": {
+        items: [{ id: 1, name: "A Brewery with a Long Name" }],
+        has_more: false,
+      },
+      "/api/v1/explore/filter-options/styles": {
+        items: [{ id: 2, name: "West Coast IPA" }],
+        has_more: false,
+      },
       "/api/v1/explore/beers": {
         items,
         page: Number(
@@ -336,6 +345,7 @@ for (const width of [320, 375, 390, 428, 768, 1280, 1440, 1920, 2560]) {
           main: box(".app-main"),
           page: box(".explorer-page"),
           catalogue: box(".explorer-catalogue"),
+          results: box(".explorer-results"),
           table: box(".explorer-beer-table"),
           form: box(".explorer-controls"),
           fields: [
@@ -400,7 +410,7 @@ for (const width of [320, 375, 390, 428, 768, 1280, 1440, 1920, 2560]) {
         await expect(table).toBeVisible();
         await expect(cards).toBeHidden();
         expect(
-          Math.abs(geometry.table.width - geometry.catalogue.width),
+          Math.abs(geometry.table.width - geometry.results.width),
         ).toBeLessThanOrEqual(1);
         expect(geometry.tableOverflow).toBeLessThanOrEqual(1);
         // Long beer, brewery and style names wrap within their actual cells.
@@ -505,6 +515,171 @@ for (const width of [390, 1280, 1920]) {
         path,
         contentType: "image/png",
       });
+    });
+  }
+}
+
+for (const width of [320, 375, 390, 428, 768, 1280]) {
+  for (const colorScheme of ["light", "dark"] as const) {
+    test(`advanced Explorer controls at ${width}px in ${colorScheme}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ colorScheme });
+      await stubExplorer(page);
+      await page.goto("/explore/beers?rating_min=3.70&future=preserved");
+      await expect(
+        page.getByRole("button", { name: "Next", exact: true }),
+      ).toBeEnabled();
+      const mobile = width <= 700;
+      const opener = page.getByRole("button", { name: "Filters (1)" });
+      if (mobile) await opener.click();
+      const panel = mobile
+        ? page.getByRole("dialog")
+        : page.getByRole("complementary", { name: "Beer filters" });
+      await expect(panel).toBeVisible();
+      await expect(
+        panel.getByRole("spinbutton", {
+          name: "My rating minimum",
+          exact: true,
+        }),
+      ).toHaveValue("3.70");
+      await panel
+        .getByRole("checkbox", { name: "A Brewery with a Long Name" })
+        .check();
+      await panel
+        .getByRole("searchbox", { name: "Search breweries" })
+        .fill("another");
+      await expect(
+        panel.getByRole("button", {
+          name: "Remove A Brewery with a Long Name",
+        }),
+      ).toBeVisible();
+      const lower = panel.getByRole("slider", {
+        name: "My rating minimum slider",
+      });
+      const upper = panel.getByRole("slider", {
+        name: "My rating maximum slider",
+      });
+      await lower.focus();
+      await lower.press("ArrowRight");
+      await expect(
+        panel.getByRole("spinbutton", {
+          name: "My rating minimum",
+          exact: true,
+        }),
+      ).toHaveValue("3.71");
+      await upper.focus();
+      await upper.press("ArrowLeft");
+      await expect(
+        panel.getByRole("spinbutton", {
+          name: "My rating maximum",
+          exact: true,
+        }),
+      ).toHaveValue("4.99");
+      const abv = panel.getByRole("spinbutton", {
+        name: "ABV maximum",
+        exact: true,
+      });
+      await abv.fill("67.50");
+      await abv.press("Tab");
+      await expect(
+        panel.getByRole("slider", { name: "ABV maximum slider" }),
+      ).toHaveValue("67.5");
+      await panel
+        .getByLabel("First tried from", { exact: true })
+        .fill("2026-01-01");
+      await panel
+        .getByLabel("First tried to", { exact: true })
+        .fill("2026-12-31");
+      for (const input of await panel.locator('input[type="date"]').all()) {
+        const geometry = await input.evaluate((node) => ({
+          width: node.getBoundingClientRect().width,
+          parent: node.parentElement!.getBoundingClientRect().width,
+        }));
+        expect(geometry.width).toBeLessThanOrEqual(geometry.parent + 1);
+      }
+      if (mobile) {
+        await expect(page).not.toHaveURL(/brewery_id/);
+        const path = testInfo.outputPath(
+          `explorer-sheet-${width}-${colorScheme}.png`,
+        );
+        await page.screenshot({ path });
+        await testInfo.attach("Mobile filter sheet", {
+          path,
+          contentType: "image/png",
+        });
+        await panel
+          .getByRole("button", { name: "Cancel", exact: true })
+          .click();
+        await expect(opener).toBeFocused();
+        await opener.click();
+        await expect(
+          panel.getByRole("spinbutton", {
+            name: "My rating minimum",
+            exact: true,
+          }),
+        ).toHaveValue("3.70");
+        await panel
+          .getByRole("button", { name: "Clear all", exact: true })
+          .click();
+        await expect(page).toHaveURL(/rating_min=3.70/);
+        await panel.getByRole("checkbox", { name: "West Coast IPA" }).check();
+        await panel
+          .getByRole("button", { name: "Apply filters", exact: true })
+          .click();
+        await expect(panel).toBeHidden();
+        await expect(page).toHaveURL(/style_id=2/);
+        await expect(page).not.toHaveURL(/rating_min/);
+        await page.getByRole("button", { name: "Filters (1)" }).click();
+        await page.keyboard.press("Escape");
+        await expect(panel).toBeHidden();
+        await page.getByRole("button", { name: "Filters (1)" }).click();
+        await page.mouse.click(5, 5);
+        await expect(panel).toBeHidden();
+        // Landscape keeps the fixed footer reachable and the sheet scrollable.
+        await page.setViewportSize({ width: 667, height: 375 });
+        await page.getByRole("button", { name: "Filters (1)" }).click();
+        await expect(
+          panel.getByRole("button", { name: "Apply filters" }),
+        ).toBeInViewport();
+        await panel
+          .getByLabel("Last tried to", { exact: true })
+          .scrollIntoViewIfNeeded();
+        await expect(
+          panel.getByRole("button", { name: "Cancel", exact: true }),
+        ).toBeInViewport();
+        await panel
+          .getByRole("button", { name: "Cancel", exact: true })
+          .click();
+      } else {
+        await expect(page).toHaveURL(/rating_min=3.71/);
+        await expect(page).toHaveURL(/brewery_id=1/);
+        const header = page.getByRole("columnheader", { name: /^My rating/ });
+        await header.getByRole("button").click();
+        await expect(header).toHaveAttribute("aria-sort", "ascending");
+        await expect(
+          page.getByRole("combobox", { name: "Sort beers" }),
+        ).toHaveValue("rating_asc");
+        await expect(
+          page.locator(".explorer-beer-name-cell"),
+        ).not.toContainText("A Brewery with a Long Name");
+        expect(
+          await panel.evaluate((node) => getComputedStyle(node).position),
+        ).toBe("sticky");
+        await expect(page).toHaveURL(/future=preserved/);
+        await page.getByRole("button", { name: "Next", exact: true }).click();
+        await expect(page).toHaveURL(/brewery_id=1/);
+        await expect(page).toHaveURL(/page=2/);
+        await page.reload();
+        await expect(
+          panel.getByRole("spinbutton", {
+            name: "My rating minimum",
+            exact: true,
+          }),
+        ).toHaveValue("3.71");
+      }
+      await expectNoHorizontalOverflow(page);
     });
   }
 }

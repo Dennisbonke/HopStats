@@ -1,20 +1,19 @@
+from datetime import UTC, date, datetime, time, timedelta
 from math import ceil
-from typing import Literal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import Select, asc, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from ..models import Beer, BeerStyle, Brewery, Checkin
-from ..schemas.explore import ExploreBeerListResponse, ExploreBeerResponse, ExploreEntity
-
-ExploreBeerSort = Literal[
-    "name_asc",
-    "name_desc",
-    "last_tried_desc",
-    "last_tried_asc",
-    "checkins_desc",
-    "checkins_asc",
-]
+from ..schemas.explore import (
+    ExploreBeerListResponse,
+    ExploreBeerResponse,
+    ExploreBeerSort,
+    ExploreBoundsResponse,
+    ExploreEntity,
+    ExploreOptionsResponse,
+)
 
 
 class ExploreService:
@@ -31,6 +30,16 @@ class ExploreService:
         sort: ExploreBeerSort = "last_tried_desc",
         page: int = 1,
         page_size: int = 25,
+        brewery_id: list[int] | None = None,
+        style_id: list[int] | None = None,
+        abv_min: float | None = None,
+        abv_max: float | None = None,
+        rating_min: float | None = None,
+        rating_max: float | None = None,
+        first_tried_from: date | None = None,
+        first_tried_to: date | None = None,
+        last_tried_from: date | None = None,
+        last_tried_to: date | None = None,
     ) -> ExploreBeerListResponse:
         stats = (
             select(
@@ -76,6 +85,29 @@ class ExploreService:
                 )
             )
 
+        if brewery_id:
+            query = query.where(Beer.brewery_id.in_(brewery_id))
+        if style_id:
+            query = query.where(Beer.style_id.in_(style_id))
+        for column, low, high in [
+            (Beer.abv, abv_min, abv_max),
+            (stats.c.personal_average_rating, rating_min, rating_max),
+        ]:
+            if low is not None:
+                query = query.where(column >= low)
+            if high is not None:
+                query = query.where(column <= high)
+        # Inclusive Amsterdam calendar days, converted to half-open UTC bounds.
+        # Convert each midnight separately so DST days can contain 23 or 25 hours.
+        for column, low, high in [
+            (stats.c.first_checked_in_at, first_tried_from, first_tried_to),
+            (stats.c.last_checked_in_at, last_tried_from, last_tried_to),
+        ]:
+            if low is not None:
+                query = query.where(column >= _utc_boundary(low))
+            if high is not None:
+                query = query.where(column < _utc_boundary(high + timedelta(days=1)))
+
         filtered = query.subquery("filtered_user_beers")
         total = self.session.scalar(select(func.count()).select_from(filtered)) or 0
         rows = self.session.execute(
@@ -117,22 +149,66 @@ class ExploreService:
             total_pages=ceil(total / page_size) if total else 0,
         )
 
+    def options(self, user_id, category, *, search="", selected_ids=None, offset=0, limit=25):
+        entity = Brewery if category == "breweries" else BeerStyle
+        foreign_key = Beer.brewery_id if category == "breweries" else Beer.style_id
+        query = select(entity.id, entity.name).where(
+            select(Beer.id)
+            .where(
+                foreign_key == entity.id,
+                select(Checkin.id)
+                .where(Checkin.beer_id == Beer.id, Checkin.user_id == user_id)
+                .exists(),
+            )
+            .exists()
+        )
+        if selected_ids is not None:
+            query = query.where(entity.id.in_(selected_ids))
+        elif search.strip():
+            query = query.where(
+                entity.name.ilike(f"%{_literal_search(search.strip())}%", escape="\\")
+            )
+        rows = self.session.execute(
+            query.order_by(func.lower(entity.name), entity.id).offset(offset).limit(limit + 1)
+        ).all()
+        return ExploreOptionsResponse(
+            items=[ExploreEntity(id=row.id, name=row.name) for row in rows[:limit]],
+            has_more=len(rows) > limit,
+        )
+
+    def bounds(self, user_id):
+        maximum = self.session.scalar(
+            select(func.max(Beer.abv)).where(
+                select(Checkin.id)
+                .where(Checkin.beer_id == Beer.id, Checkin.user_id == user_id)
+                .exists()
+            )
+        )
+        return ExploreBoundsResponse(abv_max=max(20, float(maximum or 0)))
+
+
+def _utc_boundary(day: date) -> datetime:
+    return (
+        datetime.combine(day, time.min, tzinfo=ZoneInfo("Europe/Amsterdam"))
+        .astimezone(UTC)
+        .replace(tzinfo=None)
+    )
+
 
 def _sort_order(sort: ExploreBeerSort, query: Select):
-    name = func.lower(query.c.name)
-    if sort == "name_asc":
-        primary = asc(name)
-    elif sort == "name_desc":
-        primary = desc(name)
-    elif sort == "last_tried_asc":
-        primary = asc(query.c.last_checked_in_at)
-    elif sort == "last_tried_desc":
-        primary = desc(query.c.last_checked_in_at)
-    elif sort == "checkins_asc":
-        primary = asc(query.c.checkin_count)
-    else:
-        primary = desc(query.c.checkin_count)
-    return [primary, asc(query.c.id)]
+    field, direction = sort.rsplit("_", 1)
+    columns = {
+        "name": func.lower(query.c.name),
+        "brewery": func.lower(query.c.brewery_name),
+        "style": func.lower(query.c.style_name),
+        "abv": query.c.abv,
+        "rating": query.c.personal_average_rating,
+        "first_tried": query.c.first_checked_in_at,
+        "last_tried": query.c.last_checked_in_at,
+        "checkins": query.c.checkin_count,
+    }
+    column = columns[field]
+    return [column.is_(None), asc(column) if direction == "asc" else desc(column), asc(query.c.id)]
 
 
 def _literal_search(value: str) -> str:
