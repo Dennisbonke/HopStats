@@ -1109,6 +1109,41 @@ test("Explorer review fixes: touch-capable slider gestures", async ({
     );
     await page.getByRole("button", { name: "Filters (2)" }).tap();
     const sheet = page.getByRole("dialog");
+    const inputEvents: string[] = [];
+    page.on("console", (message) => {
+      if (message.text().startsWith("explorer-touch"))
+        inputEvents.push(message.text());
+    });
+    await page.evaluate(() => {
+      for (const type of [
+        "pointerdown",
+        "pointerup",
+        "pointercancel",
+        "touchstart",
+        "touchend",
+        "click",
+        "lostpointercapture",
+      ])
+        document.addEventListener(
+          type,
+          (event) =>
+            console.debug(
+              "explorer-touch",
+              JSON.stringify({
+                type,
+                target: (event.target as HTMLElement).outerHTML.slice(0, 200),
+                pointerId: (event as PointerEvent).pointerId,
+                pointerType: (event as PointerEvent).pointerType,
+                prevented: event.defaultPrevented,
+              }),
+            ),
+          true,
+        );
+    });
+    // Reuse one CDP session and explicit contact IDs for the native gesture
+    // sequence, as in the existing chart swipe regressions.
+    const cdp =
+      browserName === "chromium" ? await context.newCDPSession(page) : null;
     for (const [label, max] of [
       ["ABV", 67.5],
       ["My rating", 5],
@@ -1118,8 +1153,7 @@ test("Explorer review fixes: touch-capable slider gestures", async ({
       });
       await slider.scrollIntoViewIfNeeded();
       const box = (await slider.boundingBox())!;
-      if (browserName === "chromium") {
-        const cdp = await context.newCDPSession(page);
+      if (cdp) {
         for (const direction of [-1, 1]) {
           const handle = sheet.getByRole("slider", {
             name: `${label} ${direction < 0 ? "minimum" : "maximum"} slider`,
@@ -1131,12 +1165,12 @@ test("Explorer review fixes: touch-capable slider gestures", async ({
           const y = box.y + box.height / 2;
           await cdp.send("Input.dispatchTouchEvent", {
             type: "touchStart",
-            touchPoints: [{ x: start, y }],
+            touchPoints: [{ id: 1, x: start, y }],
           });
           await cdp.send("Input.dispatchTouchEvent", {
             type: "touchMove",
             touchPoints: [
-              { x: start + direction * (box.width - 24) * 0.15, y },
+              { id: 1, x: start + direction * (box.width - 24) * 0.15, y },
             ],
           });
           await cdp.send("Input.dispatchTouchEvent", {
@@ -1144,7 +1178,6 @@ test("Explorer review fixes: touch-capable slider gestures", async ({
             touchPoints: [],
           });
         }
-        await cdp.detach();
       } else {
         // WebKit exposes real touchscreen taps, but no touch-drag automation API.
         // Separate using keyboard, then touch the track to move each handle.
@@ -1176,7 +1209,13 @@ test("Explorer review fixes: touch-capable slider gestures", async ({
       /rating_min=2&rating_max=2&abv_min=20&abv_max=20/,
     );
     await sheet.getByRole("button", { name: "Cancel" }).tap();
-    await expect(sheet).toHaveCount(0);
+    try {
+      await expect(sheet).toHaveCount(0);
+    } catch (error) {
+      console.log(inputEvents.join("\n"));
+      throw error;
+    }
+    await cdp?.detach();
   } finally {
     await context.close();
   }
