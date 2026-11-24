@@ -448,6 +448,7 @@
 }
 .explorer-range-track {
   touch-action: none;
+  user-select: none;
   cursor: ew-resize;
   position: relative;
   height: 2.75rem;
@@ -736,4 +737,14 @@
   .explorer-page .explorer-active-filters > button:not(.explorer-chip) {
     display: none;
   }
+}
+
+.explorer-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+.explorer-empty-actions:empty {
+  display: none;
 }

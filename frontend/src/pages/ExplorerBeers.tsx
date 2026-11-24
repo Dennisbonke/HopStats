@@ -462,40 +462,42 @@ export default function ExplorerBeers() {
                     ? "Adjust or clear your filters to see more beers."
                     : "Import your Untappd check-ins to start exploring your beer history."}
               </p>
-              {activeGroups(filters) > 0 && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={clearFilters}
-                >
-                  Clear filters
-                </Button>
-              )}
-              {querySearch.trim() && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => updateUrl("", sort, 1)}
-                >
-                  Clear search
-                </Button>
-              )}
-              {querySearch.trim() && activeGroups(filters) > 0 && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    const params = new URLSearchParams(searchParams);
-                    writeFilters(params, emptyFilters());
-                    params.delete("search");
-                    params.delete("page");
-                    setFilterResetKey((key) => key + 1);
-                    setSearchParams(params);
-                  }}
-                >
-                  Clear search and filters
-                </Button>
-              )}
+              <div className="explorer-empty-actions">
+                {activeGroups(filters) > 0 && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={clearFilters}
+                  >
+                    Clear filters
+                  </Button>
+                )}
+                {querySearch.trim() && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => updateUrl("", sort, 1)}
+                  >
+                    Clear search
+                  </Button>
+                )}
+                {querySearch.trim() && activeGroups(filters) > 0 && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      const params = new URLSearchParams(searchParams);
+                      writeFilters(params, emptyFilters());
+                      params.delete("search");
+                      params.delete("page");
+                      setFilterResetKey((key) => key + 1);
+                      setSearchParams(params);
+                    }}
+                  >
+                    Clear search and filters
+                  </Button>
+                )}
+              </div>
             </div>
           )}
           {!showLoading &&

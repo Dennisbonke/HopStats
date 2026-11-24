@@ -535,7 +535,7 @@ for (const width of [390, 1280, 1920]) {
         })),
       );
       await page.goto(
-        "/explore/beers?brewery_id=1&style_id=2&abv_min=5&abv_max=10&rating_min=3.70&rating_max=4.70",
+        "/explore/beers?brewery_id=1&style_id=2&abv_min=5&abv_max=10&rating_min=3.70&rating_max=4.80",
       );
       await expect(page.getByLabel("Active filters")).toContainText(
         "Cloudwater Brew Co.",
@@ -900,6 +900,15 @@ for (const colorScheme of ["light", "dark"] as const) {
       expect(
         await field.evaluate((node: HTMLInputElement) => node.validity.valid),
       ).toBe(true);
+    await expect(
+      sheet.getByRole("checkbox", { name: "West Coast IPA" }),
+    ).toBeVisible();
+    await expect(sheet.getByRole("status")).toHaveCount(0);
+    // Keep the selected brewery visible in its summary while showing both ranges.
+    await sheet
+      .locator("summary")
+      .filter({ hasText: /^Brewery/ })
+      .click();
     const expanded = testInfo.outputPath(
       `explorer-sheet-expanded-${colorScheme}.png`,
     );

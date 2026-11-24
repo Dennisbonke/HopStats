@@ -248,7 +248,8 @@ function RangeFilter({
         }
         onPointerDown={(event) => {
           if (event.button !== 0) return;
-          event.preventDefault();
+          // touch-action isolates dragging; keep native pointer defaults so
+          // later taps can still generate button clicks after a touch gesture.
           const box = event.currentTarget.getBoundingClientRect();
           const x = ((event.clientX - box.left - 12) / (box.width - 24)) * max;
           const collapsed =
