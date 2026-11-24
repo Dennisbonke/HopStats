@@ -1339,8 +1339,10 @@ for (const width of [390, 1280]) {
     await expect(panel.getByRole("alert")).toHaveCount(0);
     await max.fill("");
     await max.press("Tab");
+    await expect(max).toHaveValue("");
     await min.fill("");
     await min.press("Tab");
+    await expect(min).toHaveValue("");
     await expect(
       panel.getByRole("slider", { name: "My rating minimum slider" }),
     ).toHaveValue("0");

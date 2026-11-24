@@ -3,6 +3,7 @@ import {
   ReactNode,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -181,7 +182,8 @@ function RangeFilter({
     draftRef.current = values;
     setDraft(values);
   }
-  useEffect(() => {
+  // Restore applied bounds before the next field can receive a new edit.
+  useLayoutEffect(() => {
     draftRef.current = [low, high];
     badInputRef.current = [false, false];
     setBadInput([false, false]);
