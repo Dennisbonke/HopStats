@@ -435,7 +435,17 @@ for (const width of [320, 375, 390, 428, 768, 1280, 1440, 1920, 2560]) {
       await expect(
         page.getByRole("button", { name: "Next", exact: true }),
       ).toBeEnabled();
-      await sort.selectOption("name_asc");
+      await Promise.all([
+        page.waitForResponse((response) => {
+          const url = new URL(response.url());
+          return (
+            url.pathname === "/api/v1/explore/beers" &&
+            url.searchParams.get("search") === "hoppy" &&
+            url.searchParams.get("sort") === "name_asc"
+          );
+        }),
+        sort.selectOption("name_asc"),
+      ]);
       await expect(page).toHaveURL(/search=hoppy&sort=name_asc/);
       await expect(
         page.getByRole("button", { name: "Next", exact: true }),
