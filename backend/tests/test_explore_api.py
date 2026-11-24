@@ -371,3 +371,72 @@ def test_invalid_advanced_parameters(client):
         "sort=invalid",
     ]:
         assert client.get(f"/api/v1/explore/beers?{query}").status_code == 422, query
+
+
+def test_exact_rating_boundaries_sort_ties_and_pagination(client):
+    user_id = _user_id()
+    samples = [
+        ["3.60", "3.70", "3.80", None],
+        ["3.70"],
+        ["3.65", "3.75"],
+        ["4.10", "4.20", "4.30"],
+        ["0.10", "0.20", "0.30"],
+        ["0.00", None],
+        [None],
+        ["3.70", "3.70", "3.71"],
+    ]
+    ids = []
+    for i, ratings in enumerate(samples):
+        beer_id = _beer(f"Exact {i}")
+        ids.append(beer_id)
+        for j, rating in enumerate(ratings):
+            _checkin(user_id, beer_id, f"exact-{i}-{j}", j, rating)
+
+    def results(**params):
+        response = client.get("/api/v1/explore/beers", params=params)
+        assert response.status_code == 200
+        return response.json()
+
+    for bounds in [
+        dict(rating_min="3.70"),
+        dict(rating_max="3.70"),
+        dict(rating_min="3.70", rating_max="3.70"),
+    ]:
+        found = results(**bounds)["items"]
+        assert set(ids[:3]).issubset({item["id"] for item in found})
+        assert ids[6] not in {item["id"] for item in found}
+    exact = results(
+        rating_min="3.70",
+        rating_max="3.70",
+        search="Exact",
+        page_size=2,
+        sort="rating_desc",
+        page=2,
+    )
+    assert exact["total"] == 3
+    assert [item["id"] for item in exact["items"]] == [ids[2]]
+    for threshold, index in [("4.20", 3), ("0.20", 4), ("0", 5)]:
+        found = results(rating_min=threshold, rating_max=threshold)["items"]
+        assert [item["id"] for item in found] == [ids[index]]
+    ascending = [ids[5], ids[4], *ids[:3], ids[7], ids[3], ids[6]]
+    descending = [ids[3], ids[7], *ids[:3], ids[4], ids[5], ids[6]]
+    for direction, expected in [("asc", ascending), ("desc", descending)]:
+        rows = results(sort=f"rating_{direction}")["items"]
+        assert [item["id"] for item in rows] == expected
+    mean = results(rating_min="3.70", rating_max="3.71", sort="rating_desc")["items"][0]
+    assert mean["personal_average_rating"] > 3.70
+    assert mean["personal_average_rating"] < 3.71
+    assert mean["rated_checkin_count"] == 3
+    assert results(rating_max="3.70")["total"] == 5
+
+
+def test_numeric_threshold_hundredths_contract(client):
+    for field in ["abv_min", "abv_max", "rating_min", "rating_max"]:
+        for value in ["3.70", "3.7", "3.700", "3.75", "4.10", "0", "5", "37e-1"]:
+            assert client.get("/api/v1/explore/beers", params={field: value}).status_code == 200
+        for value in ["3.755", "-0.01", "nan", "inf", "-inf", "wat", "1e-3"]:
+            assert client.get("/api/v1/explore/beers", params={field: value}).status_code == 422
+    for field in ["rating_min", "rating_max"]:
+        assert client.get("/api/v1/explore/beers", params={field: "5.01"}).status_code == 422
+    assert client.get("/api/v1/explore/beers?abv_min=67.50&abv_max=100.01").status_code == 200
+    assert client.get("/api/v1/explore/beers?abv_min=10&abv_max=5").status_code == 422

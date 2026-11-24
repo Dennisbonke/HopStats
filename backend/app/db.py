@@ -11,6 +11,19 @@ class Base(DeclarativeBase):
     pass
 
 
+def _compare_rating_fractions(left: str, right: str) -> int:
+    """Exact ORDER BY for sum-of-hundredths/count, without division or float ties.
+
+    SQLite calls this during sorting, before LIMIT/OFFSET. Python integers avoid
+    cross-product overflow; no per-beer queries or materialization in the service.
+    Only SQL-generated integer pairs reach this collation.
+    """
+    left_sum, left_count = map(int, left.split("/"))
+    right_sum, right_count = map(int, right.split("/"))
+    a, b = left_sum * right_count, right_sum * left_count
+    return (a > b) - (a < b)
+
+
 def make_engine(url: str | None = None) -> Engine:
     url = url or get_settings().database_url
     kwargs = {"connect_args": {"check_same_thread": False}}
@@ -20,6 +33,7 @@ def make_engine(url: str | None = None) -> Engine:
 
     @event.listens_for(engine, "connect")
     def configure_sqlite(dbapi_connection, _connection_record):
+        dbapi_connection.create_collation("rating_fraction", _compare_rating_fractions)
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.execute("PRAGMA busy_timeout=5000")

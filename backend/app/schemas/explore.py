@@ -74,10 +74,18 @@ class ExploreBeerQuery(BaseModel):
     page_size: int = Field(default=25, ge=1, le=100)
     brewery_id: list[PositiveId] = Field(default_factory=list, max_length=100)
     style_id: list[PositiveId] = Field(default_factory=list, max_length=100)
-    abv_min: float | None = Field(default=None, ge=0, allow_inf_nan=False)
-    abv_max: float | None = Field(default=None, ge=0, allow_inf_nan=False)
-    rating_min: float | None = Field(default=None, ge=0, le=5, allow_inf_nan=False)
-    rating_max: float | None = Field(default=None, ge=0, le=5, allow_inf_nan=False)
+    abv_min: Decimal | None = Field(
+        default=None, ge=0, multiple_of=Decimal("0.01"), allow_inf_nan=False
+    )
+    abv_max: Decimal | None = Field(
+        default=None, ge=0, multiple_of=Decimal("0.01"), allow_inf_nan=False
+    )
+    rating_min: Decimal | None = Field(
+        default=None, ge=0, le=5, multiple_of=Decimal("0.01"), allow_inf_nan=False
+    )
+    rating_max: Decimal | None = Field(
+        default=None, ge=0, le=5, multiple_of=Decimal("0.01"), allow_inf_nan=False
+    )
     first_tried_from: date | None = None
     first_tried_to: date | None = None
     last_tried_from: date | None = None

@@ -1,8 +1,9 @@
 from datetime import UTC, date, datetime, time, timedelta
+from decimal import Decimal
 from math import ceil
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Select, asc, desc, func, or_, select
+from sqlalchemy import Integer, Select, String, asc, cast, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from ..models import Beer, BeerStyle, Brewery, Checkin
@@ -32,10 +33,10 @@ class ExploreService:
         page_size: int = 25,
         brewery_id: list[int] | None = None,
         style_id: list[int] | None = None,
-        abv_min: float | None = None,
-        abv_max: float | None = None,
-        rating_min: float | None = None,
-        rating_max: float | None = None,
+        abv_min: Decimal | None = None,
+        abv_max: Decimal | None = None,
+        rating_min: Decimal | None = None,
+        rating_max: Decimal | None = None,
         first_tried_from: date | None = None,
         first_tried_to: date | None = None,
         last_tried_from: date | None = None,
@@ -46,7 +47,9 @@ class ExploreService:
                 Checkin.beer_id.label("beer_id"),
                 func.count(Checkin.id).label("checkin_count"),
                 func.count(Checkin.rating).label("rated_checkin_count"),
-                func.avg(Checkin.rating).label("personal_average_rating"),
+                # Import and Numeric(3, 2) store individual ratings to hundredths.
+                # Recover those integers from SQLite's numeric storage, including 0.
+                func.sum(cast(func.round(Checkin.rating * 100), Integer)).label("rating_sum"),
                 func.min(Checkin.occurred_at_utc).label("first_checked_in_at"),
                 func.max(Checkin.occurred_at_utc).label("last_checked_in_at"),
             )
@@ -67,7 +70,7 @@ class ExploreService:
                 Beer.photo_url.label("photo_url"),
                 stats.c.checkin_count,
                 stats.c.rated_checkin_count,
-                stats.c.personal_average_rating,
+                stats.c.rating_sum,
                 stats.c.first_checked_in_at,
                 stats.c.last_checked_in_at,
             )
@@ -89,14 +92,19 @@ class ExploreService:
             query = query.where(Beer.brewery_id.in_(brewery_id))
         if style_id:
             query = query.where(Beer.style_id.in_(style_id))
-        for column, low, high in [
-            (Beer.abv, abv_min, abv_max),
-            (stats.c.personal_average_rating, rating_min, rating_max),
-        ]:
-            if low is not None:
-                query = query.where(column >= low)
-            if high is not None:
-                query = query.where(column <= high)
+        if abv_min is not None:
+            query = query.where(Beer.abv >= abv_min)
+        if abv_max is not None:
+            query = query.where(Beer.abv <= abv_max)
+        # Compare rational means exactly, without division or rounded averages.
+        if rating_min is not None:
+            query = query.where(
+                stats.c.rating_sum >= int(rating_min * 100) * stats.c.rated_checkin_count
+            )
+        if rating_max is not None:
+            query = query.where(
+                stats.c.rating_sum <= int(rating_max * 100) * stats.c.rated_checkin_count
+            )
         # Inclusive Amsterdam calendar days, converted to half-open UTC bounds.
         # Convert each midnight separately so DST days can contain 23 or 25 hours.
         for column, low, high in [
@@ -135,7 +143,11 @@ class ExploreService:
                 photo_url=row["photo_url"],
                 checkin_count=row["checkin_count"],
                 rated_checkin_count=row["rated_checkin_count"],
-                personal_average_rating=row["personal_average_rating"],
+                personal_average_rating=(
+                    Decimal(row["rating_sum"]) / (100 * row["rated_checkin_count"])
+                    if row["rated_checkin_count"]
+                    else None
+                ),
                 first_checked_in_at=row["first_checked_in_at"],
                 last_checked_in_at=row["last_checked_in_at"],
             )
@@ -195,7 +207,9 @@ def _sort_order(sort: ExploreBeerSort, query: Select):
         "brewery": func.lower(query.c.brewery_name),
         "style": func.lower(query.c.style_name),
         "abv": query.c.abv,
-        "rating": query.c.personal_average_rating,
+        "rating": (
+            cast(query.c.rating_sum, String) + "/" + cast(query.c.rated_checkin_count, String)
+        ).collate("rating_fraction"),
         "first_tried": query.c.first_checked_in_at,
         "last_tried": query.c.last_checked_in_at,
         "checkins": query.c.checkin_count,
