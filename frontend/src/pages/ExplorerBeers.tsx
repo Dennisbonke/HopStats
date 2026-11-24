@@ -16,7 +16,6 @@ import {
   DEFAULT_SORT,
   emptyFilters,
   ExploreSort,
-  FILTER_KEYS,
   Filters,
   readFilters,
   selectedSort,
@@ -263,27 +262,32 @@ export default function ExplorerBeers() {
       1,
     );
   }
-  const chips = FILTER_KEYS.flatMap((key) => {
-    const value = filters[key];
-    if (Array.isArray(value))
-      return value.map((id) => ({
-        key: `${key}-${id}`,
-        label:
-          names[key === "brewery_id" ? "breweries" : "styles"][id] ??
-          `${key === "brewery_id" ? "Brewery" : "Style"} #${id}`,
-        remove: () =>
-          applyFilters({ ...filters, [key]: value.filter((v) => v !== id) }),
-      }));
-    return value
-      ? [
-          {
-            key,
-            label: `${key.replaceAll("_", " ")}: ${value}`,
-            remove: () => applyFilters({ ...filters, [key]: "" }),
-          },
-        ]
-      : [];
-  });
+  const chips = (["brewery_id", "style_id"] as const).flatMap((key) =>
+    filters[key].map((id) => ({
+      key: `${key}-${id}`,
+      label:
+        names[key === "brewery_id" ? "breweries" : "styles"][id] ??
+        `${key === "brewery_id" ? "Brewery" : "Style"} #${id}`,
+      remove: () =>
+        applyFilters({
+          ...filters,
+          [key]: filters[key].filter((value) => value !== id),
+        }),
+    })),
+  );
+  for (const [label, low, high, unit] of [
+    ["ABV", "abv_min", "abv_max", "%"],
+    ["My rating", "rating_min", "rating_max", ""],
+    ["First tried", "first_tried_from", "first_tried_to", ""],
+    ["Last tried", "last_tried_from", "last_tried_to", ""],
+  ] as const) {
+    if (!filters[low] && !filters[high]) continue;
+    chips.push({
+      key: low,
+      label: `${label}: ${filters[low] || "Any"}–${filters[high] || "Any"}${unit}`,
+      remove: () => applyFilters({ ...filters, [low]: "", [high]: "" }),
+    });
+  }
 
   function submitSearch(event: FormEvent) {
     event.preventDefault();
@@ -315,6 +319,7 @@ export default function ExplorerBeers() {
             </button>
           </header>
           <FilterPanel
+            key={filterResetKey}
             value={filters}
             onChange={applyFilters}
             abvMax={abvMax}

@@ -62,11 +62,17 @@ async function stubExplorer(
       "/api/v1/health": { status: "ok" },
       "/api/v1/explore/filter-bounds": { abv_max: 67.5 },
       "/api/v1/explore/filter-options/breweries": {
-        items: [{ id: 1, name: "A Brewery with a Long Name" }],
+        items: [
+          ...new Map(
+            items.map((item) => [item.brewery.id, item.brewery]),
+          ).values(),
+        ],
         has_more: false,
       },
       "/api/v1/explore/filter-options/styles": {
-        items: [{ id: 2, name: "West Coast IPA" }],
+        items: [
+          ...new Map(items.map((item) => [item.style.id, item.style])).values(),
+        ],
         has_more: false,
       },
       "/api/v1/explore/beers": {
@@ -499,8 +505,35 @@ for (const width of [390, 1280, 1920]) {
     }, testInfo) => {
       await page.setViewportSize({ width, height: 1000 });
       await page.emulateMedia({ colorScheme });
-      await stubExplorer(page);
-      await page.goto("/explore/beers");
+      await stubExplorer(
+        page,
+        [
+          ["DIPA v14", 8.5, 4.75, 6],
+          ["Citra Sequences", 6.8, 4.5, 4],
+          ["Nelson Sauvin Pale", 5.6, 4.25, 3],
+          ["A Proper IPA", 6.5, 4.25, 5],
+          ["Kveik Dreams", 7, 4, 2],
+        ].map(([name, abv, rating, count], index) => ({
+          id: index + 1,
+          name: String(name),
+          brewery: { id: 1, name: "Cloudwater Brew Co." },
+          style: { id: 2, name: "IPA – New England / Hazy" },
+          abv: Number(abv),
+          ibu: 55,
+          photo_url: `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect x="9" y="3" width="22" height="34" rx="4" fill="${["#539a67", "#ce9833", "#9366ad", "#5c9fa2", "#bd7560"][index]}"/><path d="M10 7h20M10 33h20" stroke="white" stroke-width="2"/><circle cx="20" cy="20" r="7" fill="white" opacity=".85"/></svg>`)}`,
+          checkin_count: Number(count),
+          rated_checkin_count: Number(count),
+          personal_average_rating: Number(rating),
+          first_checked_in_at: "2026-01-01T00:00:00Z",
+          last_checked_in_at: `2026-08-${String(12 - index).padStart(2, "0")}T12:00:00Z`,
+        })),
+      );
+      await page.goto(
+        "/explore/beers?brewery_id=1&style_id=2&abv_min=5&abv_max=10",
+      );
+      await expect(page.getByLabel("Active filters")).toContainText(
+        "Cloudwater Brew Co.",
+      );
       await expect(
         page.getByRole("button", { name: "Next", exact: true }),
       ).toBeEnabled();

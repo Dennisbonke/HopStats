@@ -640,3 +640,17 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.explorer-filter-sidebar header button,
+.explorer-filter-sheet header button,
+.explorer-active-filters > button:not(.explorer-chip) {
+  min-height: 2.75rem;
+  padding: 0.3rem;
+  border: 0;
+  background: transparent;
+  color: var(--color-action-primary);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-decoration: underline;
+}

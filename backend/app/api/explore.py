@@ -34,7 +34,7 @@ def filter_options(
     user: Annotated[User, Depends(get_current_user)],
     search: Annotated[str, Query(max_length=200)] = "",
     selected_id: Annotated[list[PositiveId] | None, Query(max_length=100)] = None,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    offset: Annotated[int, Query(ge=0, le=2147483647)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
 ) -> ExploreOptionsResponse:
     return ExploreService(session).options(

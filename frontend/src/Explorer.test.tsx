@@ -515,3 +515,25 @@ test("invalid URL filters are ignored and errors have an accessible state", asyn
   expect(requests[0]).not.toContain("rating_min");
   expect(requests[0]).not.toContain("abv_min");
 });
+
+test("range chips remove only their category and malformed calendar dates are safe", async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter
+      initialEntries={[
+        "/explore/beers?abv_min=5&abv_max=10&rating_min=3.70&last_tried_from=2026-99-99&future=preserved",
+      ]}
+    >
+      <RouterState />
+      <ExplorerBeers />
+    </MemoryRouter>,
+  );
+  await screen.findAllByText("First Page Stout");
+  await user.click(screen.getByRole("button", { name: "Remove ABV: 5–10%" }));
+  await waitFor(() => expect(requests.at(-1)).not.toContain("abv_"));
+  expect(requests.at(-1)).toContain("rating_min=3.70");
+  expect(requests.at(-1)).not.toContain("last_tried_from");
+  expect(screen.getByLabelText("Current URL")).toHaveTextContent(
+    "future=preserved",
+  );
+});
