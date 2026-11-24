@@ -1349,7 +1349,7 @@ test("semantic themes stay scoped while Explorer uses the shared palette", async
 
     await expect(explorer).toHaveCSS("color-scheme", expected.controlScheme);
     await expect(explorer).toHaveCSS("background-color", expected.canvas);
-    await expect(catalogue).toHaveCSS("background-color", expected.surface);
+    await expect(catalogue).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     const beerCardSurface = await page
       .locator(".explorer-beer-card")
       .evaluate((element) => {
@@ -1488,11 +1488,11 @@ test("semantic themes stay scoped while Explorer uses the shared palette", async
       const searchBoundary = await page
         .getByRole("searchbox", { name: "Search beers or breweries" })
         .evaluate((element) => {
-          const catalogue = element.closest(".explorer-catalogue");
-          if (!catalogue) throw new Error("Search control lost its surface");
+          const canvas = element.closest(".explorer-page");
+          if (!canvas) throw new Error("Search control lost its page canvas");
           return {
             border: getComputedStyle(element).borderTopColor,
-            surface: getComputedStyle(catalogue).backgroundColor,
+            surface: getComputedStyle(canvas).backgroundColor,
           };
         });
       expect(
@@ -1521,9 +1521,8 @@ test("semantic themes stay scoped while Explorer uses the shared palette", async
         page.getByRole("searchbox", { name: "Search beers or breweries" }),
       ).toHaveCSS("min-height", "44px");
       const actionAndSurface = await searchAction.evaluate((element) => {
-        const surface = element.closest(".explorer-catalogue");
-        if (!surface)
-          throw new Error("Search action lost its catalogue surface");
+        const surface = element.closest(".explorer-page");
+        if (!surface) throw new Error("Search action lost its page canvas");
         return {
           action: getComputedStyle(element).backgroundColor,
           surface: getComputedStyle(surface).backgroundColor,
@@ -1555,7 +1554,7 @@ test("semantic themes stay scoped while Explorer uses the shared palette", async
         );
         await expect(page.locator(".explorer-beer-table td").first()).toHaveCSS(
           "white-space",
-          "nowrap",
+          "normal",
         );
       }
     }

@@ -62,9 +62,11 @@ async function stubExplorer(
       "/api/v1/health": { status: "ok" },
       "/api/v1/explore/beers": {
         items,
-        page: 1,
+        page: Number(
+          new URL(route.request().url()).searchParams.get("page") ?? 1,
+        ),
         page_size: 25,
-        total: items.length,
+        total: items.length ? 26 : 0,
         total_pages: items.length ? 2 : 0,
       },
     };
@@ -138,7 +140,7 @@ test("Explorer colors and active tab stay distinct in light and dark themes", as
     expect(
       await contrastRatio(
         page.locator(".explorer-catalogue-heading p"),
-        ".explorer-catalogue",
+        ".explorer-page",
       ),
     ).toBeGreaterThanOrEqual(4.5);
     expect(
@@ -278,3 +280,231 @@ test("Brewery and Style placeholders remain readable in both themes", async ({
     }
   }
 });
+
+for (const width of [320, 375, 390, 428, 768, 1280, 1440, 1920, 2560]) {
+  for (const colorScheme of ["light", "dark"] as const) {
+    test(`Explorer geometry and URL controls at ${width}px in ${colorScheme}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.emulateMedia({ colorScheme });
+      await stubExplorer(page, [
+        {
+          id: 1,
+          name: "ExtraordinarilyLongUnbrokenBeerName".repeat(4),
+          brewery: {
+            id: 1,
+            name: "ExtraordinarilyLongUnbrokenBreweryName".repeat(4),
+          },
+          style: {
+            id: 2,
+            name: "ExtraordinarilyLongUnbrokenStyleName".repeat(4),
+          },
+          abv: 6.5,
+          ibu: 55,
+          photo_url: null,
+          checkin_count: 3,
+          rated_checkin_count: 2,
+          personal_average_rating: 4.25,
+          first_checked_in_at: "2026-01-01T00:00:00Z",
+          last_checked_in_at: "2026-01-02T00:00:00Z",
+        },
+      ]);
+      await page.goto("/explore/beers");
+      await expect(
+        page.getByRole("button", { name: "Next", exact: true }),
+      ).toBeEnabled();
+      const geometry = await page.evaluate(() => {
+        function box(selector: string) {
+          const node = document.querySelector(selector) as HTMLElement;
+          const rect = node.getBoundingClientRect();
+          return {
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+            bottom: rect.bottom,
+          };
+        }
+        const main = document.querySelector(".app-main") as HTMLElement;
+        const mainStyle = getComputedStyle(main);
+        const catalogue = document.querySelector(
+          ".explorer-catalogue",
+        ) as HTMLElement;
+        const catalogueStyle = getComputedStyle(catalogue);
+        return {
+          main: box(".app-main"),
+          page: box(".explorer-page"),
+          catalogue: box(".explorer-catalogue"),
+          table: box(".explorer-beer-table"),
+          form: box(".explorer-controls"),
+          fields: [
+            box(".explorer-search-control"),
+            box(".explorer-sort-control"),
+          ],
+          controls: [
+            box("#explorer-beer-search"),
+            box("#explorer-beer-sort"),
+            box(".explorer-controls button"),
+          ],
+          gap: parseFloat(
+            getComputedStyle(document.querySelector(".explorer-controls")!).gap,
+          ),
+          gutter: parseFloat(mainStyle.paddingLeft),
+          background: catalogueStyle.backgroundColor,
+          radius: catalogueStyle.borderRadius,
+          shadow: catalogueStyle.boxShadow,
+          tableOverflow:
+            document.querySelector(".explorer-beer-table-wrap")!.scrollWidth -
+            document.querySelector(".explorer-beer-table-wrap")!.clientWidth,
+        };
+      });
+      expect(geometry.background).toBe("rgba(0, 0, 0, 0)");
+      expect(geometry.radius).toBe("0px");
+      expect(geometry.shadow).toBe("none");
+      expect(Math.abs(geometry.main.width - width)).toBeLessThanOrEqual(1);
+      expect(Math.abs(geometry.page.x - geometry.gutter)).toBeLessThanOrEqual(
+        1,
+      );
+      expect(
+        Math.abs(geometry.page.width - (width - 2 * geometry.gutter)),
+      ).toBeLessThanOrEqual(1);
+      expect(
+        Math.abs(geometry.catalogue.width - geometry.page.width),
+      ).toBeLessThanOrEqual(1);
+      for (const control of geometry.controls)
+        expect(control.height).toBeGreaterThanOrEqual(44);
+      const table = page.locator(".explorer-beer-table-wrap");
+      const cards = page.locator(".explorer-beer-cards");
+      if (width <= 700) {
+        await expect(table).toBeHidden();
+        await expect(cards).toBeVisible();
+        for (const field of geometry.fields) {
+          // A field is its label, label gap and control, never an 18rem/16rem height.
+          expect(field.height).toBeLessThan(100);
+        }
+        const group = [...geometry.fields, geometry.controls[2]];
+        for (let index = 1; index < group.length; index++) {
+          const gap = group[index].y - group[index - 1].bottom;
+          expect(gap).toBeGreaterThanOrEqual(8);
+          expect(gap).toBeLessThanOrEqual(16);
+          expect(Math.abs(gap - geometry.gap)).toBeLessThanOrEqual(1);
+        }
+        for (const control of geometry.controls) {
+          expect(
+            Math.abs(control.width - geometry.form.width),
+          ).toBeLessThanOrEqual(1);
+        }
+        expect(geometry.form.height).toBeLessThan(250);
+      } else {
+        await expect(table).toBeVisible();
+        await expect(cards).toBeHidden();
+        expect(
+          Math.abs(geometry.table.width - geometry.catalogue.width),
+        ).toBeLessThanOrEqual(1);
+        expect(geometry.tableOverflow).toBeLessThanOrEqual(1);
+        // Long beer, brewery and style names wrap within their actual cells.
+        for (const cell of await page
+          .locator(".explorer-beer-table tbody td")
+          .all()) {
+          expect(
+            await cell.evaluate((node) => node.scrollWidth - node.clientWidth),
+          ).toBeLessThanOrEqual(1);
+        }
+      }
+      await expectNoHorizontalOverflow(page);
+
+      const search = page.getByRole("searchbox", {
+        name: "Search beers or breweries",
+      });
+      const sort = page.getByRole("combobox", { name: "Sort beers" });
+      await search.fill("hoppy");
+      // URL changes can precede React's committed render. Wait for the request
+      // from the submitted search before interacting with the next control.
+      await Promise.all([
+        page.waitForResponse((response) => {
+          const url = new URL(response.url());
+          return (
+            url.pathname === "/api/v1/explore/beers" &&
+            url.searchParams.get("search") === "hoppy"
+          );
+        }),
+        page.getByRole("button", { name: "Search", exact: true }).click(),
+      ]);
+      await expect(page).toHaveURL(/search=hoppy/);
+      await expect(
+        page.getByRole("button", { name: "Next", exact: true }),
+      ).toBeEnabled();
+      await Promise.all([
+        page.waitForResponse((response) => {
+          const url = new URL(response.url());
+          return (
+            url.pathname === "/api/v1/explore/beers" &&
+            url.searchParams.get("search") === "hoppy" &&
+            url.searchParams.get("sort") === "name_asc"
+          );
+        }),
+        sort.selectOption("name_asc"),
+      ]);
+      await expect(page).toHaveURL(/search=hoppy&sort=name_asc/);
+      await expect(
+        page.getByRole("button", { name: "Next", exact: true }),
+      ).toBeEnabled();
+      await page.getByRole("button", { name: "Next", exact: true }).click();
+      await expect(page).toHaveURL(/search=hoppy&sort=name_asc&page=2/);
+      await expect(
+        page.getByRole("button", { name: "Previous", exact: true }),
+      ).toBeEnabled();
+      await page.reload();
+      await expect(search).toHaveValue("hoppy");
+      await expect(sort).toHaveValue("name_asc");
+      await expect(
+        page.getByText("Page 2 of 2", { exact: true }),
+      ).toBeVisible();
+      await page.getByRole("button", { name: "Previous", exact: true }).click();
+      await expect(page).toHaveURL(/search=hoppy&sort=name_asc$/);
+      await expectNoHorizontalOverflow(page);
+
+      // Client-side navigation must restore the standard shell width.
+      if (width >= 1440) {
+        await page
+          .getByRole("navigation", { name: "Main navigation" })
+          .getByRole("link", { name: "Dashboard", exact: true })
+          .click();
+        await expect(page.locator(".app-main")).not.toHaveClass(
+          /app-main--explorer/,
+        );
+        expect(
+          (await page.locator(".app-main").boundingBox())!.width,
+        ).toBeLessThanOrEqual(1280);
+      }
+    });
+  }
+}
+
+for (const width of [390, 1280, 1920]) {
+  for (const colorScheme of ["light", "dark"] as const) {
+    test(`Explorer screenshot at ${width}px in ${colorScheme}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.emulateMedia({ colorScheme });
+      await stubExplorer(page);
+      await page.goto("/explore/beers");
+      await expect(
+        page.getByRole("button", { name: "Next", exact: true }),
+      ).toBeEnabled();
+      const path = testInfo.outputPath(`explorer-${width}-${colorScheme}.png`);
+      if (width === 390) {
+        // The entire page section includes controls and the complete first beer card.
+        await page.locator(".explorer-page").screenshot({ path });
+      } else {
+        await page.screenshot({ path, fullPage: true });
+      }
+      await testInfo.attach(`Explorer ${width}px ${colorScheme}`, {
+        path,
+        contentType: "image/png",
+      });
+    });
+  }
+}

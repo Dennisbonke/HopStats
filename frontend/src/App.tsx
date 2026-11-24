@@ -63,6 +63,7 @@ function Placeholder({ title }: { title: string }) {
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
+  const explorerLayout = matchPath("/explore/*", location.pathname) !== null;
   const themeAware = themeAwareRoutes.some(
     (path) => matchPath(path, location.pathname) !== null,
   );
@@ -199,7 +200,9 @@ export default function App() {
           </Button>
         </nav>
       </header>
-      <main className="app-main">
+      <main
+        className={`app-main${explorerLayout ? " app-main--explorer" : ""}`}
+      >
         {logoutError && (
           <p className="logout-error" role="alert">
             {logoutError}
