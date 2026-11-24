@@ -199,7 +199,7 @@ function RangeFilter({
   function commit(values: string[], slider = false) {
     if (!badInputRef.current.some(Boolean) && valid(values)) {
       const next =
-        (slider || (values[0] !== "" && values[1] !== "")) &&
+        slider &&
         Number(values[0] || 0) === 0 &&
         Number(values[1] || max) === max
           ? ["", ""]

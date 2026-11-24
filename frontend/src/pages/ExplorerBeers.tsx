@@ -18,6 +18,7 @@ import {
   ExploreSort,
   Filters,
   readFilters,
+  sameFilters,
   selectedSort,
   SORT_LABELS,
   writeFilters,
@@ -269,6 +270,7 @@ export default function ExplorerBeers() {
   }
 
   function applyFilters(next: Filters) {
+    if (sameFilters(filters, next)) return;
     const params = new URLSearchParams(searchParams);
     writeFilters(params, next);
     params.delete("page");

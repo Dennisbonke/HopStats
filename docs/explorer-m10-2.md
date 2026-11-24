@@ -27,8 +27,19 @@ Malformed page URL filters are ignored safely rather than sent to the API.
 
 Example: `?brewery_id=12&brewery_id=34&style_id=56&rating_min=3.70&sort=rating_desc`.
 Values within a category combine with OR; categories combine with AND. The active
-count measures categories, not selections. A slider at its complete range does
-not activate a filter. Missing values remain visible until their category is filtered.
+count measures categories, not selections. Untouched sliders with empty numeric
+bounds are inactive. Explicit numeric bounds (including minimum zero, maximum
+five for ratings, or a complete range) remain active and exclude missing values.
+This also applies to URL-restored bounds and dynamically expanded ABV extents.
+Only intentionally restoring the full extent with a slider clears that range;
+focus traversal and numeric commits preserve explicit bounds. Clear all and
+range-chip removal also clear the bounds, including missing values again.
+
+Applying unchanged effective filters preserves pagination, the URL and browser
+history without requesting the catalogue again. Numeric spellings such as
+`3.7` and `3.70`, and different selection orders, are equivalent. Empty bounds
+and explicit zero bounds remain distinct. Actual filter changes reset page one
+while preserving search, sorting, page size and unrelated URL parameters.
 
 `GET /api/v1/explore/filter-options/{breweries|styles}` accepts `search`, `offset`
 (default 0), `limit` (1–100, default 25), or repeated `selected_id` for resolving
@@ -103,8 +114,9 @@ must be at most 5. Equivalent forms such as `3.7`, `3.70`, `3.700` and `37e-1`
 mean the same threshold. Unsupported precision (`3.755`), non-finite values,
 negative values and inverted ranges return HTTP 422. Empty bounds are omitted;
 one-sided ranges are supported. Invalid URL bounds are ignored, never silently
-rounded; reversed URL pairs are both ignored. Applying the restored filters
-writes only valid bounds. Calculated averages are not restricted to hundredths.
+rounded; reversed URL pairs are both ignored. Requests use only valid bounds;
+actual filter changes also write only valid bounds to the URL. Calculated averages
+are not restricted to hundredths.
 Invalid numeric edits show an associated accessible error and never alter
 applied desktop filters; mobile Apply is blocked until corrected or cleared.
 Correcting a value clears its error immediately; Clear all resets local errors.

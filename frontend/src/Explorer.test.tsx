@@ -780,3 +780,184 @@ test("one-sided slider bounds reset fully while explicit zero survives focus tra
   );
   expect(screen.getByLabelText("Current URL")).toHaveTextContent("future=kept");
 });
+
+test.each([
+  "",
+  "&abv_min=0&abv_max=100.01&rating_min=0&rating_max=5",
+  "&abv_min=3.70&rating_min=3.70",
+  "&abv_max=100.01&rating_max=5",
+])(
+  "unchanged range commits preserve page, URL and requests (%s)",
+  async (bounds) => {
+    const user = userEvent.setup();
+    const url = `/explore/beers?page=2&page_size=25&search=stout&sort=name_asc&future=kept${bounds}`;
+    render(
+      <MemoryRouter initialEntries={[url]}>
+        <RouterState />
+        <ExplorerBeers />
+      </MemoryRouter>,
+    );
+    await screen.findAllByText("Second Page Pilsner");
+    const count = requests.length;
+    for (const label of ["ABV", "My rating"]) {
+      for (const side of ["minimum", "maximum"]) {
+        const numeric = screen.getByRole("spinbutton", {
+          name: `${label} ${side}`,
+        });
+        await user.click(numeric);
+        await user.keyboard("{Enter}");
+        await user.tab();
+        const slider = screen.getByRole("slider", {
+          name: `${label} ${side} slider`,
+        });
+        act(() => slider.focus());
+        await user.tab();
+      }
+    }
+    if (bounds.includes("3.70")) {
+      for (const label of ["ABV", "My rating"]) {
+        const numeric = screen.getByRole("spinbutton", {
+          name: `${label} minimum`,
+        });
+        await user.clear(numeric);
+        await user.type(numeric, "3.7");
+        await user.keyboard("{Enter}");
+        await user.tab();
+      }
+    }
+    expect(screen.getByLabelText("Current URL")).toHaveTextContent(url);
+    expect(requests).toHaveLength(count);
+    if (!bounds) {
+      await user.click(screen.getByRole("button", { name: "Clear all" }));
+      expect(screen.getByLabelText("Current URL")).toHaveTextContent(url);
+      expect(requests).toHaveLength(count);
+    }
+    const minimum = screen.getByRole("spinbutton", {
+      name: "My rating minimum",
+    });
+    await user.clear(minimum);
+    await user.type(minimum, "4.1");
+    await user.tab();
+    await waitFor(() => expect(requests).toHaveLength(count + 1));
+    const changed = new URL(
+      screen.getByLabelText("Current URL").textContent!,
+      "http://localhost",
+    );
+    expect(changed.searchParams.has("page")).toBe(false);
+    expect(changed.searchParams.get("rating_min")).toBe("4.1");
+    for (const key of ["page_size", "search", "sort", "future"]) {
+      expect(changed.searchParams.get(key)).toBe(
+        new URL(url, "http://localhost").searchParams.get(key),
+      );
+    }
+  },
+);
+
+test.each([false, true])(
+  "explicit numeric boundary ranges remain active (mobile=%s)",
+  async (isMobile) => {
+    viewport(isMobile);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/explore/beers?page=2&future=kept"]}>
+        <RouterState />
+        <ExplorerBeers />
+      </MemoryRouter>,
+    );
+    await screen.findAllByText("Second Page Pilsner");
+    if (isMobile)
+      await user.click(screen.getByRole("button", { name: "Filters (0)" }));
+    const panel = isMobile
+      ? screen.getByRole("dialog")
+      : screen.getByRole("complementary");
+    for (const [label, maximum] of [
+      ["ABV", "100.01"],
+      ["My rating", "5"],
+    ]) {
+      if (isMobile && label === "My rating")
+        await user.click(within(panel).getByText("My rating", { exact: true }));
+      for (const [side, value] of [
+        ["minimum", "0"],
+        ["maximum", maximum],
+      ]) {
+        const input = within(panel).getByRole("spinbutton", {
+          name: `${label} ${side}`,
+        });
+        await user.type(input, value);
+        await user.tab();
+        expect(input).toHaveValue(Number(value));
+        if (!isMobile)
+          expect(screen.getByLabelText("Current URL")).toHaveTextContent(
+            `${label === "ABV" ? "abv" : "rating"}_${side === "minimum" ? "min" : "max"}=${value}`,
+          );
+      }
+    }
+    if (isMobile) {
+      expect(screen.getByLabelText("Current URL")).toHaveTextContent("page=2");
+      // Happy DOM flags valid hundredths (even 5) as stepMismatch.
+      // Browser regressions exercise the unchanged native form validation.
+      panel.querySelector("form")!.noValidate = true;
+      await user.click(
+        within(panel).getByRole("button", { name: "Apply filters" }),
+      );
+    }
+    await waitFor(() =>
+      expect(screen.getByLabelText("Current URL")).toHaveTextContent(
+        "rating_max=5",
+      ),
+    );
+    expect(screen.getByLabelText("Current URL")).toHaveTextContent(
+      "abv_min=0&abv_max=100.01&rating_min=0&rating_max=5",
+    );
+    expect(screen.getByLabelText("Current URL")).not.toHaveTextContent(
+      "page=2",
+    );
+    expect(
+      within(screen.getByLabelText("Active filters")).getByRole("button", {
+        name: "Remove My rating: 0–5",
+      }),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Remove ABV: 0–100.01%" }),
+    );
+    expect(screen.getByLabelText("Current URL")).not.toHaveTextContent(
+      "abv_min",
+    );
+    expect(screen.getByLabelText("Current URL")).toHaveTextContent(
+      "rating_min=0",
+    );
+    await user.click(screen.getByRole("button", { name: "Clear all filters" }));
+    expect(screen.getByLabelText("Current URL")).toHaveTextContent(
+      "/explore/beers?future=kept",
+    );
+  },
+);
+
+test("unchanged mobile Apply preserves full bounds and reordered selections on page two", async () => {
+  viewport(true);
+  const user = userEvent.setup();
+  const url =
+    "/explore/beers?page=2&brewery_id=1&brewery_id=2&style_id=3&style_id=4&abv_min=0&abv_max=67.5&rating_min=0&rating_max=5&future=kept";
+  render(
+    <MemoryRouter initialEntries={[url]}>
+      <RouterState />
+      <ExplorerBeers />
+    </MemoryRouter>,
+  );
+  await screen.findAllByText("Second Page Pilsner");
+  await user.click(screen.getByRole("button", { name: "Filters (4)" }));
+  const dialog = screen.getByRole("dialog");
+  for (const name of ["Cloudwater", "Imperial IPA"]) {
+    const checkbox = await within(dialog).findByRole("checkbox", { name });
+    await user.click(checkbox);
+    await user.click(checkbox);
+  }
+  // Happy DOM miscalculates hundredths steps; CI exercises native validation.
+  dialog.querySelector("form")!.noValidate = true;
+  await user.click(
+    within(dialog).getByRole("button", { name: "Apply filters" }),
+  );
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Current URL")).toHaveTextContent(url);
+  expect(requests).toHaveLength(1);
+});

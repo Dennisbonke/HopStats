@@ -1356,3 +1356,240 @@ for (const width of [390, 1280]) {
     await expect(page).toHaveURL(/future=kept/);
   });
 }
+
+for (const bounds of [
+  "",
+  "&abv_min=0&abv_max=100.01&rating_min=0&rating_max=5",
+]) {
+  test(`Explorer review fixes: no-op desktop range interactions preserve pagination (${bounds || "inactive"})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await stubExplorer(page);
+    const requests: string[] = [];
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname === "/api/v1/explore/beers")
+        requests.push(request.url());
+    });
+    await page.goto(
+      `/explore/beers?page=2&page_size=25&search=beer&sort=name_asc&future=kept${bounds}`,
+    );
+    await expect(page.getByRole("table")).toBeVisible();
+    const original = page.url();
+    const history = await page.evaluate(() => window.history.length);
+    const count = requests.length;
+    const panel = page.getByRole("complementary", { name: "Beer filters" });
+    for (const label of ["ABV", "My rating"]) {
+      for (const side of ["minimum", "maximum"]) {
+        const numeric = panel.getByRole("spinbutton", {
+          name: `${label} ${side}`,
+        });
+        await numeric.focus();
+        await numeric.press("Enter");
+        await numeric.press("Tab");
+        const slider = panel.getByRole("slider", {
+          name: `${label} ${side} slider`,
+        });
+        await slider.focus();
+        await slider.press("Tab");
+      }
+    }
+    if (!bounds) {
+      for (const label of ["ABV", "My rating"]) {
+        const lower = panel.getByRole("slider", {
+          name: `${label} minimum slider`,
+        });
+        await lower.press("Home");
+        const upper = panel.getByRole("slider", {
+          name: `${label} maximum slider`,
+        });
+        await upper.press("End");
+        const track = lower.locator("..");
+        await track.scrollIntoViewIfNeeded();
+        const box = (await track.boundingBox())!;
+        await page.mouse.click(box.x + 12, box.y + box.height / 2);
+        await page.mouse.click(box.x + box.width - 12, box.y + box.height / 2);
+      }
+      await panel
+        .getByRole("button", { name: "Clear all", exact: true })
+        .click();
+    }
+    await expect(page).toHaveURL(original);
+    expect(requests).toHaveLength(count);
+    expect(await page.evaluate(() => window.history.length)).toBe(history);
+    const minimum = panel.getByRole("spinbutton", {
+      name: "My rating minimum",
+    });
+    await minimum.fill("3.70");
+    await minimum.press("Tab");
+    await expect.poll(() => requests.length).toBe(count + 1);
+    await expect(page).not.toHaveURL(/[?&]page=/);
+    // A new page-2 URL with equivalent numeric text must remain byte-for-byte unchanged.
+    const params = new URL(page.url()).searchParams;
+    params.set("page", "2");
+    await page.goto(`/explore/beers?${params}`);
+    await expect(minimum).toHaveValue("3.70");
+    const equivalentUrl = page.url();
+    const equivalentCount = requests.length;
+    await minimum.fill("3.7");
+    await minimum.press("Enter");
+    await minimum.press("Tab");
+    await expect(page).toHaveURL(equivalentUrl);
+    expect(requests).toHaveLength(equivalentCount);
+    for (const [key, value] of [
+      ["page_size", "25"],
+      ["search", "beer"],
+      ["sort", "name_asc"],
+      ["future", "kept"],
+    ]) {
+      expect(new URL(page.url()).searchParams.get(key)).toBe(value);
+    }
+  });
+}
+
+test("Explorer review fixes: unchanged mobile Apply preserves explicit ranges and selection order on page two", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await stubExplorer(page);
+  const requests: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/v1/explore/beers")
+      requests.push(request.url());
+  });
+  await page.goto(
+    "/explore/beers?page=2&brewery_id=1&style_id=2&rating_min=0&rating_max=5&abv_min=0&abv_max=100.01&future=kept",
+  );
+  await page.getByRole("button", { name: "Filters (4)" }).click();
+  const sheet = page.getByRole("dialog");
+  const original = page.url();
+  const count = requests.length;
+  for (const name of ["A Brewery with a Long Name", "West Coast IPA"]) {
+    const checkbox = sheet.getByRole("checkbox", { name });
+    await checkbox.uncheck();
+    await checkbox.check();
+  }
+  for (const label of ["ABV", "My rating"]) {
+    for (const side of ["minimum", "maximum"]) {
+      const numeric = sheet.getByRole("spinbutton", {
+        name: `${label} ${side}`,
+      });
+      await numeric.focus();
+      await numeric.press("Enter");
+      await numeric.press("Tab");
+    }
+  }
+  await sheet.getByRole("button", { name: "Apply filters" }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(page).toHaveURL(original);
+  expect(requests).toHaveLength(count);
+  // Clear all is a draft edit; committing it genuinely changes the result set.
+  await page.getByRole("button", { name: "Filters (4)" }).click();
+  await sheet.getByRole("button", { name: "Clear all", exact: true }).click();
+  await expect(page).toHaveURL(original);
+  await sheet.getByRole("button", { name: "Apply filters" }).click();
+  await expect(page).toHaveURL(/\/explore\/beers\?future=kept$/);
+  await expect.poll(() => requests.length).toBe(count + 1);
+  await page.goto("/explore/beers?page=2&future=kept");
+  await page.getByRole("button", { name: "Filters (0)" }).click();
+  const inactive = page.url();
+  const inactiveCount = requests.length;
+  await sheet.getByRole("button", { name: "Clear all", exact: true }).click();
+  await sheet.getByRole("button", { name: "Apply filters" }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(page).toHaveURL(inactive);
+  expect(requests).toHaveLength(inactiveCount);
+});
+
+for (const width of [390, 1280]) {
+  test(`Explorer review fixes: explicit numeric full ranges and intentional slider resets at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await stubExplorer(page);
+    await page.goto("/explore/beers?page=2&future=kept");
+    const mobile = width <= 700;
+    if (mobile) await page.getByRole("button", { name: "Filters (0)" }).click();
+    const panel = mobile
+      ? page.getByRole("dialog")
+      : page.getByRole("complementary", { name: "Beer filters" });
+    if (mobile)
+      await panel.locator("summary").filter({ hasText: "My rating" }).click();
+    for (const [label, prefix, maximum] of [
+      ["ABV", "abv", "100.01"],
+      ["My rating", "rating", "5"],
+    ]) {
+      const bounds = [
+        ["minimum", "0", "min"],
+        ["maximum", maximum, "max"],
+      ];
+      // Exercise each one-sided boundary independently before forming the full range.
+      for (const [side, value, suffix] of mobile ? bounds.reverse() : bounds) {
+        const input = panel.getByRole("spinbutton", {
+          name: `${label} ${side}`,
+        });
+        await input.fill(value);
+        await input.press("Tab");
+        await expect(input).toHaveValue(value);
+        if (!mobile)
+          expect(
+            new URL(page.url()).searchParams.get(`${prefix}_${suffix}`),
+          ).toBe(value);
+      }
+      await expect(
+        panel.getByRole("slider", { name: `${label} maximum slider` }),
+      ).toHaveAttribute("max", maximum);
+    }
+    if (mobile) {
+      await expect(page).toHaveURL(/page=2/);
+      await panel.getByRole("button", { name: "Apply filters" }).click();
+    }
+    await expect(page).toHaveURL(
+      /abv_min=0&abv_max=100.01&rating_min=0&rating_max=5/,
+    );
+    await expect(page).not.toHaveURL(/page=2/);
+    await expect(
+      page.getByRole("button", { name: "Remove My rating: 0–5", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Remove ABV: 0–100.01%", exact: true })
+      .click();
+    await expect(page).not.toHaveURL(/abv_min|abv_max/);
+    await expect(page).toHaveURL(/rating_min=0/);
+    // Preserve explicit full-range URL bounds through real focus/blur, then reset deliberately.
+    await page.goto(
+      "/explore/beers?page=2&abv_min=0&abv_max=67.5&rating_min=0&rating_max=5&future=kept",
+    );
+    if (mobile) await page.getByRole("button", { name: "Filters (2)" }).click();
+    for (const label of ["ABV", "My rating"]) {
+      const lower = panel.getByRole("slider", {
+        name: `${label} minimum slider`,
+      });
+      await lower.focus();
+      await lower.press("Tab");
+      await expect(page).toHaveURL(/page=2/);
+      await expect(
+        panel.getByRole("spinbutton", { name: `${label} minimum` }),
+      ).toHaveValue("0");
+    }
+    for (const label of ["ABV", "My rating"]) {
+      const lower = panel.getByRole("slider", {
+        name: `${label} minimum slider`,
+      });
+      // Home is an intentional slider reset even when the lower handle is already zero.
+      await lower.focus();
+      await lower.press("Home");
+      await expect(
+        panel.getByRole("spinbutton", { name: `${label} minimum` }),
+      ).toHaveValue("");
+      await expect(
+        panel.getByRole("spinbutton", { name: `${label} maximum` }),
+      ).toHaveValue("");
+    }
+    if (mobile) {
+      await expect(page).toHaveURL(/page=2/);
+      await panel.getByRole("button", { name: "Apply filters" }).click();
+    }
+    await expect(page).toHaveURL(/\/explore\/beers\?future=kept$/);
+  });
+}

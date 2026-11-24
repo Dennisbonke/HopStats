@@ -440,3 +440,30 @@ def test_numeric_threshold_hundredths_contract(client):
         assert client.get("/api/v1/explore/beers", params={field: "5.01"}).status_code == 422
     assert client.get("/api/v1/explore/beers?abv_min=67.50&abv_max=100.01").status_code == 200
     assert client.get("/api/v1/explore/beers?abv_min=10&abv_max=5").status_code == 422
+
+
+def test_explicit_full_ranges_exclude_missing_values_but_keep_zero(client):
+    user = _user_id()
+    zero = _beer("Genuine zero")
+    _set_beer(zero, abv=Decimal("0"))
+    _checkin(user, zero, "full-zero", 0, 0)
+    maximum = _beer("Maximum")
+    _set_beer(maximum, abv=Decimal("100.01"))
+    _checkin(user, maximum, "full-max", 1, 5)
+    missing = _beer("Missing")
+    _checkin(user, missing, "full-missing", 2)
+
+    def ids(**params):
+        response = client.get("/api/v1/explore/beers", params=params)
+        assert response.status_code == 200, response.text
+        return {item["id"] for item in response.json()["items"]}
+
+    assert ids() == {zero, maximum, missing}
+    for category, upper in [("rating", "5"), ("abv", "100.01")]:
+        for bounds in [
+            {f"{category}_min": "0"},
+            {f"{category}_max": upper},
+            {f"{category}_min": "0", f"{category}_max": upper},
+        ]:
+            assert ids(**bounds) == {zero, maximum}
+        assert ids() == {zero, maximum, missing}

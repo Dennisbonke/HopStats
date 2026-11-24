@@ -133,6 +133,20 @@ export function writeFilters(params: URLSearchParams, filters: Filters) {
     for (const value of values) if (value) params.append(key, value);
   }
 }
+// Bounds are optional: an explicit zero/full range excludes missing values.
+// Selection order and equivalent numeric spellings do not change the results.
+export function sameFilters(left: Filters, right: Filters): boolean {
+  return FILTER_KEYS.every((key) => {
+    if (key === "brewery_id" || key === "style_id") {
+      const a = new Set(left[key]);
+      const b = new Set(right[key]);
+      return a.size === b.size && [...a].every((id) => b.has(id));
+    }
+    if (key.includes("tried") || !left[key] || !right[key])
+      return left[key] === right[key];
+    return Number(left[key]) === Number(right[key]);
+  });
+}
 export function activeGroups(f: Filters): number {
   return [
     f.brewery_id.length,
