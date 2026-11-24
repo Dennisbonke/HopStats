@@ -43,6 +43,7 @@ jobs:
       - run: npx playwright install --with-deps chromium firefox webkit
       - run: npx playwright test --grep 'native reporting date keyboard' --max-failures=1
       - run: npx playwright test --project=webkit --grep 'touch taps pin|exact sparse.*320px|native reporting dates.*320px' --max-failures=1
+      - run: npx playwright test --grep 'advanced Explorer controls|both range handles|Explorer screenshot' --max-failures=1
       - run: npm run test:responsive
       - uses: actions/upload-artifact@v7
         if: always()

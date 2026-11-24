@@ -152,15 +152,13 @@ class ExploreService:
     def options(self, user_id, category, *, search="", selected_ids=None, offset=0, limit=25):
         entity = Brewery if category == "breweries" else BeerStyle
         foreign_key = Beer.brewery_id if category == "breweries" else Beer.style_id
-        query = select(entity.id, entity.name).where(
-            select(Beer.id)
-            .where(
-                foreign_key == entity.id,
-                select(Checkin.id)
-                .where(Checkin.beer_id == Beer.id, Checkin.user_id == user_id)
-                .exists(),
-            )
-            .exists()
+        # Resolve user membership once, using the user-prefixed unique index.
+        user_beers = select(Checkin.beer_id).where(Checkin.user_id == user_id).distinct()
+        query = (
+            select(entity.id, entity.name)
+            .join(Beer, foreign_key == entity.id)
+            .where(Beer.id.in_(user_beers))
+            .distinct()
         )
         if selected_ids is not None:
             query = query.where(entity.id.in_(selected_ids))
@@ -177,13 +175,8 @@ class ExploreService:
         )
 
     def bounds(self, user_id):
-        maximum = self.session.scalar(
-            select(func.max(Beer.abv)).where(
-                select(Checkin.id)
-                .where(Checkin.beer_id == Beer.id, Checkin.user_id == user_id)
-                .exists()
-            )
-        )
+        user_beers = select(Checkin.beer_id).where(Checkin.user_id == user_id).distinct()
+        maximum = self.session.scalar(select(func.max(Beer.abv)).where(Beer.id.in_(user_beers)))
         return ExploreBoundsResponse(abv_max=max(20, float(maximum or 0)))
 
 

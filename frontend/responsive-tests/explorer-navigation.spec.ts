@@ -716,3 +716,53 @@ for (const width of [320, 375, 390, 428, 768, 1280]) {
     });
   }
 }
+
+test("both range handles support pointer dragging and keyboard endpoints", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await stubExplorer(page);
+  await page.goto("/explore/beers?rating_min=1&rating_max=4");
+  const panel = page.getByRole("complementary", { name: "Beer filters" });
+  for (const [side, initial, delta] of [
+    ["minimum", 1, 0.1],
+    ["maximum", 4, -0.1],
+  ] as const) {
+    const slider = panel.getByRole("slider", {
+      name: `My rating ${side} slider`,
+    });
+    await slider.scrollIntoViewIfNeeded();
+    const box = (await slider.boundingBox())!;
+    // The native thumb is 24px wide; its center travels inside that inset.
+    const x = box.x + 12 + ((box.width - 24) * initial) / 5;
+    await page.mouse.move(x, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x + box.width * delta, box.y + box.height / 2, {
+      steps: 6,
+    });
+    await page.mouse.up();
+    await expect
+      .poll(async () =>
+        side === "minimum"
+          ? Number(await slider.inputValue()) > initial
+          : Number(await slider.inputValue()) < initial,
+      )
+      .toBe(true);
+    await expect(
+      panel.getByRole("spinbutton", { name: `My rating ${side}`, exact: true }),
+    ).toHaveValue(await slider.inputValue());
+  }
+  const minimum = panel.getByRole("slider", {
+    name: "My rating minimum slider",
+  });
+  await minimum.focus();
+  await minimum.press("Home");
+  await expect(minimum).toHaveValue("0");
+  const maximum = panel.getByRole("slider", {
+    name: "My rating maximum slider",
+  });
+  await maximum.focus();
+  await maximum.press("End");
+  await expect(maximum).toHaveValue("5");
+  await expect(page).not.toHaveURL(/rating_min|rating_max/);
+});

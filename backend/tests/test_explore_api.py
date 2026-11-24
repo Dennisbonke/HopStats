@@ -327,6 +327,25 @@ def test_filter_options_scoped_bounded_searchable_and_authenticated(client):
         assert client.get(url, params={"selected_id": 99999}).json()["items"] == []
         assert client.get(url, params={"offset": 1}).json()["items"] == []
         assert client.get(url, params={"limit": 101}).status_code == 422
+    # Multiple beers/check-ins sharing an entity must not duplicate options.
+    shared = _beer("Another local beer")
+    with SessionLocal() as session:
+        source = session.get(Beer, local)
+        brewery_id, style_id = source.brewery_id, source.style_id
+    _set_beer(shared, brewery_id=brewery_id, style_id=style_id)
+    _checkin(_user_id(), shared, "options-shared-1", 0)
+    _checkin(_user_id(), shared, "options-shared-2", 1)
+    another = _beer("Additional", brewery="Additional brewery", style="Additional style")
+    _checkin(_user_id(), another, "options-additional", 0)
+    for category in ["breweries", "styles"]:
+        url = f"/api/v1/explore/filter-options/{category}"
+        first = client.get(url, params={"limit": 1}).json()
+        second = client.get(url, params={"limit": 1, "offset": 1}).json()
+        assert first["has_more"] is True and second["has_more"] is False
+        assert first["items"][0]["name"].startswith("Additional")
+        assert second["items"][0]["name"].startswith("Local")
+        assert client.get(url, params={"offset": 2}).json()["items"] == []
+        assert client.get(url, params={"offset": 9223372036854775808}).status_code == 422
     assert client.get("/api/v1/explore/filter-bounds").json()["abv_max"] == 67.5
     client.cookies.clear()
     for path in ["beers", "filter-options/styles", "filter-options/breweries", "filter-bounds"]:
