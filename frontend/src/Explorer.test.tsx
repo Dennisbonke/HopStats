@@ -556,7 +556,6 @@ test("Enter in sheet search or numeric editing does not implicitly apply drafts"
   await user.type(
     within(dialog).getByRole("spinbutton", {
       name: "My rating minimum",
-      exact: true,
     }),
     "3.70{Enter}",
   );
