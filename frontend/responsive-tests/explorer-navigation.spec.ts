@@ -296,7 +296,9 @@ test("Brewery and Style placeholders remain readable in both themes", async ({
   }
 });
 
-for (const width of [320, 375, 390, 428, 768, 1280, 1440, 1920, 2560]) {
+for (const width of [
+  320, 375, 390, 428, 700, 701, 768, 1280, 1440, 1920, 2560,
+]) {
   for (const colorScheme of ["light", "dark"] as const) {
     test(`Explorer geometry and URL controls at ${width}px in ${colorScheme}`, async ({
       page,
@@ -533,7 +535,7 @@ for (const width of [390, 1280, 1920]) {
         })),
       );
       await page.goto(
-        "/explore/beers?brewery_id=1&style_id=2&abv_min=5&abv_max=10",
+        "/explore/beers?brewery_id=1&style_id=2&abv_min=5&abv_max=10&rating_min=3.70&rating_max=4.70",
       );
       await expect(page.getByLabel("Active filters")).toContainText(
         "Cloudwater Brew Co.",
@@ -556,7 +558,7 @@ for (const width of [390, 1280, 1920]) {
   }
 }
 
-for (const width of [320, 375, 390, 428, 768, 1280]) {
+for (const width of [320, 375, 390, 428, 700, 701, 768, 1280]) {
   for (const colorScheme of ["light", "dark"] as const) {
     test(`advanced Explorer controls at ${width}px in ${colorScheme}`, async ({
       page,
@@ -631,6 +633,11 @@ for (const width of [320, 375, 390, 428, 768, 1280]) {
       await expect(
         panel.getByRole("slider", { name: "ABV maximum slider" }),
       ).toHaveValue("67.5");
+      if (mobile)
+        await panel
+          .locator("summary")
+          .filter({ hasText: /^First tried/ })
+          .click();
       await panel
         .getByLabel("First tried from", { exact: true })
         .fill("2026-01-01");
@@ -669,6 +676,10 @@ for (const width of [320, 375, 390, 428, 768, 1280]) {
           .getByRole("button", { name: "Clear all", exact: true })
           .click();
         await expect(page).toHaveURL(/rating_min=3.70/);
+        await panel
+          .locator("summary")
+          .filter({ hasText: /^Beer style/ })
+          .click();
         await panel.getByRole("checkbox", { name: "West Coast IPA" }).check();
         await panel
           .getByRole("button", { name: "Apply filters", exact: true })
@@ -688,6 +699,10 @@ for (const width of [320, 375, 390, 428, 768, 1280]) {
         await expect(
           panel.getByRole("button", { name: "Apply filters" }),
         ).toBeInViewport();
+        await panel
+          .locator("summary")
+          .filter({ hasText: /^Last tried/ })
+          .click();
         await panel
           .getByLabel("Last tried to", { exact: true })
           .scrollIntoViewIfNeeded();
@@ -778,3 +793,466 @@ test("both range handles support pointer dragging and keyboard endpoints", async
   await expect(maximum).toHaveValue("5");
   await expect(page).not.toHaveURL(/rating_min|rating_max/);
 });
+
+for (const colorScheme of ["light", "dark"] as const) {
+  test(`Explorer review fixes: intentional submission, validation and compact sheet in ${colorScheme}`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ colorScheme });
+    await stubExplorer(page);
+    const optionRequests: string[] = [];
+    const catalogueRequests: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/filter-options/"))
+        optionRequests.push(request.url());
+      if (new URL(request.url()).pathname === "/api/v1/explore/beers")
+        catalogueRequests.push(request.url());
+    });
+    await page.goto(
+      "/explore/beers?rating_min=3.755&abv_max=100.01&future=kept&sort=rating_desc",
+    );
+    await expect(
+      page.getByRole("button", { name: "Filters (1)" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Next", exact: true }),
+    ).toBeEnabled();
+    // Bounds are shared metadata; no hidden option panel may fetch on mobile.
+    await expect(page.locator(".explorer-filter-content")).toHaveCount(0);
+    // Outlive option-search debounce when asserting that no requests occurred.
+    await page.waitForTimeout(350);
+    expect(optionRequests).toHaveLength(0);
+    expect(catalogueRequests.at(-1)).not.toContain("rating_min");
+    await page.getByRole("button", { name: "Filters (1)" }).click();
+    const sheet = page.getByRole("dialog");
+    const sections = sheet.locator("details");
+    await expect(sections).toHaveCount(6);
+    for (const [index, open] of [
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+    ].entries())
+      expect(
+        await sections
+          .nth(index)
+          .evaluate((node) => (node as HTMLDetailsElement).open),
+      ).toBe(open);
+    await expect(sheet.getByRole("checkbox")).toHaveCount(1);
+    expect(
+      optionRequests.filter((url) => url.includes("/styles")),
+    ).toHaveLength(0);
+    const initial = testInfo.outputPath(
+      `explorer-sheet-compact-${colorScheme}.png`,
+    );
+    await page.screenshot({ path: initial });
+    await testInfo.attach("Compact initial filter sheet", {
+      path: initial,
+      contentType: "image/png",
+    });
+    const initialUrl = page.url(),
+      initialCount = catalogueRequests.length;
+    await sheet.getByRole("checkbox").check();
+    for (const category of ["breweries", "styles"]) {
+      if (category === "styles")
+        await sheet
+          .locator("summary")
+          .filter({ hasText: /^Beer style/ })
+          .click();
+      const search = sheet.getByRole("searchbox", {
+        name: `Search ${category}`,
+      });
+      await search.fill("IPA");
+      await search.press("Enter");
+      await expect(sheet).toBeVisible();
+      expect(page.url()).toBe(initialUrl);
+      expect(catalogueRequests).toHaveLength(initialCount);
+      await expect(
+        sheet.getByRole("button", {
+          name: "Remove A Brewery with a Long Name",
+        }),
+      ).toBeVisible();
+    }
+    await sheet
+      .locator("summary")
+      .filter({ hasText: /^My rating/ })
+      .click();
+    const min = sheet.getByRole("spinbutton", {
+      name: "My rating minimum",
+      exact: true,
+    });
+    await min.fill("3.755");
+    await sheet.getByRole("button", { name: "Apply filters" }).click();
+    await expect(sheet).toBeVisible();
+    await expect(min).toHaveAttribute("aria-invalid", "true");
+    await expect(sheet.getByRole("alert")).toContainText("0.01");
+    expect(page.url()).toBe(initialUrl);
+    await min.fill("3.75");
+    await min.press("Tab");
+    await expect(min).toHaveAttribute("aria-invalid", "false");
+    await expect(
+      sheet.getByRole("slider", { name: "ABV maximum slider" }),
+    ).toHaveAttribute("max", "100.01");
+    for (const field of await sheet.locator('input[type="number"]').all())
+      expect(
+        await field.evaluate((node: HTMLInputElement) => node.validity.valid),
+      ).toBe(true);
+    const expanded = testInfo.outputPath(
+      `explorer-sheet-expanded-${colorScheme}.png`,
+    );
+    await sheet
+      .locator(".explorer-sheet-scroll")
+      .evaluate((node) => (node.scrollTop = 0));
+    await page.screenshot({ path: expanded });
+    await testInfo.attach("Expanded draft filters", {
+      path: expanded,
+      contentType: "image/png",
+    });
+    // Intentional keyboard activation of Apply is preserved.
+    await sheet.getByRole("button", { name: "Apply filters" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(sheet).toHaveCount(0);
+    await expect(page).toHaveURL(/rating_min=3.75/);
+    await expect(page).toHaveURL(/brewery_id=1/);
+    await expect(page).toHaveURL(/abv_max=100.01/);
+    await page.reload();
+    await expect(page.getByLabel("Active filters")).toContainText(
+      "A Brewery with a Long Name",
+    );
+    await page.getByRole("button", { name: "Filters (3)" }).click();
+    await expect(
+      sheet.getByRole("spinbutton", { name: "My rating minimum", exact: true }),
+    ).toHaveValue("3.75");
+    // Clear also resets invalid local input and remains draft-only until Apply.
+    await sheet
+      .getByRole("spinbutton", { name: "My rating minimum", exact: true })
+      .fill("5.01");
+    await sheet.getByRole("button", { name: "Clear all", exact: true }).click();
+    await expect(sheet.getByRole("alert")).toHaveCount(0);
+    await expect(page).toHaveURL(/rating_min=3.75/);
+    await sheet.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.locator(".explorer-filter-content")).toHaveCount(0);
+    // Crossing the exact breakpoint discards drafts and releases body locking.
+    await page.setViewportSize({ width: 700, height: 400 });
+    await page.getByRole("button", { name: "Filters (3)" }).click();
+    await sheet.getByRole("button", { name: "Clear all", exact: true }).click();
+    await page.setViewportSize({ width: 701, height: 400 });
+    await expect(sheet).toHaveCount(0);
+    await expect(page.locator(".explorer-filter-content")).toHaveCount(1);
+    await expect(page.locator("body")).not.toHaveCSS("position", "fixed");
+    await expect(page).toHaveURL(/rating_min=3.75/);
+    await expect(page.getByLabel("Active filters")).toContainText(
+      "A Brewery with a Long Name",
+    );
+    await expectNoHorizontalOverflow(page);
+  });
+
+  test(`Explorer review fixes: context-aware empty states in ${colorScheme}`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ colorScheme });
+    await stubExplorer(page, []);
+    for (const [query, text] of [
+      ["", "No beers in your catalogue yet."],
+      ["search=ipa", "No beers match your search."],
+      ["rating_min=3.70", "No beers match your filters."],
+      ["search=ipa&rating_min=3.70", "No beers match your search and filters."],
+    ]) {
+      await page.goto(
+        `/explore/beers?${query}&sort=rating_desc&future=kept&page=2`,
+      );
+      await expect(page.getByText(text, { exact: true })).toBeVisible();
+      await expect(page).toHaveURL(/page=1/);
+      if (query.includes("search") && query.includes("rating")) {
+        const path = testInfo.outputPath(`explorer-empty-${colorScheme}.png`);
+        await page.screenshot({ path });
+        await testInfo.attach("Search and filters without matches", {
+          path,
+          contentType: "image/png",
+        });
+        await page
+          .getByRole("button", { name: "Clear filters", exact: true })
+          .click();
+        await expect(page).toHaveURL(/search=ipa/);
+        await expect(page).not.toHaveURL(/rating_min/);
+        await page.goBack();
+        await page
+          .getByRole("button", { name: "Clear search", exact: true })
+          .click();
+        await expect(page).toHaveURL(/rating_min=3.70/);
+        await expect(page).not.toHaveURL(/search=/);
+        await page.goBack();
+        await page
+          .getByRole("button", {
+            name: "Clear search and filters",
+            exact: true,
+          })
+          .click();
+        await expect(page).not.toHaveURL(/search=|rating_min|page=/);
+        await expect(page).toHaveURL(/sort=rating_desc&future=kept/);
+      }
+      await expectNoHorizontalOverflow(page);
+    }
+  });
+}
+
+test("Explorer review fixes: both sliders separate coincident handles with real pointer dragging", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await stubExplorer(page);
+  let requests = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/v1/explore/beers") requests++;
+  });
+  for (const [label, key, max] of [
+    ["My rating", "rating", 5],
+    ["ABV", "abv", 67.5],
+  ] as const) {
+    for (const [low, high, side, direction] of [
+      [1, 4, 0, 1],
+      [1, 4, 1, -1],
+      [2, 2, 0, -1],
+      [2, 2, 1, 1],
+      [2, 2.01, 0, -1],
+      [2, 2.01, 1, 1],
+      [0, 0, 1, 1],
+      [5, 5, 0, -1],
+    ]) {
+      await page.goto(
+        `/explore/beers?${key}_min=${((low * max) / 5).toFixed(2)}&${key}_max=${((high * max) / 5).toFixed(2)}`,
+      );
+      const slider = page.getByRole("slider", {
+        name: `${label} ${side ? "maximum" : "minimum"} slider`,
+      });
+      await slider.scrollIntoViewIfNeeded();
+      await expect(
+        page.getByRole("button", { name: "Next", exact: true }),
+      ).toBeEnabled();
+      const track = slider.locator("..");
+      const box = (await track.boundingBox())!;
+      const initial = Number(await slider.inputValue());
+      const start = box.x + 12 + (initial / max) * (box.width - 24);
+      const end = start + (direction * (box.width - 24)) / 5;
+      const before = requests;
+      await page.mouse.move(start, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(end, box.y + box.height / 2, { steps: 8 });
+      expect(requests).toBe(before);
+      // Highlight updates before release, while catalogue requests remain unchanged.
+      const fraction = await track.evaluate(
+        (node, side) =>
+          Number(
+            (node as HTMLElement).style.getPropertyValue(
+              side ? "--range-high" : "--range-low",
+            ),
+          ),
+        side,
+      );
+      expect(Math.abs(fraction - initial / max)).toBeGreaterThan(0.1);
+      const highlight = await track.evaluate((node) => ({
+        width: getComputedStyle(node, "::after").width,
+        color: getComputedStyle(node, "::after").backgroundColor,
+        accent: getComputedStyle(node)
+          .getPropertyValue("--color-action-primary")
+          .trim(),
+      }));
+      const expectedWidth = await track.evaluate((node) => {
+        const style = (node as HTMLElement).style;
+        return (
+          (Number(style.getPropertyValue("--range-high")) -
+            Number(style.getPropertyValue("--range-low"))) *
+          (node.getBoundingClientRect().width - 24)
+        );
+      });
+      expect(
+        Math.abs(parseFloat(highlight.width) - expectedWidth),
+      ).toBeLessThan(2);
+      expect(parseFloat(highlight.width)).toBeGreaterThan(1);
+      expect(highlight.color).not.toBe("rgba(0, 0, 0, 0)");
+      await page.mouse.up();
+      await expect.poll(() => requests).toBe(before + 1);
+      expect(
+        (Number(await slider.inputValue()) - initial) * direction,
+      ).toBeGreaterThan(0);
+      await expect(
+        page.getByRole("spinbutton", {
+          name: `${label} ${side ? "maximum" : "minimum"}`,
+          exact: true,
+        }),
+      ).toHaveValue(await slider.inputValue());
+    }
+  }
+});
+
+test("Explorer review fixes: touch-capable slider gestures", async ({
+  browser,
+  browserName,
+}) => {
+  test.skip(
+    browserName === "firefox",
+    "Playwright Firefox does not support hasTouch contexts",
+  );
+  const context = await browser.newContext({
+    hasTouch: true,
+    viewport: { width: 390, height: 844 },
+  });
+  try {
+    const page = await context.newPage();
+    await stubExplorer(page);
+    await page.goto(
+      "/explore/beers?rating_min=2&rating_max=2&abv_min=20&abv_max=20",
+    );
+    await page.getByRole("button", { name: "Filters (2)" }).tap();
+    const sheet = page.getByRole("dialog");
+    for (const [label, max] of [
+      ["ABV", 67.5],
+      ["My rating", 5],
+    ] as const) {
+      const slider = sheet.getByRole("slider", {
+        name: `${label} maximum slider`,
+      });
+      await slider.scrollIntoViewIfNeeded();
+      const box = (await slider.boundingBox())!;
+      if (browserName === "chromium") {
+        const cdp = await context.newCDPSession(page);
+        for (const direction of [-1, 1]) {
+          const handle = sheet.getByRole("slider", {
+            name: `${label} ${direction < 0 ? "minimum" : "maximum"} slider`,
+          });
+          const start =
+            box.x +
+            12 +
+            (Number(await handle.inputValue()) / max) * (box.width - 24);
+          const y = box.y + box.height / 2;
+          await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ x: start, y }],
+          });
+          await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [
+              { x: start + direction * (box.width - 24) * 0.15, y },
+            ],
+          });
+          await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchEnd",
+            touchPoints: [],
+          });
+        }
+        await cdp.detach();
+      } else {
+        // WebKit exposes real touchscreen taps, but no touch-drag automation API.
+        // Separate using keyboard, then touch the track to move each handle.
+        const lower = sheet.getByRole("slider", {
+          name: `${label} minimum slider`,
+        });
+        await lower.focus();
+        await lower.press("Home");
+        await slider.focus();
+        await slider.press("End");
+        await page.touchscreen.tap(
+          box.x + 12 + (box.width - 24) * 0.15,
+          box.y + box.height / 2,
+        );
+        await page.touchscreen.tap(
+          box.x + 12 + (box.width - 24) * 0.85,
+          box.y + box.height / 2,
+        );
+      }
+      const lo = Number(
+        await sheet
+          .getByRole("slider", { name: `${label} minimum slider` })
+          .inputValue(),
+      );
+      const hi = Number(await slider.inputValue());
+      expect(hi).toBeGreaterThan(lo);
+    }
+    await expect(page).toHaveURL(
+      /rating_min=2&rating_max=2&abv_min=20&abv_max=20/,
+    );
+    await sheet.getByRole("button", { name: "Cancel" }).tap();
+    await expect(sheet).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
+});
+
+for (const width of [390, 1280]) {
+  test(`Explorer review fixes: numeric contract and native submission at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await stubExplorer(page);
+    await page.goto(
+      "/explore/beers?rating_min=3.70&abv_max=100.01&future=kept",
+    );
+    const mobile = width < 701;
+    if (mobile) await page.getByRole("button", { name: "Filters (2)" }).click();
+    const panel = mobile
+      ? page.getByRole("dialog")
+      : page.getByRole("complementary", { name: "Beer filters" });
+    const min = panel.getByRole("spinbutton", {
+      name: "My rating minimum",
+      exact: true,
+    });
+    const max = panel.getByRole("spinbutton", {
+      name: "My rating maximum",
+      exact: true,
+    });
+    for (const invalid of ["3.755", "-0.01", "5.01"]) {
+      await min.fill(invalid);
+      await min.press("Tab");
+      await expect(min).toHaveAttribute("aria-invalid", "true");
+      await expect(page).toHaveURL(/rating_min=3.70/);
+      if (mobile) {
+        await panel.getByRole("button", { name: "Apply filters" }).click();
+        await expect(panel).toBeVisible();
+      }
+    }
+    for (const value of ["3.70", "3.75", "4.10", "0", "5"]) {
+      await min.fill(value);
+      await min.press("Tab");
+      await expect(min).toHaveAttribute("aria-invalid", "false");
+      expect(
+        await min.evaluate((node: HTMLInputElement) => node.validity.valid),
+      ).toBe(true);
+      if (!mobile)
+        await expect
+          .poll(() => new URL(page.url()).searchParams.get("rating_min"))
+          .toBe(value);
+    }
+    await max.fill("4");
+    await max.press("Tab");
+    await expect(panel.getByRole("alert")).toContainText("ordered");
+    if (mobile) {
+      await panel.getByRole("button", { name: "Apply filters" }).click();
+      await expect(panel).toBeVisible();
+      await expect(min).toBeFocused();
+    }
+    await min.fill("3.70");
+    await min.press("Tab");
+    await expect(panel.getByRole("alert")).toHaveCount(0);
+    await max.fill("");
+    await max.press("Tab");
+    await min.fill("");
+    await min.press("Tab");
+    await expect(
+      panel.getByRole("slider", { name: "My rating minimum slider" }),
+    ).toHaveValue("0");
+    await expect(
+      panel.getByRole("slider", { name: "My rating maximum slider" }),
+    ).toHaveValue("5");
+    if (mobile) {
+      await panel.getByRole("button", { name: "Apply filters" }).click();
+      await expect(panel).toHaveCount(0);
+    }
+    await expect(page).not.toHaveURL(/rating_min|rating_max/);
+    await expect(page).toHaveURL(/abv_max=100.01/);
+    await expect(page).toHaveURL(/future=kept/);
+  });
+}
