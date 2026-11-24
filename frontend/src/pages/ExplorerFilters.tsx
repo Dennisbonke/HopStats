@@ -3,7 +3,6 @@ import {
   ReactNode,
   useEffect,
   useId,
-  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -159,6 +158,7 @@ function RangeFilter({
 }) {
   const [draft, setDraft] = useState([low, high]);
   const draftRef = useRef(draft);
+  const pending = useRef<string[][]>([]);
   const [badInput, setBadInput] = useState([false, false]);
   const badInputRef = useRef(badInput);
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
@@ -182,8 +182,24 @@ function RangeFilter({
     draftRef.current = values;
     setDraft(values);
   }
-  // Restore applied bounds before the next field can receive a new edit.
-  useLayoutEffect(() => {
+  function sameBounds(left: string[], right: string[]) {
+    return left.every((value, index) =>
+      !value || !right[index]
+        ? value === right[index]
+        : Number(value) === Number(right[index]),
+    );
+  }
+  useEffect(() => {
+    // Router transitions may acknowledge a commit after the next field was
+    // edited. Those bounds are already reflected locally; preserve newer edits.
+    const acknowledged = pending.current.findIndex((values) =>
+      sameBounds(values, [low, high]),
+    );
+    if (acknowledged >= 0) {
+      pending.current.splice(0, acknowledged + 1);
+      return;
+    }
+    pending.current = [];
     draftRef.current = [low, high];
     badInputRef.current = [false, false];
     setBadInput([false, false]);
@@ -207,6 +223,8 @@ function RangeFilter({
           ? ["", ""]
           : values;
       edit(next);
+      if (sameBounds(next, pending.current.at(-1) ?? [low, high])) return;
+      pending.current.push(next);
       onChange(next[0], next[1]);
     }
   }

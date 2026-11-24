@@ -11,7 +11,8 @@ import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { within } from "@testing-library/react";
 import ExplorerBeers from "./pages/ExplorerBeers";
-import { readFilters } from "./pages/explorerState";
+import { emptyFilters, Filters, readFilters } from "./pages/explorerState";
+import { FilterPanel } from "./pages/ExplorerFilters";
 
 vi.mock("./api/explore", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api/explore")>()),
@@ -961,3 +962,53 @@ test("unchanged mobile Apply preserves full bounds and reordered selections on p
   expect(screen.getByLabelText("Current URL")).toHaveTextContent(url);
   expect(requests).toHaveLength(1);
 });
+
+test.each(["ABV", "My rating"])(
+  "%s preserves newer edits when prior commits are acknowledged",
+  (label) => {
+    const low = label === "ABV" ? "abv_min" : "rating_min";
+    const high = label === "ABV" ? "abv_max" : "rating_max";
+    const onChange = vi.fn();
+    const panel = (value: Filters) => (
+      <FilterPanel
+        value={value}
+        onChange={onChange}
+        abvMax={67.5}
+        names={{ breweries: {}, styles: {} }}
+        onNames={{ breweries: vi.fn(), styles: vi.fn() }}
+      />
+    );
+    const { rerender } = render(
+      panel({ ...emptyFilters(), [low]: "3", [high]: "4" }),
+    );
+    const minimum = screen.getByRole("spinbutton", {
+      name: `${label} minimum`,
+    });
+    const maximum = screen.getByRole("spinbutton", {
+      name: `${label} maximum`,
+    });
+    fireEvent.change(minimum, { target: { value: "3.70" } });
+    fireEvent.blur(minimum);
+    const first = onChange.mock.calls.at(-1)![0];
+    fireEvent.change(maximum, { target: { value: "" } });
+    rerender(panel(first));
+    expect(maximum).toHaveValue(null);
+    fireEvent.blur(maximum);
+    const second = onChange.mock.calls.at(-1)![0];
+    expect(second[high]).toBe("");
+    fireEvent.change(maximum, { target: { value: "3.755" } });
+    rerender(panel(second));
+    expect(maximum).toHaveValue(3.755);
+    expect(maximum).toHaveAttribute("aria-invalid", "true");
+    fireEvent.change(maximum, { target: { value: "3.80" } });
+    fireEvent.blur(maximum);
+    rerender(panel(onChange.mock.calls.at(-1)![0]));
+    expect(maximum).toHaveValue(3.8);
+    expect(maximum).toHaveAttribute("aria-invalid", "false");
+    // An external URL change still replaces local drafts and validation state.
+    rerender(panel({ ...emptyFilters(), [low]: "2", [high]: "3" }));
+    expect(minimum).toHaveValue(2);
+    expect(maximum).toHaveValue(3);
+    expect(onChange).toHaveBeenCalledTimes(3);
+  },
+);
