@@ -1396,6 +1396,8 @@ for (const bounds of [
         await slider.press("Tab");
       }
     }
+    await expect(page).toHaveURL(original);
+    expect(requests).toHaveLength(count);
     if (!bounds) {
       for (const label of ["ABV", "My rating"]) {
         const lower = panel.getByRole("slider", {
@@ -1409,8 +1411,10 @@ for (const bounds of [
         const track = lower.locator("..");
         await track.scrollIntoViewIfNeeded();
         const box = (await track.boundingBox())!;
-        await page.mouse.click(box.x + 12, box.y + box.height / 2);
-        await page.mouse.click(box.x + box.width - 12, box.y + box.height / 2);
+        // Click beyond the thumb centres so integer pointer coordinates still
+        // clamp to the exact endpoints on every browser's subpixel geometry.
+        await page.mouse.click(box.x + 1, box.y + box.height / 2);
+        await page.mouse.click(box.x + box.width - 1, box.y + box.height / 2);
       }
       await panel
         .getByRole("button", { name: "Clear all", exact: true })
