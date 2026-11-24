@@ -537,3 +537,36 @@ test("range chips remove only their category and malformed calendar dates are sa
     "future=preserved",
   );
 });
+
+test("Enter in sheet search or numeric editing does not implicitly apply drafts", async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter>
+      <ExplorerBeers />
+    </MemoryRouter>,
+  );
+  await screen.findAllByText("First Page Stout");
+  await user.click(screen.getByRole("button", { name: "Filters (0)" }));
+  const dialog = screen.getByRole("dialog");
+  await user.type(
+    within(dialog).getByRole("searchbox", { name: "Search breweries" }),
+    "Cloudwater{Enter}",
+  );
+  expect(dialog).toBeInTheDocument();
+  await user.type(
+    within(dialog).getByRole("spinbutton", {
+      name: "My rating minimum",
+      exact: true,
+    }),
+    "3.70{Enter}",
+  );
+  expect(dialog).toBeInTheDocument();
+  expect(requests).toHaveLength(1);
+  expect(
+    within(dialog).getByRole("slider", { name: "My rating minimum slider" }),
+  ).toHaveValue("3.7");
+  expect(
+    within(dialog).getByRole("heading", { name: "Filters 1 active" }),
+  ).toBeInTheDocument();
+  await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+});

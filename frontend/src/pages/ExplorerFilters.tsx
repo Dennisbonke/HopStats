@@ -67,6 +67,9 @@ function MultiSelect({
           type="search"
           maxLength={200}
           value={search}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.preventDefault();
+          }}
           onChange={(e) => {
             setSearch(e.target.value);
             setOffset(0);
@@ -224,6 +227,12 @@ function RangeFilter({
               placeholder={index ? String(maximum) : "0"}
               value={draft[index]}
               aria-invalid={error}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  commit(draft);
+                }
+              }}
               onChange={(e) => {
                 const next = [...draft];
                 next[index] = e.target.value;

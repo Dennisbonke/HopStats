@@ -591,6 +591,10 @@ for (const width of [320, 375, 390, 428, 768, 1280]) {
       await panel
         .getByRole("searchbox", { name: "Search breweries" })
         .fill("another");
+      await panel
+        .getByRole("searchbox", { name: "Search breweries" })
+        .press("Enter");
+      await expect(panel).toBeVisible();
       await expect(
         panel.getByRole("button", {
           name: "Remove A Brewery with a Long Name",
