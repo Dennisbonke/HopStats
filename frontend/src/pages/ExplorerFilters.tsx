@@ -228,14 +228,8 @@ function RangeFilter({
                 const next = [...draft];
                 next[index] = e.target.value;
                 setDraft(next);
-                e.currentTarget.setCustomValidity("");
               }}
-              onBlur={(e) => {
-                commit(draft);
-                e.currentTarget.setCustomValidity(
-                  lower > upper ? "Minimum must not exceed maximum" : "",
-                );
-              }}
+              onBlur={() => commit(draft)}
             />
           </label>
         ))}

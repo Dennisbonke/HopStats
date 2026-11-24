@@ -100,7 +100,7 @@ function BeerCard({ beer }: { beer: ExploreBeer }) {
 
 export default function ExplorerBeers() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const querySearch = searchParams.get("search") ?? "";
+  const querySearch = (searchParams.get("search") ?? "").slice(0, 200);
   const sort = selectedSort(searchParams.get("sort"));
   const page = selectedPage(searchParams.get("page"));
   const urlStateKey = searchParams.toString();
@@ -331,6 +331,7 @@ export default function ExplorerBeers() {
             >
               <input
                 type="search"
+                maxLength={200}
                 value={searchDraft}
                 onChange={(event) => setSearchDraft(event.target.value)}
                 placeholder="Search your beers…"
