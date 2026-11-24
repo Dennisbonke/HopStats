@@ -33,6 +33,10 @@ body {
   padding: 2rem 1rem;
   color: var(--color-text-primary);
 }
+/* Explorer owns a full-width workspace; other routes keep their reading width. */
+.app > .app-main.app-main--explorer {
+  width: 100%;
+}
 .placeholder-panel {
   background: var(--color-surface);
   padding: 2rem;

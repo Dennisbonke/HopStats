@@ -1,6 +1,5 @@
 .explorer-page {
   min-width: 0;
-  padding: 1.25rem;
   background: var(--color-canvas);
   color: var(--color-text-primary);
 }
@@ -74,8 +73,7 @@
 .explorer-page .explorer-catalogue {
   min-width: 0;
   padding: 0;
-  border-radius: 0.7rem;
-  background: var(--color-surface);
+  background: transparent;
   color: var(--color-text-primary);
 }
 
@@ -154,6 +152,8 @@
 .explorer-page .explorer-beer-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
+  background: var(--color-surface);
   color: var(--color-text-primary);
   text-align: left;
   font-size: 0.9rem;
@@ -166,14 +166,23 @@
   color: var(--color-text-primary);
   text-align: left;
   vertical-align: middle;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+}
+
+.explorer-page .explorer-beer-table th:nth-child(1) {
+  width: 24%;
+}
+
+.explorer-page .explorer-beer-table th:nth-child(2),
+.explorer-page .explorer-beer-table th:nth-child(3) {
+  width: 17%;
 }
 
 .explorer-page .explorer-beer-name-cell {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  min-width: 12rem;
+  min-width: 0;
 }
 
 .explorer-page .explorer-beer-name-cell strong {
@@ -273,13 +282,15 @@
 }
 
 @media (max-width: 700px) {
-  .explorer-page {
-    padding: 1rem;
-  }
-
   .explorer-page .explorer-controls {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  /* Desktop horizontal bases must not become heights in a column. */
+  .explorer-page .explorer-search-control,
+  .explorer-page .explorer-sort-control {
+    flex: 0 1 auto;
   }
 
   .explorer-page .explorer-controls .ui-button {
