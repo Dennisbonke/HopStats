@@ -1185,12 +1185,20 @@ test("Explorer review fixes: touch-capable slider gestures", async ({
             type: "touchStart",
             touchPoints: [{ id: 1, x: start, y }],
           });
-          await cdp.send("Input.dispatchTouchEvent", {
-            type: "touchMove",
-            touchPoints: [
-              { id: 1, x: start + direction * (box.width - 24) * 0.15, y },
-            ],
-          });
+          // Pace native moves like a finger drag rather than a one-frame fling.
+          for (const fraction of [0.25, 0.5, 0.75, 1]) {
+            await cdp.send("Input.dispatchTouchEvent", {
+              type: "touchMove",
+              touchPoints: [
+                {
+                  id: 1,
+                  x: start + direction * (box.width - 24) * 0.15 * fraction,
+                  y,
+                },
+              ],
+            });
+            await page.waitForTimeout(50);
+          }
           await cdp.send("Input.dispatchTouchEvent", {
             type: "touchEnd",
             touchPoints: [],
@@ -1226,6 +1234,9 @@ test("Explorer review fixes: touch-capable slider gestures", async ({
     await expect(page).toHaveURL(
       /rating_min=2&rating_max=2&abv_min=20&abv_max=20/,
     );
+    // Native gesture recognition continues after CDP's touchEnd acknowledgement.
+    // Let it settle before a separate tap, while retaining real touchscreen input.
+    await page.waitForTimeout(500);
     await sheet.getByRole("button", { name: "Cancel" }).tap();
     try {
       await expect(sheet).toHaveCount(0);

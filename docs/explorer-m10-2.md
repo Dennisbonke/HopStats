@@ -145,6 +145,7 @@ These checks require a real device; automated WebKit coverage is not physical ve
 - Use the software keyboard Search action in both brewery and style searches after changing a draft; confirm the sheet stays open and applied results/URL stay unchanged until explicit Apply. Verify Cancel discards edits.
 - Expand and collapse every section independently; confirm the initial compact defaults, collapsed active summaries and draft selections survive edits and option loading.
 - Open both native date pickers, select inclusive boundaries and clear a date. Check input widths and keyboard editing.
+- Immediately tap Apply and Cancel after dragging each handle; verify the first tap works and draft/apply semantics remain correct.
 - Apply multiple categories; check chips, counts, pagination, reload and browser back/forward.
 - Open and dismiss the software keyboard near the bottom; verify the focused field, header and footer remain reachable with safe-area padding.
 - Rotate between portrait and short landscape while open. Confirm compact layout without horizontal overflow, independently scrolling content, background scroll locking, and restoration after Cancel, Close, backdrop and Apply.
