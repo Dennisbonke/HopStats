@@ -11,6 +11,7 @@ import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { within } from "@testing-library/react";
 import ExplorerBeers from "./pages/ExplorerBeers";
+import { readFilters } from "./pages/explorerState";
 
 vi.mock("./api/explore", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api/explore")>()),
@@ -41,6 +42,12 @@ vi.mock("./api/explore", async (importOriginal) => ({
 }));
 
 const requests: string[] = [];
+let mobile = false;
+const mediaListeners = new Set<() => void>();
+function viewport(isMobile: boolean) {
+  mobile = isMobile;
+  act(() => mediaListeners.forEach((listener) => listener()));
+}
 
 function RouterState() {
   const location = useLocation();
@@ -83,6 +90,20 @@ function beer(id: number, name: string) {
 }
 
 beforeEach(() => {
+  mobile = false;
+  mediaListeners.clear();
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({
+      get matches() {
+        return mobile;
+      },
+      addEventListener: (_: string, listener: () => void) =>
+        mediaListeners.add(listener),
+      removeEventListener: (_: string, listener: () => void) =>
+        mediaListeners.delete(listener),
+    })),
+  );
   requests.length = 0;
   vi.stubGlobal(
     "fetch",
@@ -240,7 +261,7 @@ test("normalizes an empty result page to page one and keeps the empty state", as
   );
 
   expect(
-    await screen.findByText("No checked-in beers match your search."),
+    await screen.findByText("No beers match your search."),
   ).toBeInTheDocument();
   expect(screen.getByLabelText("Current URL")).toHaveTextContent(
     "/explore/beers?search=stout&page=1",
@@ -436,6 +457,7 @@ test("exact numeric thresholds synchronize sliders and sortable headers", async 
 });
 
 test("mobile sheet cancels, applies atomically, clears only drafts and restores focus", async () => {
+  viewport(true);
   const user = userEvent.setup();
   render(
     <MemoryRouter initialEntries={["/explore/beers?rating_min=3.7"]}>
@@ -458,8 +480,15 @@ test("mobile sheet cancels, applies atomically, clears only drafts and restores 
   ).toHaveValue(3.7);
   await user.click(within(dialog).getByRole("button", { name: "Clear all" }));
   // Happy DOM incorrectly flags fractional range steps as stepMismatch.
-  // Exercise submission directly here; Playwright clicks the actual button.
-  fireEvent.submit(dialog.querySelector("form")!);
+  // Disable only its range constraint checks; CI tests the native form unchanged.
+  dialog
+    .querySelectorAll<HTMLInputElement>('input[type="range"]')
+    .forEach((input) => {
+      input.disabled = true;
+    });
+  await user.click(
+    within(dialog).getByRole("button", { name: "Apply filters" }),
+  );
   await waitFor(() => expect(requests.at(-1)).not.toContain("rating_min"));
   expect(document.body.style.overflow).toBe("");
 });
@@ -539,6 +568,7 @@ test("range chips remove only their category and malformed calendar dates are sa
 });
 
 test("Enter in sheet search or numeric editing does not implicitly apply drafts", async () => {
+  viewport(true);
   const user = userEvent.setup();
   render(
     <MemoryRouter>
@@ -553,12 +583,17 @@ test("Enter in sheet search or numeric editing does not implicitly apply drafts"
     "Cloudwater{Enter}",
   );
   expect(dialog).toBeInTheDocument();
+  await user.click(
+    within(dialog).getByText("My rating", { selector: "summary" }),
+  );
   await user.type(
     within(dialog).getByRole("spinbutton", {
       name: "My rating minimum",
     }),
     "3.70{Enter}",
   );
+  expect(dialog).toBeInTheDocument();
+  fireEvent.submit(dialog.querySelector("form")!);
   expect(dialog).toBeInTheDocument();
   expect(requests).toHaveLength(1);
   expect(
@@ -569,3 +604,149 @@ test("Enter in sheet search or numeric editing does not implicitly apply drafts"
   ).toBeInTheDocument();
   await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
 });
+
+test.each([
+  ["", "No beers in your catalogue yet."],
+  ["search=ipa", "No beers match your search."],
+  ["rating_min=3.70", "No beers match your filters."],
+  ["search=ipa&rating_min=3.70", "No beers match your search and filters."],
+])("empty catalogue messaging for %s and recovery", async (query, message) => {
+  const user = userEvent.setup();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      requests.push(url);
+      return {
+        ok: true,
+        json: async () => ({
+          items: [],
+          total: 0,
+          total_pages: 0,
+          page: 1,
+          page_size: 25,
+        }),
+      };
+    }),
+  );
+  render(
+    <MemoryRouter
+      initialEntries={[`/explore/beers?${query}&sort=rating_desc&future=kept`]}
+    >
+      <RouterState />
+      <ExplorerBeers />
+    </MemoryRouter>,
+  );
+  await screen.findByText(message);
+  if (query.includes("search")) {
+    await user.click(screen.getByRole("button", { name: "Clear search" }));
+    await waitFor(() => expect(requests.at(-1)).not.toContain("search="));
+    if (query.includes("rating"))
+      expect(requests.at(-1)).toContain("rating_min=3.70");
+    expect(screen.getByLabelText("Current URL")).toHaveTextContent(
+      "future=kept",
+    );
+    expect(requests.at(-1)).toContain("sort=rating_desc");
+  } else if (query) {
+    await user.click(screen.getByRole("button", { name: "Clear filters" }));
+    await waitFor(() => expect(requests.at(-1)).not.toContain("rating_min="));
+  }
+});
+
+test("unsupported URL precision is ignored and corrected numeric errors clear", async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter
+      initialEntries={["/explore/beers?rating_min=3.755&abv_max=100.01"]}
+    >
+      <RouterState />
+      <ExplorerBeers />
+    </MemoryRouter>,
+  );
+  await screen.findAllByText("First Page Stout");
+  expect(requests.at(-1)).not.toContain("rating_min");
+  const input = screen.getByRole("spinbutton", { name: "My rating minimum" });
+  await user.type(input, "3.755");
+  await user.tab();
+  expect(input).toHaveAttribute("aria-invalid", "true");
+  expect(requests.at(-1)).not.toContain("rating_min");
+  await user.clear(input);
+  await user.type(input, "3.75");
+  expect(input).toHaveAttribute("aria-invalid", "false");
+  await user.tab();
+  await waitFor(() => expect(requests.at(-1)).toContain("rating_min=3.75"));
+  await user.clear(input);
+  await user.type(input, "3.755");
+  await user.click(screen.getByRole("button", { name: "Clear all" }));
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(
+    screen.getByRole("spinbutton", { name: "My rating minimum" }),
+  ).toHaveValue(null);
+});
+
+test("mobile panels unmount on close and viewport changes discard drafts", async () => {
+  viewport(true);
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={["/explore/beers?brewery_id=1&future=kept"]}>
+      <RouterState />
+      <ExplorerBeers />
+    </MemoryRouter>,
+  );
+  await screen.findAllByText("First Page Stout");
+  expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("searchbox", { name: "Search breweries" }),
+  ).not.toBeInTheDocument();
+  expect(
+    await within(screen.getByLabelText("Active filters")).findByText(
+      /Cloudwater/,
+    ),
+  ).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Filters (1)" }));
+  const dialog = screen.getByRole("dialog");
+  expect(
+    within(dialog).queryByRole("searchbox", { name: "Search styles" }),
+  ).not.toBeInTheDocument();
+  await user.click(
+    await within(dialog).findByRole("checkbox", { name: "Moersleutel" }),
+  );
+  viewport(false);
+  await waitFor(() =>
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+  );
+  expect(document.body.style.overflow).toBe("");
+  expect(screen.getByRole("complementary")).toBeInTheDocument();
+  expect(screen.getByLabelText("Current URL")).not.toHaveTextContent(
+    "brewery_id=2",
+  );
+  expect(screen.getByLabelText("Current URL")).toHaveTextContent("future=kept");
+  viewport(true);
+  expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("searchbox", { name: "Search breweries" }),
+  ).not.toBeInTheDocument();
+});
+
+test.each(["3.70", "3.75", "4.10", "0", "5", "3.700", "37e-1"])(
+  "valid threshold %s restores without rounding",
+  async (value) => {
+    render(
+      <MemoryRouter initialEntries={[`/explore/beers?rating_min=${value}`]}>
+        <ExplorerBeers />
+      </MemoryRouter>,
+    );
+    await screen.findAllByText("First Page Stout");
+    expect(
+      new URL(requests[0], "http://localhost").searchParams.get("rating_min"),
+    ).toBe(value);
+  },
+);
+
+test.each(["3.755", "-0.01", "Infinity", "NaN", "5.01", "1e-3"])(
+  "invalid URL rating threshold %s is safely omitted",
+  (value) => {
+    expect(
+      readFilters(new URLSearchParams({ rating_min: value })).rating_min,
+    ).toBe("");
+  },
+);

@@ -57,6 +57,16 @@ beforeEach(() => {
           ok: true,
           json: async () => ({ insights: [] }),
         });
+      if (String(url).startsWith("/api/v1/explore/filter-options/"))
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ items: [], has_more: false }),
+        });
+      if (url === "/api/v1/explore/filter-bounds")
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ abv_max: 20 }),
+        });
       if (String(url).startsWith("/api/v1/explore/beers"))
         return Promise.resolve({
           ok: true,
@@ -208,7 +218,7 @@ test("opens Explorer beers and marks the other catalogues as upcoming", async ()
     screen.queryByRole("link", { name: /Breweries/ }),
   ).not.toBeInTheDocument();
   expect(
-    await screen.findByText("No checked-in beers match your search."),
+    await screen.findByText("No beers in your catalogue yet."),
   ).toBeInTheDocument();
 });
 

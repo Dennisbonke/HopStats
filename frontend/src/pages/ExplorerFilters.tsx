@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  CSSProperties,
+  ReactNode,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { ExploreEntity, fetchExploreOptions } from "../api/explore";
 import { Button } from "../components/ui";
@@ -7,6 +14,7 @@ import {
   amsterdamDay,
   emptyFilters,
   Filters,
+  validThreshold,
 } from "./explorerState";
 
 export type OptionNames = Record<string, string>;
@@ -149,47 +157,138 @@ function RangeFilter({
   onChange: (low: string, high: string) => void;
 }) {
   const [draft, setDraft] = useState([low, high]);
-  const [error, setError] = useState(false);
+  const draftRef = useRef(draft);
+  const [badInput, setBadInput] = useState([false, false]);
+  const badInputRef = useRef(badInput);
+  const inputs = useRef<(HTMLInputElement | null)[]>([]);
+  const gesture = useRef<{
+    x: number;
+    index: number | null;
+    original: string[];
+  } | null>(null);
+  const errorId = useId();
+  const rating = label === "My rating";
+  function valid(values: string[]) {
+    return (
+      values.every((v) => validThreshold(v, rating)) &&
+      (!values[0] || !values[1] || Number(values[0]) <= Number(values[1]))
+    );
+  }
+  const error = badInput.some(Boolean) || !valid(draft);
+  function edit(values: string[], bad = [false, false]) {
+    badInputRef.current = bad;
+    setBadInput(bad);
+    draftRef.current = values;
+    setDraft(values);
+  }
   useEffect(() => {
+    draftRef.current = [low, high];
+    badInputRef.current = [false, false];
+    setBadInput([false, false]);
     setDraft([low, high]);
-    setError(false);
   }, [low, high]);
-  const max =
-    label === "My rating"
-      ? 5
-      : Math.max(
-          maximum,
-          Number(low),
-          Number(high),
-          Number(draft[0]),
-          Number(draft[1]),
-        );
-  const lower = Number(draft[0] || 0),
-    upper = Number(draft[1] || max);
-  function commit(values: string[]) {
-    const valid =
-      values.every(
-        (v) =>
-          v === "" ||
-          (Number.isFinite(Number(v)) &&
-            Number(v) >= 0 &&
-            (label !== "My rating" || Number(v) <= 5)),
-      ) &&
-      (!values[0] || !values[1] || Number(values[0]) <= Number(values[1]));
-    setError(!valid);
-    if (valid)
-      onChange(
-        ...((Number(values[0]) === 0 && Number(values[1]) === maximum
-          ? ["", ""]
-          : values) as [string, string]),
+  const max = rating
+    ? 5
+    : Math.max(
+        maximum,
+        ...[low, high, ...draft].filter((v) => validThreshold(v)).map(Number),
       );
+  const sliderValues = error ? [low, high] : draft;
+  const lower = Number(sliderValues[0] || 0);
+  const upper = Number(sliderValues[1] || max);
+  function commit(values: string[]) {
+    if (!badInputRef.current.some(Boolean) && valid(values)) {
+      const next =
+        values[0] !== "" &&
+        values[1] !== "" &&
+        Number(values[0]) === 0 &&
+        Number(values[1]) === max
+          ? ["", ""]
+          : values;
+      edit(next);
+      onChange(next[0], next[1]);
+    }
+  }
+  function move(event: React.PointerEvent<HTMLDivElement>) {
+    const current = gesture.current;
+    if (!current) return;
+    const box = event.currentTarget.getBoundingClientRect();
+    const value =
+      Math.round(
+        Math.max(
+          0,
+          Math.min(1, (event.clientX - box.left - 12) / (box.width - 24)),
+        ) *
+          max *
+          100,
+      ) / 100;
+    if (current.index === null) {
+      if (event.clientX === current.x) return;
+      // A collapsed pair splits in the drag direction, including at either end.
+      current.index = event.clientX < current.x ? 0 : 1;
+      inputs.current[current.index]?.focus({ preventScroll: true });
+    }
+    const next = [...draftRef.current];
+    const lo = Number(next[0] || 0),
+      hi = Number(next[1] || max);
+    next[current.index] = String(
+      current.index ? Math.max(lo, value) : Math.min(hi, value),
+    );
+    edit(next);
   }
   return (
     <div className="explorer-range">
-      <div className="explorer-range-track">
+      <div
+        className="explorer-range-track"
+        style={
+          {
+            "--range-low": Math.min(lower, upper) / max,
+            "--range-high": Math.max(lower, upper) / max,
+          } as CSSProperties
+        }
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          const box = event.currentTarget.getBoundingClientRect();
+          const x = ((event.clientX - box.left - 12) / (box.width - 24)) * max;
+          const collapsed =
+            (Math.abs(upper - lower) / max) * (box.width - 24) < 12;
+          gesture.current = {
+            x: event.clientX,
+            index: collapsed
+              ? null
+              : Math.abs(x - lower) < Math.abs(x - upper)
+                ? 0
+                : 1,
+            original: [...draftRef.current],
+          };
+          event.currentTarget.setPointerCapture(event.pointerId);
+          if (gesture.current.index !== null) {
+            inputs.current[gesture.current.index]?.focus({
+              preventScroll: true,
+            });
+            move(event);
+          }
+        }}
+        onPointerMove={move}
+        onPointerUp={(event) => {
+          if (!gesture.current) return;
+          move(event);
+          gesture.current = null;
+          event.currentTarget.releasePointerCapture(event.pointerId);
+          commit(draftRef.current);
+        }}
+        onPointerCancel={() => {
+          if (gesture.current) edit(gesture.current.original);
+          gesture.current = null;
+        }}
+      >
         {[0, 1].map((index) => (
           <input
             key={index}
+            ref={(node) => {
+              inputs.current[index] = node;
+            }}
             type="range"
             aria-label={`${label} ${index ? "maximum" : "minimum"} slider`}
             min={0}
@@ -198,18 +297,19 @@ function RangeFilter({
             value={index ? upper : lower}
             aria-valuemin={index ? lower : 0}
             aria-valuemax={index ? max : upper}
-            onChange={(e) => {
-              const next = [...draft];
+            onChange={(event) => {
+              const next = [...draftRef.current];
               next[index] = String(
                 index
-                  ? Math.max(lower, Number(e.target.value))
-                  : Math.min(upper, Number(e.target.value)),
+                  ? Math.max(lower, Number(event.target.value))
+                  : Math.min(upper, Number(event.target.value)),
               );
-              setDraft(next);
+              edit(next);
             }}
-            onPointerUp={() => commit(draft)}
-            onKeyUp={() => commit(draft)}
-            onBlur={() => commit(draft)}
+            onKeyUp={() => commit(draftRef.current)}
+            onBlur={() => {
+              if (!gesture.current) commit(draftRef.current);
+            }}
           />
         ))}
       </div>
@@ -222,34 +322,63 @@ function RangeFilter({
               inputMode="decimal"
               aria-label={`${label} ${index ? "maximum" : "minimum"}`}
               min="0"
-              max={label === "My rating" ? 5 : undefined}
+              max={rating ? 5 : undefined}
               step="0.01"
               placeholder={index ? String(maximum) : "0"}
               value={draft[index]}
               aria-invalid={error}
+              aria-describedby={error ? errorId : undefined}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.preventDefault();
-                  commit(draft);
+                  commit(draftRef.current);
                 }
               }}
-              onChange={(e) => {
-                const next = [...draft];
-                next[index] = e.target.value;
-                setDraft(next);
+              onChange={(event) => {
+                const next = [...draftRef.current];
+                next[index] = event.target.value;
+                const bad = [...badInputRef.current];
+                bad[index] = event.target.validity.badInput;
+                edit(next, bad);
               }}
-              onBlur={() => commit(draft)}
+              onBlur={() => commit(draftRef.current)}
             />
           </label>
         ))}
       </div>
       {error && (
-        <p role="alert">
-          Enter an ordered {label === "My rating" ? "0–5" : "non-negative"}{" "}
-          range.
+        <p id={errorId} role="alert">
+          Enter an ordered {rating ? "0–5" : "non-negative"} range in increments
+          of 0.01.
         </p>
       )}
     </div>
+  );
+}
+
+function FilterSection({
+  title,
+  summary,
+  initialOpen,
+  children,
+}: {
+  title: string;
+  summary?: ReactNode;
+  initialOpen: boolean;
+  children: (open: boolean) => ReactNode;
+}) {
+  const [open, setOpen] = useState(initialOpen);
+  return (
+    <details
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary>
+        {title}
+        {summary && <span>{summary}</span>}
+      </summary>
+      {children(open)}
+    </details>
   );
 }
 
@@ -259,7 +388,9 @@ export function FilterPanel({
   abvMax,
   names,
   onNames,
+  mobile = false,
 }: {
+  mobile?: boolean;
   value: Filters;
   onChange: (value: Filters) => void;
   abvMax: number;
@@ -274,19 +405,26 @@ export function FilterPanel({
           ["Beer style", "styles", "style_id"],
         ] as const
       ).map(([label, category, key]) => (
-        <details key={key} open>
-          <summary>
-            {label}
-            {value[key].length > 0 && <span>{value[key].length} selected</span>}
-          </summary>
-          <MultiSelect
-            category={category}
-            selected={value[key]}
-            onChange={(ids) => onChange({ ...value, [key]: ids })}
-            names={names[category]}
-            onNames={onNames[category]}
-          />
-        </details>
+        <FilterSection
+          key={key}
+          title={label}
+          initialOpen={!mobile || key === "brewery_id" || value[key].length > 0}
+          summary={
+            value[key].length ? `${value[key].length} selected` : undefined
+          }
+        >
+          {(open) =>
+            open && (
+              <MultiSelect
+                category={category}
+                selected={value[key]}
+                onChange={(ids) => onChange({ ...value, [key]: ids })}
+                names={names[category]}
+                onNames={onNames[category]}
+              />
+            )
+          }
+        </FilterSection>
       ))}
       {(
         [
@@ -294,22 +432,36 @@ export function FilterPanel({
           ["My rating", "rating_min", "rating_max", 5],
         ] as const
       ).map(([label, low, high, max]) => (
-        <details key={low} open>
-          <summary>{label}</summary>
-          <RangeFilter
-            label={label}
-            low={value[low]}
-            high={value[high]}
-            maximum={max}
-            onChange={(a, b) => onChange({ ...value, [low]: a, [high]: b })}
-          />
-          {label === "My rating" && (
-            <p className="explorer-filter-help">
-              Average of your rated check-ins. Exact thresholds to 0.01; unrated
-              check-ins are excluded from the average.
-            </p>
+        <FilterSection
+          key={low}
+          title={label}
+          initialOpen={
+            !mobile || low === "abv_min" || !!(value[low] || value[high])
+          }
+          summary={
+            value[low] || value[high]
+              ? `${value[low] || "Any"}–${value[high] || "Any"}`
+              : undefined
+          }
+        >
+          {() => (
+            <>
+              <RangeFilter
+                label={label}
+                low={value[low]}
+                high={value[high]}
+                maximum={max}
+                onChange={(a, b) => onChange({ ...value, [low]: a, [high]: b })}
+              />
+              {label === "My rating" && (
+                <p className="explorer-filter-help">
+                  Average of your rated check-ins. Exact thresholds to 0.01;
+                  unrated check-ins are excluded from the average.
+                </p>
+              )}
+            </>
           )}
-        </details>
+        </FilterSection>
       ))}
       {(
         [
@@ -317,66 +469,78 @@ export function FilterPanel({
           ["Last tried", "last_tried_from", "last_tried_to", 30],
         ] as const
       ).map(([label, from, to, days]) => (
-        <details key={from} open>
-          <summary>{label}</summary>
-          <div className="explorer-presets">
-            {["Any time", `Last ${days} days`, "This year"].map(
-              (preset, index) => (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => {
-                    const today = amsterdamDay();
-                    const day = new Date(`${today}T12:00:00Z`);
-                    day.setUTCDate(day.getUTCDate() - days + 1);
-                    onChange({
-                      ...value,
-                      [from]:
-                        index === 0
-                          ? ""
-                          : index === 1
-                            ? day.toISOString().slice(0, 10)
-                            : `${today.slice(0, 4)}-01-01`,
-                      [to]: index === 0 ? "" : today,
-                    });
-                  }}
-                >
-                  {preset}
-                </button>
-              ),
-            )}
-          </div>
-          <div className="explorer-date-inputs">
-            <label>
-              From
-              <input
-                type="date"
-                aria-label={`${label} from`}
-                min="0002-01-01"
-                max={value[to] || "9999-12-30"}
-                value={value[from]}
-                onChange={(e) => {
-                  if (e.target.validity.valid)
-                    onChange({ ...value, [from]: e.target.value });
-                }}
-              />
-            </label>
-            <label>
-              To
-              <input
-                type="date"
-                aria-label={`${label} to`}
-                min={value[from] || "0002-01-01"}
-                max="9999-12-30"
-                value={value[to]}
-                onChange={(e) => {
-                  if (e.target.validity.valid)
-                    onChange({ ...value, [to]: e.target.value });
-                }}
-              />
-            </label>
-          </div>
-        </details>
+        <FilterSection
+          key={from}
+          title={label}
+          initialOpen={!mobile || !!(value[from] || value[to])}
+          summary={
+            value[from] || value[to]
+              ? `${value[from] || "Any"}–${value[to] || "Any"}`
+              : undefined
+          }
+        >
+          {() => (
+            <>
+              <div className="explorer-presets">
+                {["Any time", `Last ${days} days`, "This year"].map(
+                  (preset, index) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => {
+                        const today = amsterdamDay();
+                        const day = new Date(`${today}T12:00:00Z`);
+                        day.setUTCDate(day.getUTCDate() - days + 1);
+                        onChange({
+                          ...value,
+                          [from]:
+                            index === 0
+                              ? ""
+                              : index === 1
+                                ? day.toISOString().slice(0, 10)
+                                : `${today.slice(0, 4)}-01-01`,
+                          [to]: index === 0 ? "" : today,
+                        });
+                      }}
+                    >
+                      {preset}
+                    </button>
+                  ),
+                )}
+              </div>
+              <div className="explorer-date-inputs">
+                <label>
+                  From
+                  <input
+                    type="date"
+                    aria-label={`${label} from`}
+                    min="0002-01-01"
+                    max={value[to] || "9999-12-30"}
+                    value={value[from]}
+                    onChange={(e) => {
+                      if (e.target.validity.valid)
+                        onChange({ ...value, [from]: e.target.value });
+                    }}
+                  />
+                </label>
+                <label>
+                  To
+                  <input
+                    type="date"
+                    aria-label={`${label} to`}
+                    min={value[from] || "0002-01-01"}
+                    max="9999-12-30"
+                    value={value[to]}
+                    onChange={(e) => {
+                      if (e.target.validity.valid)
+                        onChange({ ...value, [to]: e.target.value });
+                    }}
+                  />
+                </label>
+              </div>
+            </>
+          )}
+        </FilterSection>
       ))}
       <p className="explorer-filter-help">
         Dates include the complete calendar day in Europe/Amsterdam.
@@ -398,6 +562,7 @@ export function FilterSheet({
   const [draft, setDraft] = useState(applied);
   const [resetKey, setResetKey] = useState(0);
   const ref = useRef<HTMLDialogElement>(null);
+  const applyIntent = useRef(false);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const body = document.body;
@@ -454,10 +619,33 @@ export function FilterSheet({
       }}
     >
       <form
+        onInvalidCapture={(event) => {
+          applyIntent.current = false;
+          const input = event.target as HTMLInputElement;
+          const section = input.closest("details");
+          if (section) section.open = true;
+        }}
+        onKeyDown={(event) => {
+          if (
+            event.key === "Enter" &&
+            event.target instanceof HTMLInputElement &&
+            event.target.type !== "date"
+          )
+            event.preventDefault();
+        }}
         onSubmit={(e) => {
           e.preventDefault();
-          if (!e.currentTarget.querySelector('[aria-invalid="true"]'))
-            onApply(draft);
+          const intentional = applyIntent.current;
+          applyIntent.current = false;
+          if (!intentional) return;
+          const invalid = e.currentTarget.querySelector<HTMLInputElement>(
+            '[aria-invalid="true"]',
+          );
+          if (invalid) {
+            const section = invalid.closest("details");
+            if (section) section.open = true;
+            invalid.focus();
+          } else onApply(draft);
         }}
       >
         <header>
@@ -481,6 +669,7 @@ export function FilterSheet({
           <FilterPanel
             key={resetKey}
             {...props}
+            mobile
             value={draft}
             onChange={setDraft}
           />
@@ -489,7 +678,14 @@ export function FilterSheet({
           <Button type="button" variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit">Apply filters</Button>
+          <Button
+            type="submit"
+            onClick={() => {
+              applyIntent.current = true;
+            }}
+          >
+            Apply filters
+          </Button>
         </footer>
       </form>
     </dialog>,

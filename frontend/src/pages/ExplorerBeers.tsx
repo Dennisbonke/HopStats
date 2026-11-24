@@ -23,6 +23,22 @@ import {
   writeFilters,
 } from "./explorerState";
 
+// Keep this breakpoint aligned with Explorer.css's max-width: 700px.
+const MOBILE_QUERY = "(max-width: 700px)";
+function useMobileExplorer() {
+  const [mobile, setMobile] = useState(
+    () => window.matchMedia(MOBILE_QUERY).matches,
+  );
+  useEffect(() => {
+    const media = window.matchMedia(MOBILE_QUERY);
+    const changed = () => setMobile(media.matches);
+    media.addEventListener("change", changed);
+    changed();
+    return () => media.removeEventListener("change", changed);
+  }, []);
+  return mobile;
+}
+
 function selectedPage(value: string | null): number {
   if (!value || !/^[1-9]\d*$/.test(value)) return 1;
   const page = Number(value);
@@ -110,6 +126,13 @@ export default function ExplorerBeers() {
   );
   const [filterResetKey, setFilterResetKey] = useState(0);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const mobile = useMobileExplorer();
+  useEffect(() => {
+    if (!mobile && sheetOpen) {
+      setSheetOpen(false);
+      document.getElementById("explorer-beer-search")?.focus();
+    }
+  }, [mobile, sheetOpen]);
   const [abvMax, setAbvMax] = useState(20);
   const [names, setNames] = useState<
     Record<"breweries" | "styles", OptionNames>
@@ -309,24 +332,26 @@ export default function ExplorerBeers() {
         )}
       </div>
       <div className="explorer-columns">
-        <aside className="explorer-filter-sidebar" aria-label="Beer filters">
-          <header>
-            <h4>
-              Filters <span>{activeGroups(filters)} active</span>
-            </h4>
-            <button type="button" onClick={clearFilters}>
-              Clear all
-            </button>
-          </header>
-          <FilterPanel
-            key={filterResetKey}
-            value={filters}
-            onChange={applyFilters}
-            abvMax={abvMax}
-            names={names}
-            onNames={onNames}
-          />
-        </aside>
+        {!mobile && (
+          <aside className="explorer-filter-sidebar" aria-label="Beer filters">
+            <header>
+              <h4>
+                Filters <span>{activeGroups(filters)} active</span>
+              </h4>
+              <button type="button" onClick={clearFilters}>
+                Clear all
+              </button>
+            </header>
+            <FilterPanel
+              key={filterResetKey}
+              value={filters}
+              onChange={applyFilters}
+              abvMax={abvMax}
+              names={names}
+              onNames={onNames}
+            />
+          </aside>
+        )}
         <div className="explorer-results">
           <form className="explorer-controls" onSubmit={submitSearch}>
             <FormField
@@ -393,7 +418,7 @@ export default function ExplorerBeers() {
               </button>
             </div>
           )}
-          {sheetOpen && (
+          {mobile && sheetOpen && (
             <FilterSheet
               applied={filters}
               onApply={(next) => {
@@ -419,8 +444,58 @@ export default function ExplorerBeers() {
           )}
           {!showLoading && !currentError && currentData?.total === 0 && (
             <div className="explorer-state">
-              <strong>No checked-in beers match your search.</strong>
-              <p>Try another name or brewery.</p>
+              <strong>
+                {querySearch.trim()
+                  ? activeGroups(filters)
+                    ? "No beers match your search and filters."
+                    : "No beers match your search."
+                  : activeGroups(filters)
+                    ? "No beers match your filters."
+                    : "No beers in your catalogue yet."}
+              </strong>
+              <p>
+                {querySearch.trim()
+                  ? activeGroups(filters)
+                    ? "Try a different search or broaden your filters."
+                    : "Try another beer name or brewery."
+                  : activeGroups(filters)
+                    ? "Adjust or clear your filters to see more beers."
+                    : "Import your Untappd check-ins to start exploring your beer history."}
+              </p>
+              {activeGroups(filters) > 0 && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={clearFilters}
+                >
+                  Clear filters
+                </Button>
+              )}
+              {querySearch.trim() && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => updateUrl("", sort, 1)}
+                >
+                  Clear search
+                </Button>
+              )}
+              {querySearch.trim() && activeGroups(filters) > 0 && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    const params = new URLSearchParams(searchParams);
+                    writeFilters(params, emptyFilters());
+                    params.delete("search");
+                    params.delete("page");
+                    setFilterResetKey((key) => key + 1);
+                    setSearchParams(params);
+                  }}
+                >
+                  Clear search and filters
+                </Button>
+              )}
             </div>
           )}
           {!showLoading &&

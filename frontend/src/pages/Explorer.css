@@ -447,6 +447,8 @@
   gap: 0.5rem;
 }
 .explorer-range-track {
+  touch-action: none;
+  cursor: ew-resize;
   position: relative;
   height: 2.75rem;
   margin: 0.4rem 0;
@@ -455,13 +457,25 @@
   content: "";
   position: absolute;
   top: calc(50% - 2px);
-  left: 0;
-  right: 0;
+  left: 12px;
+  right: 12px;
   height: 4px;
   border-radius: 4px;
   background: var(--color-border-strong);
 }
+.explorer-range-track::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  top: calc(50% - 2px);
+  left: calc(12px + (100% - 24px) * var(--range-low));
+  right: calc(12px + (100% - 24px) * (1 - var(--range-high)));
+  height: 4px;
+  border-radius: 4px;
+  background: var(--color-action-primary);
+}
 .explorer-range-track input {
+  z-index: 1;
   appearance: none;
   -webkit-appearance: none;
   position: absolute;
@@ -475,26 +489,33 @@
 .explorer-range-track input::-webkit-slider-thumb {
   appearance: none;
   -webkit-appearance: none;
-  pointer-events: auto;
+  pointer-events: none;
   width: 1.5rem;
   height: 1.5rem;
   border: 2px solid var(--color-action-primary);
   border-radius: 50%;
   background: var(--color-surface);
   cursor: ew-resize;
-  touch-action: pan-y;
+  touch-action: none;
 }
 .explorer-range-track input::-moz-range-thumb {
-  pointer-events: auto;
+  pointer-events: none;
   width: 1.25rem;
   height: 1.25rem;
   border: 2px solid var(--color-action-primary);
   border-radius: 50%;
   background: var(--color-surface);
   cursor: ew-resize;
-  touch-action: pan-y;
+  touch-action: none;
+}
+.explorer-range-track input::-webkit-slider-runnable-track {
+  background: transparent;
+}
+.explorer-range-track input::-moz-range-track {
+  background: transparent;
 }
 .explorer-range-track input:focus-visible {
+  z-index: 2;
   outline-offset: 2px;
 }
 .explorer-filter-help {

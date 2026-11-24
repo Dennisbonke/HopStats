@@ -68,6 +68,24 @@ function validDay(value: string) {
     new Date(value).toISOString().slice(0, 10) === value
   );
 }
+// Match the API's exact hundredths contract without floating-point modulo or rounding.
+// Equivalent decimal/exponent spellings are accepted only if their exact value
+// is a multiple of 0.01. Invalid shared URL values are ignored, never rounded.
+export function validThreshold(value: string, rating = false): boolean {
+  if (!value) return true;
+  const match = /^(\d+(?:\.\d*)?|\.\d+)(?:[eE]([+-]?\d+))?$/.exec(value);
+  if (
+    !match ||
+    !Number.isFinite(Number(value)) ||
+    (rating && Number(value) > 5)
+  )
+    return false;
+  const [whole, fraction = ""] = match[1].split(".");
+  const digits = (whole + fraction).replace(/0+$/, "");
+  if (!digits) return true;
+  const trailing = (whole + fraction).length - digits.length;
+  return fraction.length - Number(match[2] || 0) - trailing <= 2;
+}
 export function readFilters(params: URLSearchParams): Filters {
   const filters = emptyFilters();
   for (const key of FILTER_KEYS) {
@@ -85,12 +103,7 @@ export function readFilters(params: URLSearchParams): Filters {
       const value = params.get(key) ?? "";
       if (key.includes("tried")) {
         if (validDay(value)) filters[key] = value;
-      } else if (
-        /^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(value) &&
-        Number.isFinite(Number(value)) &&
-        Number(value) >= 0 &&
-        (!key.startsWith("rating") || Number(value) <= 5)
-      )
+      } else if (validThreshold(value, key.startsWith("rating")))
         filters[key] = value;
     }
   }
