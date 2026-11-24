@@ -953,8 +953,11 @@ test("weekly chart tooltips stay within the document after orientation changes",
   await expect
     .poll(async () => (await measureLayout()).chartScroll!.width)
     .toBeGreaterThan(before.chartScroll!.width);
+  // WebKit can apply the new layout before the resize handler and React finish
+  // dismissing tooltips. Wait for that behavior before measuring the layout.
+  await expect(tooltip).toBeHidden();
+  await expect(lineTooltip).toBeHidden();
   const landscape = await measureLayout();
-  expect(await tooltip.isVisible()).toBe(false);
   expect(landscape.documentWidth - landscape.clientWidth).toBeLessThanOrEqual(
     1,
   );
@@ -963,9 +966,10 @@ test("weekly chart tooltips stay within the document after orientation changes",
   await expect
     .poll(async () => (await measureLayout()).chartScroll!.width)
     .toBeLessThan(landscape.chartScroll!.width);
+  await expect(tooltip).toBeHidden();
+  await expect(lineTooltip).toBeHidden();
   const after = await measureLayout();
   expect(after.chartSvg!.width).toBeGreaterThanOrEqual(40 * 36);
-  expect(await tooltip.isVisible()).toBe(false);
   expect(after.documentWidth - after.clientWidth).toBeLessThanOrEqual(1);
   expect(after.bodyWidth - after.clientWidth).toBeLessThanOrEqual(1);
   await page.evaluate(() =>
@@ -978,7 +982,7 @@ test("weekly chart tooltips stay within the document after orientation changes",
     1,
   );
   expect(afterSwipe.bodyWidth - afterSwipe.clientWidth).toBeLessThanOrEqual(1);
-  expect(await tooltip.isVisible()).toBe(false);
+  await expect(tooltip).toBeHidden();
 
   await hoverBucket(barChart, 10);
   await expect(tooltip).toBeVisible();
