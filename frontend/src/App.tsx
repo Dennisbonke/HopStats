@@ -18,6 +18,7 @@ import Milestones from "./pages/Milestones";
 import MilestoneDetail from "./pages/MilestoneDetail";
 const Analytics = lazy(() => import("./pages/Analytics"));
 const ExplorerLayout = lazy(() => import("./pages/ExplorerLayout"));
+const ExplorerBeerDetail = lazy(() => import("./pages/ExplorerBeerDetail"));
 const ExplorerBeers = lazy(() => import("./pages/ExplorerBeers"));
 const ExplorerUpcoming = lazy(() =>
   import("./pages/ExplorerLayout").then((module) => ({
@@ -49,6 +50,7 @@ const themeAwareRoutes = [
   "/milestones/:id",
   "/analytics",
   "/explore/beers",
+  "/explore/beers/:beerId",
 ];
 
 function Placeholder({ title }: { title: string }) {
@@ -250,6 +252,7 @@ export default function App() {
           >
             <Route index element={<Navigate to="beers" replace />} />
             <Route path="beers" element={<ExplorerBeers />} />
+            <Route path="beers/:beerId" element={<ExplorerBeerDetail />} />
             <Route
               path="breweries"
               element={<ExplorerUpcoming title="Breweries" />}

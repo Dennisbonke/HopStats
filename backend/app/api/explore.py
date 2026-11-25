@@ -1,15 +1,18 @@
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.orm import Session
 
 from ..api.auth import get_current_user
 from ..db import get_db
 from ..models import User
 from ..schemas.explore import (
+    ExploreBeerDetailResponse,
     ExploreBeerListResponse,
     ExploreBeerQuery,
     ExploreBoundsResponse,
+    ExploreCheckinListResponse,
+    ExploreCheckinQuery,
     ExploreOptionsResponse,
     PositiveId,
 )
@@ -48,3 +51,22 @@ def filter_bounds(
     user: Annotated[User, Depends(get_current_user)],
 ) -> ExploreBoundsResponse:
     return ExploreService(session).bounds(user.id)
+
+
+@router.get("/beers/{beer_id}", response_model=ExploreBeerDetailResponse)
+def beer_detail(
+    beer_id: Annotated[int, Path(gt=0, le=9223372036854775807)],
+    session: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> ExploreBeerDetailResponse:
+    return ExploreService(session).detail(user.id, beer_id)
+
+
+@router.get("/beers/{beer_id}/checkins", response_model=ExploreCheckinListResponse)
+def beer_checkins(
+    beer_id: Annotated[int, Path(gt=0, le=9223372036854775807)],
+    session: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+    filters: Annotated[ExploreCheckinQuery, Query()],
+) -> ExploreCheckinListResponse:
+    return ExploreService(session).checkins(user.id, beer_id, **filters.model_dump())

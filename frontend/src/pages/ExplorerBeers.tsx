@@ -1,5 +1,10 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import {
+  Link,
+  useLocation,
+  useNavigationType,
+  useSearchParams,
+} from "react-router-dom";
 import {
   ExploreBeer,
   ExploreEntity,
@@ -8,7 +13,15 @@ import {
   ExploreBeersResponse,
   fetchExploreBeers,
 } from "../api/explore";
-import { Button, Card, FormField } from "../components/ui";
+import { Button, FormField } from "../components/ui";
+
+import BeerArtwork from "../components/BeerArtwork";
+import {
+  beerDetailUrl,
+  saveExplorerScroll,
+  readExplorerScroll,
+  explorerEntryKey,
+} from "../utils/explorer";
 
 import { FilterPanel, FilterSheet, OptionNames } from "./ExplorerFilters";
 import {
@@ -59,33 +72,17 @@ function ratingLabel(beer: ExploreBeer): string {
   return beer.personal_average_rating.toFixed(2);
 }
 
-function BeerArtwork({ beer }: { beer: ExploreBeer }) {
-  const [failed, setFailed] = useState(false);
-  if (!beer.photo_url || failed) {
-    return (
-      <span
-        className="explorer-beer-artwork-fallback"
-        role="img"
-        aria-label={`${beer.name} artwork unavailable`}
-      >
-        Beer
-      </span>
-    );
-  }
-  return (
-    <img
-      className="explorer-beer-artwork"
-      src={beer.photo_url}
-      alt={`${beer.name} artwork`}
-      loading="lazy"
-      onError={() => setFailed(true)}
-    />
-  );
-}
-
 function BeerCard({ beer }: { beer: ExploreBeer }) {
+  const location = useLocation();
   return (
-    <Card as="article" className="explorer-beer-card">
+    <Link
+      className="ui-card ui-card--standard explorer-beer-card"
+      to={beerDetailUrl(beer.id, location.search)}
+      state={{ explorerEntryKey: explorerEntryKey(location.key) }}
+      onClick={() =>
+        saveExplorerScroll(explorerEntryKey(location.key), location.search)
+      }
+    >
       <BeerArtwork beer={beer} />
       <div className="explorer-beer-card-content">
         <h4>{beer.name}</h4>
@@ -110,12 +107,15 @@ function BeerCard({ beer }: { beer: ExploreBeer }) {
           </div>
         </dl>
       </div>
-    </Card>
+    </Link>
   );
 }
 
 export default function ExplorerBeers() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigationType = useNavigationType();
+  const restoredEntry = useRef<string | null>(null);
   const querySearch = (searchParams.get("search") ?? "").slice(0, 200);
   const sort = selectedSort(searchParams.get("sort"));
   const page = selectedPage(searchParams.get("page"));
@@ -255,6 +255,31 @@ export default function ExplorerBeers() {
   }, [page, pageSize, querySearch, setSearchParams, sort, urlStateKey]);
 
   const currentData = dataKey === urlStateKey ? data : null;
+  useEffect(() => {
+    if (dataKey !== urlStateKey || !data) return;
+    if (restoredEntry.current === location.key) return;
+    const saved = readExplorerScroll(
+      navigationType === "POP"
+        ? (window.history.state?.hopstatsExplorerSavedKey ??
+            location.state?.explorerReturnKey)
+        : location.state?.explorerReturnKey,
+      location.search,
+    );
+    const frame = requestAnimationFrame(() => {
+      restoredEntry.current = location.key;
+      if (saved !== null) window.scrollTo(0, saved);
+      else if (navigationType === "PUSH") window.scrollTo(0, 0);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [
+    dataKey,
+    urlStateKey,
+    data,
+    location.key,
+    location.search,
+    location.state,
+    navigationType,
+  ]);
   const currentError = errorKey === urlStateKey;
   const showLoading = loading || (!currentData && !currentError);
 
@@ -556,11 +581,27 @@ export default function ExplorerBeers() {
                     </thead>
                     <tbody>
                       {currentData.items.map((beer) => (
-                        <tr key={beer.id}>
+                        <tr key={beer.id} className="explorer-beer-row">
                           <td>
                             <div className="explorer-beer-name-cell">
                               <BeerArtwork beer={beer} />
-                              <strong>{beer.name}</strong>
+                              <Link
+                                className="explorer-beer-link"
+                                to={beerDetailUrl(beer.id, location.search)}
+                                state={{
+                                  explorerEntryKey: explorerEntryKey(
+                                    location.key,
+                                  ),
+                                }}
+                                onClick={() =>
+                                  saveExplorerScroll(
+                                    explorerEntryKey(location.key),
+                                    location.search,
+                                  )
+                                }
+                              >
+                                <strong>{beer.name}</strong>
+                              </Link>
                             </div>
                           </td>
                           <td>{beer.brewery?.name ?? "Unavailable"}</td>

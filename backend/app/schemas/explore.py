@@ -119,3 +119,65 @@ class ExploreOptionsResponse(BaseModel):
 
 class ExploreBoundsResponse(BaseModel):
     abv_max: float
+
+
+class ExploreLocation(ExploreEntity):
+    city: str | None
+    state: str | None
+    country: str | None
+
+
+class ExploreRatingPoint(BaseModel):
+    id: int
+    occurred_at_utc: datetime
+    rating: float
+
+    @field_serializer("occurred_at_utc", when_used="json")
+    def serialize_timestamp(self, value: datetime) -> str:
+        return (
+            value.replace(tzinfo=UTC).isoformat()
+            if value.tzinfo is None
+            else value.astimezone(UTC).isoformat()
+        )
+
+
+class ExploreBeerDetailResponse(ExploreBeerResponse):
+    brewery: ExploreLocation | None
+    highest_rating: float | None
+    lowest_rating: float | None
+    rating_history: list[ExploreRatingPoint]
+    untappd_url: str | None
+
+
+class ExploreCheckinResponse(BaseModel):
+    id: int
+    occurred_at_utc: datetime
+    rating: float | None
+    comment: str | None
+    serving_type: str | None
+    purchase_venue: str | None
+    photo_url: str | None
+    venue: ExploreLocation | None
+    untappd_url: str | None
+
+    @field_serializer("occurred_at_utc", when_used="json")
+    def serialize_timestamp(self, value: datetime) -> str:
+        return (
+            value.replace(tzinfo=UTC).isoformat()
+            if value.tzinfo is None
+            else value.astimezone(UTC).isoformat()
+        )
+
+
+class ExploreCheckinListResponse(BaseModel):
+    items: list[ExploreCheckinResponse]
+    page: int
+    page_size: int
+    total: int
+    total_pages: int
+
+
+class ExploreCheckinQuery(BaseModel):
+    page: int = Field(default=1, ge=1, le=2147483647)
+    page_size: int = Field(default=25, ge=1, le=100)
+    sort: Literal["newest", "oldest"] = "newest"
