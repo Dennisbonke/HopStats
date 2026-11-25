@@ -1,6 +1,7 @@
 # Beer Details & Check-in History (M10.3)
 
-Implementation status: pending CI, visual inspection and independent acceptance.
+Implementation status: implemented; independent review and acceptance pending.
+See PR #77 for CI results, screenshot artifacts and visual inspection notes.
 No migration, new import format, chart dependency or styling framework is added.
 
 ## API contracts and authorization
@@ -120,6 +121,7 @@ search, filters, sort, page, page size and unrelated parameters survive. Browser
 Back/Forward use ordinary router history; no arbitrary history delta is used by
 the visible back link. Optional sessionStorage stores scrollY by catalogue query
 on link activation and restores after results load. Storage failures are harmless.
+Entering a detail route scrolls to its top; history pagination does not reset the page scroll.
 
 History page, page size and order live in the detail URL; unrelated parameters
 including returnTo survive changes. Profile/chart and history have independent
