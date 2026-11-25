@@ -215,7 +215,7 @@ for (const theme of ["light", "dark"] as const) {
         }
       } else await link.click();
       await expect(
-        page.getByRole("heading", { name: beer.name }),
+        page.getByRole("heading", { name: beer.name, level: 1, exact: true }),
       ).toBeVisible();
       await expect(
         page.locator('#main-navigation a[href="/explore/beers"]'),
@@ -315,7 +315,7 @@ for (const theme of ["light", "dark"] as const) {
         await stub(page, state);
         await page.goto("/explore/beers/1");
         await expect(
-          page.getByRole("heading", { name: beer.name }),
+          page.getByRole("heading", { name: beer.name, level: 1, exact: true }),
         ).toBeVisible();
         if (state === "single")
           await expect(page.locator(".recharts-line-dot")).toHaveCount(1);
@@ -393,7 +393,9 @@ test("beer catalogue links open details in a new tab", async ({
     .locator(".explorer-beer-link")
     .click({ modifiers: ["ControlOrMeta"] });
   const popup = await popupPromise;
-  await expect(popup.getByRole("heading", { name: beer.name })).toBeVisible();
+  await expect(
+    popup.getByRole("heading", { name: beer.name, level: 1, exact: true }),
+  ).toBeVisible();
   await expect(
     popup.getByRole("link", { name: /Back to Beer Explorer/ }),
   ).toHaveAttribute("href", "/explore/beers?future=preserved");
@@ -447,7 +449,9 @@ for (const width of [700, 701, 1100, 1101]) {
     await page.setViewportSize({ width, height: 390 });
     await stub(page);
     await page.goto("/explore/beers/1");
-    await expect(page.getByRole("heading", { name: beer.name })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: beer.name, level: 1, exact: true }),
+    ).toBeVisible();
     const chart = (await page.locator(".beer-rating-section").boundingBox())!;
     const history = (await page.locator(".beer-history").boundingBox())!;
     if (width <= 1100) expect(history.y).toBeGreaterThan(chart.y);
@@ -687,7 +691,9 @@ for (const width of [390, 1280]) {
     const saved = await page.evaluate(() => window.scrollY);
     expect(saved).toBeGreaterThan(500);
     await link.click();
-    await expect(page.getByRole("heading", { name: beer.name })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: beer.name, level: 1, exact: true }),
+    ).toBeVisible();
     delayed = true;
     await page.getByRole("link", { name: /Back to Beer Explorer/ }).click();
     await expect(page.getByText("Loading beers…")).toBeVisible();
@@ -698,13 +704,17 @@ for (const width of [390, 1280]) {
       .poll(() => page.evaluate(() => window.scrollY))
       .toBeCloseTo(saved, 0);
     await page.goBack();
-    await expect(page.getByRole("heading", { name: beer.name })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: beer.name, level: 1, exact: true }),
+    ).toBeVisible();
     await page.goBack();
     await expect
       .poll(() => page.evaluate(() => window.scrollY))
       .toBeCloseTo(saved, 0);
     await page.goForward();
-    await expect(page.getByRole("heading", { name: beer.name })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: beer.name, level: 1, exact: true }),
+    ).toBeVisible();
     await page.goForward();
     await expect
       .poll(() => page.evaluate(() => window.scrollY))
@@ -727,7 +737,9 @@ for (const width of [390, 1280]) {
       });
     });
     await page.goto("/explore/beers/1");
-    await expect(page.getByRole("heading", { name: beer.name })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: beer.name, level: 1, exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByRole("link", { name: /Back to Beer Explorer/ }),
     ).toHaveAttribute("href", "/explore/beers");
