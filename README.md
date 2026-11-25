@@ -119,3 +119,11 @@ Do not place real Untappd exports or personal inventory data in this repo.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Beer Explorer
+
+The catalogue and personal beer details are documented in
+[Beer Explorer M10.2](docs/explorer-m10-2.md) and
+[Beer Details & Check-in History M10.3](docs/explorer-m10-3.md).
+See the [Explorer roadmap](docs/roadmap.md) for acceptance status.
+Imported check-ins are read-only; make changes in Untappd.

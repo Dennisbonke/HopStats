@@ -24,9 +24,8 @@ export default function ExplorerLayout() {
       <nav className="explorer-tabs" aria-label="Explorer sections">
         <NavLink
           to="/explore/beers"
-          end
           aria-current={
-            location.pathname === "/explore/beers" ? "page" : undefined
+            location.pathname.startsWith("/explore/beers") ? "page" : undefined
           }
         >
           Beers

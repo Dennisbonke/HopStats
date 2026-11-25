@@ -1,19 +1,26 @@
+import re
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from math import ceil
 from zoneinfo import ZoneInfo
 
+from fastapi import HTTPException
 from sqlalchemy import Integer, Select, String, asc, cast, desc, func, or_, select
 from sqlalchemy.orm import Session
 
-from ..models import Beer, BeerStyle, Brewery, Checkin
+from ..models import Beer, BeerStyle, Brewery, Checkin, Venue
 from ..schemas.explore import (
+    ExploreBeerDetailResponse,
     ExploreBeerListResponse,
     ExploreBeerResponse,
     ExploreBeerSort,
     ExploreBoundsResponse,
+    ExploreCheckinListResponse,
+    ExploreCheckinResponse,
     ExploreEntity,
+    ExploreLocation,
     ExploreOptionsResponse,
+    ExploreRatingPoint,
 )
 
 
@@ -161,6 +168,109 @@ class ExploreService:
             total_pages=ceil(total / page_size) if total else 0,
         )
 
+    def _personal_history(self, user_id: int, beer_id: int):
+        return (Checkin.user_id == user_id, Checkin.beer_id == beer_id)
+
+    def detail(self, user_id: int, beer_id: int) -> ExploreBeerDetailResponse:
+        scope = self._personal_history(user_id, beer_id)
+        stats = self.session.execute(
+            select(
+                func.count(Checkin.id),
+                func.count(Checkin.rating),
+                func.sum(cast(func.round(Checkin.rating * 100), Integer)),
+                func.min(Checkin.rating),
+                func.max(Checkin.rating),
+                func.min(Checkin.occurred_at_utc),
+                func.max(Checkin.occurred_at_utc),
+            ).where(*scope)
+        ).one()
+        count, rated, total, low, high, first, last = stats
+        if not count:
+            raise HTTPException(status_code=404, detail="Beer not found")
+        beer, brewery, style = self.session.execute(
+            select(Beer, Brewery, BeerStyle)
+            .outerjoin(Brewery, Beer.brewery_id == Brewery.id)
+            .outerjoin(BeerStyle, Beer.style_id == BeerStyle.id)
+            .where(Beer.id == beer_id)
+        ).one()
+        points = self.session.execute(
+            select(Checkin.id, Checkin.occurred_at_utc, Checkin.rating)
+            .where(*scope, Checkin.rating.is_not(None))
+            .order_by(Checkin.occurred_at_utc, Checkin.id)
+        )
+        return ExploreBeerDetailResponse(
+            id=beer.id,
+            name=beer.name,
+            brewery=_location(brewery),
+            style=ExploreEntity(id=style.id, name=style.name) if style else None,
+            abv=beer.abv,
+            ibu=beer.ibu,
+            photo_url=beer.photo_url,
+            checkin_count=count,
+            rated_checkin_count=rated,
+            personal_average_rating=Decimal(total) / (100 * rated) if rated else None,
+            highest_rating=high,
+            lowest_rating=low,
+            first_checked_in_at=first,
+            last_checked_in_at=last,
+            rating_history=[
+                ExploreRatingPoint(id=p.id, occurred_at_utc=p.occurred_at_utc, rating=p.rating)
+                for p in points
+            ],
+            untappd_url=_untappd_url(beer.source_system, beer.external_id, "beer"),
+        )
+
+    def checkins(
+        self, user_id: int, beer_id: int, *, page=1, page_size=25, sort="newest"
+    ) -> ExploreCheckinListResponse:
+        scope = self._personal_history(user_id, beer_id)
+        total = self.session.scalar(select(func.count(Checkin.id)).where(*scope)) or 0
+        if not total:
+            raise HTTPException(status_code=404, detail="Beer not found")
+        total_pages = ceil(total / page_size)
+        page = min(page, total_pages)
+        direction = desc if sort == "newest" else asc
+        # Select presentation columns explicitly: never load raw import payloads.
+        rows = self.session.execute(
+            select(
+                Checkin.id,
+                Checkin.occurred_at_utc,
+                Checkin.rating,
+                Checkin.comment,
+                Checkin.serving_type,
+                Checkin.purchase_venue,
+                Checkin.photo_url,
+                Checkin.source_system,
+                Checkin.external_id,
+                Venue,
+            )
+            .outerjoin(Venue, Checkin.venue_id == Venue.id)
+            .where(*scope)
+            .order_by(direction(Checkin.occurred_at_utc), direction(Checkin.id))
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return ExploreCheckinListResponse(
+            items=[
+                ExploreCheckinResponse(
+                    id=r.id,
+                    occurred_at_utc=r.occurred_at_utc,
+                    rating=r.rating,
+                    comment=r.comment,
+                    serving_type=r.serving_type,
+                    purchase_venue=r.purchase_venue,
+                    photo_url=r.photo_url,
+                    venue=_location(r.Venue),
+                    untappd_url=_untappd_url(r.source_system, r.external_id, "checkin"),
+                )
+                for r in rows
+            ],
+            page=page,
+            page_size=page_size,
+            total=total,
+            total_pages=total_pages,
+        )
+
     def options(self, user_id, category, *, search="", selected_ids=None, offset=0, limit=25):
         entity = Brewery if category == "breweries" else BeerStyle
         foreign_key = Beer.brewery_id if category == "breweries" else Beer.style_id
@@ -220,3 +330,24 @@ def _sort_order(sort: ExploreBeerSort, query: Select):
 
 def _literal_search(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _location(entity):
+    return (
+        ExploreLocation(
+            id=entity.id,
+            name=entity.name,
+            city=entity.city,
+            state=entity.state,
+            country=entity.country,
+        )
+        if entity
+        else None
+    )
+
+
+def _untappd_url(source, identifier, kind):
+    if source != "untappd" or not identifier or not re.fullmatch(r"[1-9][0-9]{0,19}", identifier):
+        return None
+    prefix = "beer" if kind == "beer" else "c"
+    return f"https://untappd.com/{prefix}/{identifier}"

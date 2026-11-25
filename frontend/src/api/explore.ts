@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiFetch, ApiError } from "./client";
 
 export type ExploreEntity = { id: number; name: string };
 
@@ -52,4 +52,52 @@ export async function fetchExploreBounds(): Promise<{ abv_max: number }> {
   const response = await apiFetch("/api/v1/explore/filter-bounds");
   if (!response.ok) throw new Error("Unable to load ABV bounds");
   return response.json() as Promise<{ abv_max: number }>;
+}
+
+export type ExploreLocation = ExploreEntity & {
+  city: string | null;
+  state: string | null;
+  country: string | null;
+};
+export type RatingPoint = {
+  id: number;
+  occurred_at_utc: string;
+  rating: number;
+};
+export type BeerDetail = ExploreBeer & {
+  brewery: ExploreLocation | null;
+  highest_rating: number | null;
+  lowest_rating: number | null;
+  rating_history: RatingPoint[];
+  untappd_url: string | null;
+};
+export type BeerCheckin = {
+  id: number;
+  occurred_at_utc: string;
+  rating: number | null;
+  comment: string | null;
+  serving_type: string | null;
+  purchase_venue: string | null;
+  photo_url: string | null;
+  venue: ExploreLocation | null;
+  untappd_url: string | null;
+};
+export type BeerHistory = Omit<ExploreBeersResponse, "items"> & {
+  items: BeerCheckin[];
+};
+
+export async function fetchBeerDetail(id: string): Promise<BeerDetail> {
+  const response = await apiFetch(`/api/v1/explore/beers/${id}`);
+  if (!response.ok) throw new ApiError(response.status);
+  return response.json() as Promise<BeerDetail>;
+}
+export async function fetchBeerHistory(
+  id: string,
+  params: URLSearchParams,
+): Promise<BeerHistory> {
+  const response = await apiFetch(
+    `/api/v1/explore/beers/${id}/checkins?${params}`,
+  );
+  if (!response.ok) throw new ApiError(response.status);
+  return response.json() as Promise<BeerHistory>;
 }
