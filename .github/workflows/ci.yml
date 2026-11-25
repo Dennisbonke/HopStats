@@ -42,6 +42,13 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium firefox webkit
       - run: npx playwright test beer-details.spec.ts --max-failures=1
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: beer-detail-screenshots
+          path: frontend/test-results/**/*.png
+          if-no-files-found: ignore
+          retention-days: 14
       - run: npx playwright test --grep 'Explorer review fixes' --max-failures=1
       - run: npx playwright test --grep 'native reporting date keyboard' --max-failures=1
       - run: npx playwright test --project=webkit --grep 'touch taps pin|exact sparse.*320px|native reporting dates.*320px' --max-failures=1
