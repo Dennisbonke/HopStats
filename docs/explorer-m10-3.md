@@ -59,8 +59,8 @@ then ID. It includes every rated check-in, including same-day observations and
 zero ratings, without monthly grouping, filling gaps or synthetic observations.
 Recharts uses a numeric time scale and a fixed 0–5 Y domain. Visible points are
 connected with straight segments; these connect observations rather than adding
-measurements. A single point receives a one-day domain either side to stay
-visible. No ratings produces a compact message. No legend is needed.
+measurements. A single timestamp (one point or coincident observations) receives a one-day
+domain either side to stay visible. Axis ticks show the actual first/last observation dates. No ratings produces a compact message. No legend is needed.
 
 The existing tooltip portal and viewport positioning, keyboard accessibility
 layer, and touch bucket-selection hook are reused. Touch hit regions use the

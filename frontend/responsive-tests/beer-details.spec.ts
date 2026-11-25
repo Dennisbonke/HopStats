@@ -35,10 +35,18 @@ const beer = {
 const photo = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480"><rect width="640" height="480" fill="#293d49"/><rect x="236" y="75" width="168" height="300" rx="18" fill="#daa520"/><rect x="255" y="150" width="130" height="110" fill="#faf3dc"/><text x="320" y="210" text-anchor="middle" font-family="sans-serif" font-size="20">Synthetic beer</text></svg>`;
 async function stub(
   page: Page,
-  state: "multi" | "single" | "unrated" = "multi",
+  state: "multi" | "single" | "unrated" | "coincident" = "multi",
 ) {
   const detail = {
     ...beer,
+    ...(state === "coincident"
+      ? {
+          rating_history: beer.rating_history.map((p) => ({
+            ...p,
+            occurred_at_utc: beer.rating_history[0].occurred_at_utc,
+          })),
+        }
+      : {}),
     ...(state === "single"
       ? {
           rated_checkin_count: 1,
@@ -105,7 +113,7 @@ async function stub(
                 {
                   id: 1,
                   occurred_at_utc: "2025-01-01T12:00:00Z",
-                  rating: null,
+                  rating: state === "single" ? 0 : null,
                   comment: "Sparse metadata entry",
                   serving_type: null,
                   purchase_venue: null,
@@ -117,8 +125,16 @@ async function stub(
             : [
                 {
                   id: 4,
-                  occurred_at_utc: "2026-11-20T23:30:00Z",
-                  rating: 0,
+                  occurred_at_utc:
+                    sort === "oldest"
+                      ? "2025-01-01T12:00:00Z"
+                      : "2026-11-20T23:30:00Z",
+                  rating:
+                    state === "unrated" || state === "single"
+                      ? null
+                      : sort === "oldest"
+                        ? 0
+                        : 5,
                   comment: `${sort === "oldest" ? "Oldest first" : "Newest first"}\nA long imported comment with meaningful line breaks.\n${"VeryLongUnbrokenComment".repeat(8)}\n<script>Plain text, never HTML</script>`,
                   serving_type: "Bottle",
                   purchase_venue: "A Bottle Shop Somewhere Else",
@@ -142,6 +158,21 @@ async function stub(
     });
   });
   return counts;
+}
+async function readyPhotos(page: Page) {
+  const photo = page.locator(".beer-checkin-photo");
+  if (await photo.count()) {
+    await photo.scrollIntoViewIfNeeded();
+    await expect
+      .poll(() =>
+        photo.evaluate((node) => {
+          const image = node as HTMLImageElement;
+          return image.complete && image.naturalWidth > 0;
+        }),
+      )
+      .toBe(true);
+    await page.evaluate(() => window.scrollTo(0, 0));
+  }
 }
 async function noOverflow(page: Page) {
   expect(
@@ -171,8 +202,17 @@ for (const theme of ["light", "dark"] as const) {
       await expect(link).toHaveAttribute("href", /\/explore\/beers\/1\?/);
       if (width > 700) {
         expect(await page.locator(".explorer-beer-table th").count()).toBe(7);
-        await link.focus();
-        await page.keyboard.press("Enter");
+        if (width === 1280) {
+          const breweryCell = page
+            .locator(".explorer-beer-table tbody td")
+            .nth(1);
+          await breweryCell.scrollIntoViewIfNeeded();
+          const box = (await breweryCell.boundingBox())!;
+          await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+        } else {
+          await link.focus();
+          await page.keyboard.press("Enter");
+        }
       } else await link.click();
       await expect(
         page.getByRole("heading", { name: beer.name }),
@@ -184,6 +224,9 @@ for (const theme of ["light", "dark"] as const) {
         page.locator(".beer-rating-chart svg.recharts-surface"),
       ).toBeVisible();
       await expect(page.locator(".recharts-line-dot")).toHaveCount(4);
+      await expect(
+        page.locator(".recharts-xAxis .recharts-cartesian-axis-tick"),
+      ).toHaveCount(2);
       await expect(page.locator(".beer-checkin-photo")).toBeVisible();
       await expect(
         page.getByRole("img", { name: /artwork unavailable/ }),
@@ -213,11 +256,13 @@ for (const theme of ["light", "dark"] as const) {
         expect(history.x).toBeGreaterThan(chart.x + chart.width);
         expect(history.width).toBeGreaterThan(chart.width);
       } else expect(history.y).toBeGreaterThan(chart.y);
-      if ([320, 390, 1280, 1920].includes(width))
+      if ([320, 390, 1280, 1920].includes(width)) {
+        await readyPhotos(page);
         await page.screenshot({
           path: testInfo.outputPath(`beer-detail-${width}-${theme}.png`),
           fullPage: true,
         });
+      }
       const profileRequests = counts.detail;
       const pagination = page.getByRole("navigation", {
         name: "Check-in history pagination",
@@ -273,6 +318,7 @@ for (const theme of ["light", "dark"] as const) {
           await expect(page.locator(".beer-rating-chart")).toHaveCount(0);
         }
         await noOverflow(page);
+        await readyPhotos(page);
         await page.screenshot({
           path: testInfo.outputPath(`beer-${state}-${width}-${theme}.png`),
           fullPage: true,
@@ -397,3 +443,26 @@ for (const width of [700, 701, 1100, 1101]) {
     await noOverflow(page);
   });
 }
+
+test("beer chart retains distinct observations at coincident timestamps", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await stub(page, "coincident");
+  await page.goto("/explore/beers/1");
+  const dots = page.locator(".recharts-line-dot");
+  await expect(dots).toHaveCount(4);
+  expect(
+    new Set(
+      await dots.evaluateAll((nodes) =>
+        nodes.map((node) => node.getAttribute("cx")),
+      ),
+    ).size,
+  ).toBe(1);
+  await expect(
+    page.locator(".recharts-xAxis .recharts-cartesian-axis-tick"),
+  ).toHaveCount(1);
+  await page.getByText("View rating history as text").click();
+  await expect(page.locator(".beer-rating-data li")).toHaveCount(4);
+  await noOverflow(page);
+});

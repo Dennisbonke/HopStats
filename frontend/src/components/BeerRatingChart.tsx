@@ -92,7 +92,7 @@ export default function BeerRatingChart({ points }: { points: RatingPoint[] }) {
                   scale="time"
                   dataKey="timestamp"
                   domain={
-                    data.length === 1
+                    data[0].timestamp === data[data.length - 1].timestamp
                       ? [
                           data[0].timestamp - 86400000,
                           data[0].timestamp + 86400000,
@@ -102,6 +102,13 @@ export default function BeerRatingChart({ points }: { points: RatingPoint[] }) {
                   tickFormatter={(v: number) =>
                     checkinDate(new Date(v).toISOString())
                   }
+                  ticks={Array.from(
+                    new Set([
+                      data[0].timestamp,
+                      data[data.length - 1].timestamp,
+                    ]),
+                  )}
+                  interval="preserveStartEnd"
                   minTickGap={36}
                 />
                 <YAxis domain={[0, 5]} ticks={[0, 1, 2, 3, 4, 5]} width={28} />
