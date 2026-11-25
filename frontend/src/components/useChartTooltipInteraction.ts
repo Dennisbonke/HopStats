@@ -9,6 +9,7 @@ import type { PointerEvent as ReactPointerEvent, RefObject } from "react";
 export function useChartTooltipInteraction(
   chartRef: RefObject<HTMLElement | null>,
   contextKey: unknown,
+  tooltipRef?: RefObject<HTMLElement | null>,
 ) {
   const [selection, setSelection] = useState<BucketSelection | null>(null);
   const [hovered, setHovered] = useState(false);
@@ -40,7 +41,10 @@ export function useChartTooltipInteraction(
         touchStart.current = null;
         setTouchMode(false);
       }
-      if (!chartRef.current?.contains(event.target as Node)) {
+      if (
+        !chartRef.current?.contains(event.target as Node) &&
+        !tooltipRef?.current?.contains(event.target as Node)
+      ) {
         setSelection(null);
         setHovered(false);
         setTouchMode(false);
@@ -107,7 +111,7 @@ export function useChartTooltipInteraction(
       window.removeEventListener("scroll", cancelTouchOnScroll, true);
       window.removeEventListener("resize", dismissOnResize);
     };
-  }, [chartRef]);
+  }, [chartRef, tooltipRef]);
 
   function onPointerMove(event: ReactPointerEvent<HTMLElement>) {
     if (event.pointerType === "mouse") {

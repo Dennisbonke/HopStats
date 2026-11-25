@@ -109,6 +109,18 @@ function RouterState() {
       <button onClick={() => navigate(-1)}>Browser back</button>
       <button onClick={() => navigate(1)}>Browser forward</button>
       <button onClick={() => navigate("/explore/beers/2")}>Other beer</button>
+      <button onClick={() => navigate("/explore/beers/1?sort=oldest")}>
+        Navigate oldest
+      </button>
+      <button onClick={() => navigate("/")}>Dashboard</button>
+      <button onClick={() => navigate("/explore/beers")}>Fresh Explorer</button>
+      <button
+        onClick={() =>
+          navigate("/explore/beers?search=previous&sort=name_desc&page_size=50")
+        }
+      >
+        Previous filters
+      </button>
     </>
   );
 }
@@ -117,6 +129,7 @@ function show(url = "/explore/beers/1") {
     <MemoryRouter initialEntries={[url]}>
       <RouterState />
       <Routes>
+        <Route path="/" element={<p>Dashboard route</p>} />
         <Route path="/explore/beers" element={<ExplorerBeers />} />
         <Route path="/explore/beers/:beerId" element={<ExplorerBeerDetail />} />
       </Routes>
@@ -125,6 +138,9 @@ function show(url = "/explore/beers/1") {
 }
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(
+    () => {},
+  );
   sessionStorage.clear();
   vi.stubGlobal(
     "matchMedia",
@@ -154,6 +170,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 test("direct route shows profile, complete statistics and safe plain-text check-ins", async () => {
@@ -323,7 +340,7 @@ test("rapid history requests cannot replace the latest ordering", async () => {
   show();
   await screen.findByLabelText("History order");
   expect(screen.getByText("Loading check-in history…")).toBeInTheDocument();
-  await user.selectOptions(screen.getByLabelText("History order"), "oldest");
+  await user.click(screen.getByText("Navigate oldest"));
   await screen.findByText("Newest request");
   await act(async () => resolveOld(history));
   expect(screen.queryByText("Bottle shop")).toBeInTheDocument();
@@ -423,4 +440,152 @@ test("sparse history omits empty metadata and shows missing ratings explicitly",
   expect(
     screen.queryByAltText("Imported check-in photo"),
   ).not.toBeInTheDocument();
+});
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+}
+
+test("pending history retains list and controls, hides stale content, and focuses the heading on success", async () => {
+  const next = deferred<BeerHistory>();
+  vi.mocked(fetchBeerHistory)
+    .mockResolvedValueOnce(history)
+    .mockReturnValueOnce(next.promise);
+  const user = userEvent.setup();
+  show();
+  await screen.findByText("Bottle shop");
+  const list = screen.getByRole("list", { name: "Imported check-ins" });
+  const nextButton = screen.getByRole("button", { name: "Next" });
+  nextButton.focus();
+  await user.click(nextButton);
+  expect(screen.getByText("Loading history page 2…")).toBeInTheDocument();
+  expect(list).toBeInTheDocument();
+  expect(list).not.toBeVisible();
+  expect(list).toHaveAttribute("aria-hidden", "true");
+  expect(screen.getByRole("button", { name: "Next" })).toBe(nextButton);
+  expect(nextButton).toBeDisabled();
+  expect(screen.getByLabelText("History order")).toBeDisabled();
+  await act(async () =>
+    next.resolve({
+      ...history,
+      page: 2,
+      items: [{ ...history.items[0], comment: "Second page" }],
+    }),
+  );
+  expect(await screen.findByText("Second page")).toBeVisible();
+  expect(
+    screen.getByRole("heading", { name: "Check-in history" }),
+  ).toHaveFocus();
+  expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({
+    behavior: "instant",
+    block: "start",
+  });
+  expect(fetchBeerDetail).toHaveBeenCalledTimes(1);
+  await user.click(screen.getByRole("button", { name: "Previous" }));
+  await screen.findByText(/First line/);
+  expect(
+    screen.getByRole("heading", { name: "Check-in history" }),
+  ).toHaveFocus();
+});
+
+test("failed subsequent history requests retain geometry and usable navigation; retry completes focus management", async () => {
+  const next = deferred<BeerHistory>();
+  vi.mocked(fetchBeerHistory)
+    .mockResolvedValueOnce(history)
+    .mockReturnValueOnce(next.promise)
+    .mockResolvedValueOnce({ ...history, page: 2 });
+  const user = userEvent.setup();
+  show();
+  await screen.findByText("Bottle shop");
+  const list = screen.getByRole("list", { name: "Imported check-ins" });
+  await user.click(screen.getByRole("button", { name: "Next" }));
+  await act(async () => next.reject(new Error("offline")));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "temporarily unavailable",
+  );
+  expect(list).toBeInTheDocument();
+  expect(list).not.toBeVisible();
+  expect(screen.getByRole("button", { name: "Previous" })).toBeEnabled();
+  await user.click(screen.getByRole("button", { name: "Try again" }));
+  await waitFor(() => expect(list).toBeVisible());
+  expect(
+    screen.getByRole("heading", { name: "Check-in history" }),
+  ).toHaveFocus();
+  expect(fetchBeerDetail).toHaveBeenCalledTimes(1);
+});
+
+test("catalogue scroll belongs to the detail flow, including Back/Forward and delayed restoration", async () => {
+  const scroll = vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+  vi.stubGlobal("scrollY", 420);
+  const user = userEvent.setup();
+  show("/explore/beers?search=previous&sort=name_desc&page_size=50");
+  await screen.findByRole("region", { name: "Beer catalogue table" });
+  await user.click(
+    within(
+      screen.getByRole("region", { name: "Beer catalogue table" }),
+    ).getByRole("link", { name: "Personal stout" }),
+  );
+  await screen.findByRole("heading", { name: "Personal stout" });
+  const delayed = deferred<Awaited<ReturnType<typeof fetchExploreBeers>>>();
+  vi.mocked(fetchExploreBeers).mockReturnValueOnce(delayed.promise);
+  scroll.mockClear();
+  await user.click(screen.getByRole("link", { name: /Back to Beer Explorer/ }));
+  expect(screen.getByText("Loading beers…")).toBeInTheDocument();
+  expect(scroll).not.toHaveBeenCalled();
+  await act(async () =>
+    delayed.resolve({
+      items: [detail],
+      page: 1,
+      page_size: 50,
+      total: 1,
+      total_pages: 1,
+    }),
+  );
+  await waitFor(() => expect(scroll).toHaveBeenLastCalledWith(0, 420));
+  await user.click(screen.getByText("Dashboard"));
+  scroll.mockClear();
+  await user.click(screen.getByText("Fresh Explorer"));
+  await waitFor(() => expect(scroll).toHaveBeenLastCalledWith(0, 0));
+  await user.click(screen.getByText("Previous filters"));
+  await waitFor(() =>
+    expect(screen.getByLabelText("Current URL")).toHaveTextContent(
+      "search=previous",
+    ),
+  );
+  await waitFor(() => expect(scroll).toHaveBeenLastCalledWith(0, 0));
+  // Return through the actual history entries rather than reusing the query.
+  await user.click(screen.getByText("Browser back"));
+  await user.click(screen.getByText("Browser back"));
+  await user.click(screen.getByText("Browser back"));
+  await waitFor(() => expect(scroll).toHaveBeenLastCalledWith(0, 420));
+  await user.click(screen.getByText("Browser back"));
+  await screen.findByRole("heading", { name: "Personal stout" });
+  await user.click(screen.getByText("Browser forward"));
+  await waitFor(() => expect(scroll).toHaveBeenLastCalledWith(0, 420));
+});
+
+test("unavailable session storage does not break detail navigation", async () => {
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    throw new Error("unavailable");
+  });
+  vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+    throw new Error("unavailable");
+  });
+  const user = userEvent.setup();
+  show("/explore/beers");
+  await screen.findByRole("region", { name: "Beer catalogue table" });
+  await user.click(
+    within(
+      screen.getByRole("region", { name: "Beer catalogue table" }),
+    ).getByRole("link", { name: "Personal stout" }),
+  );
+  await screen.findByRole("heading", { name: "Personal stout" });
+  await user.click(screen.getByRole("link", { name: /Back to Beer Explorer/ }));
+  await screen.findByRole("heading", { name: "Beers" });
 });

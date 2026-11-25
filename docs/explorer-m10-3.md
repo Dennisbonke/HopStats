@@ -63,10 +63,16 @@ measurements. A single timestamp (one point or coincident observations) receives
 domain either side to stay visible. Axis ticks show the actual first/last observation dates. No ratings produces a compact message. No legend is needed.
 
 The existing tooltip portal and viewport positioning, keyboard accessibility
-layer, and touch bucket-selection hook are reused. Touch hit regions use the
-actual time-axis scale. Coincident timestamp/rating points can overlap visually;
-the expandable chronological text list retains every distinct check-in for
-assistive technology and inspection.
+layer, and touch bucket-selection hook are reused. Touch hit regions use distinct timestamps on the actual time-axis scale. A shared
+timestamp selects all its individual observations: the tooltip shows the timestamp,
+number of check-ins and every rating in stable ID order, including duplicate and
+zero ratings. Mouse and keyboard tooltips use the same grouping. Chart dots and
+the expandable chronological text list retain every individual observation; no
+ratings are averaged and no timestamps are shifted. All-coincident observations
+receive the same padded time domain as a single point. Large grouped tooltips are
+height-bounded and scrollable. The shared interaction hook accepts an optional
+tooltip boundary so scrolling a pinned beer tooltip does not dismiss it; other
+analytics charts retain their existing behavior.
 
 ## Import audit and missing data
 
@@ -119,16 +125,32 @@ Back to Beer Explorer link accepts only the same-origin exact `/explore/beers`
 pathname without a fragment, otherwise falling back to `/explore/beers`. All
 search, filters, sort, page, page size and unrelated parameters survive. Browser
 Back/Forward use ordinary router history; no arbitrary history delta is used by
-the visible back link. Optional sessionStorage stores scrollY by catalogue query
-on link activation and restores after results load. Storage failures are harmless.
-Entering a detail route scrolls to its top; history pagination does not reset the page scroll.
+the visible back link. Optional sessionStorage stores scrollY and the exact catalogue URL by originating
+history-entry key on link activation. That entry receives a small history-state
+marker, preserving React Router's state. The explicit return link carries the
+origin key; ordinary Back/Forward uses the marked history entry. Restoration runs
+once per matching entry after catalogue data loads. Records remain available for
+legitimate Back/Forward, but fresh navigation and reselected filter combinations
+receive new entries and do not reuse old positions. The marker also prevents a
+fresh document's default router key from matching an unrelated stored position.
+Storage/history API failures are nonfatal. Detail history URL changes retain the
+origin navigation state. Direct detail opens retain the validated URL fallback.
+Entering a detail route scrolls to its top.
 
 History page, page size and order live in the detail URL; unrelated parameters
 including returnTo survive changes. Profile/chart and history have independent
 resources. History changes do not refetch profile/chart. Both resources discard
 late responses after their key changes or unmounts and hide mismatched data
-immediately. Missing, loading, expired-session, backend/network error and retry
-states follow the existing application conventions.
+immediately. Subsequent history requests keep the last list mounted but hidden
+and inert to preserve its geometry without presenting stale entries under the
+new URL. Pagination remains mounted, with page/order actions disabled and loading
+status at both the history section and pagination. Initial loading stays compact.
+On failure, controls become usable and retry preserves the retained geometry.
+After successful explicit pagination or ordering, the history heading receives
+focus and is positioned into view without animation (including reduced motion).
+Back/Forward and late responses cannot apply another request's focus action.
+Missing, expired-session, backend/network error and retry states follow the
+existing application conventions.
 
 ## Performance and self-review
 
@@ -155,7 +177,9 @@ Automated WebKit coverage does not constitute physical-device verification.
 - Check long names/styles, six statistics and long multiline comments at narrow portrait and short landscape widths. Verify no clipped content or horizontal page scrolling.
 - Tap early, late, same-day and zero-valued chart observations. Confirm date/time/rating and tooltips within the visible viewport. Scroll through the chart without accidentally pinning a tooltip; tap outside to dismiss.
 - Inspect a single rated observation and an unrated beer. Expand the text history and verify every observation is available.
-- Change history ordering and pages; reload and use Back/Forward. Verify no profile/chart flicker or stale check-ins.
+- Change history ordering and pages on a tall page with photos and long comments, including with a slow connection. Confirm the page does not collapse while pending, controls are disabled, and old entries are hidden. On success, check the history heading position and keyboard focus. Simulate a failed request; use Previous or Retry and check recovery without profile/chart refetch. Use Back/Forward while pending and verify late responses cannot replace the current history.
+- Select a timestamp shared by at least three check-ins, including duplicate and zero ratings, with a stationary tap. Verify the tooltip lists every individual rating, fits the viewport and agrees with mouse, keyboard and text-history inspection.
+- Return to the catalogue with the visible link and Back/Forward. Then navigate through Dashboard and open Explorer fresh or reselect old filters: verify old scroll positions are not restored on these fresh visits.
 - Verify check-in venue versus purchase venue, full and sparse metadata, loaded photos, broken artwork/photo fallback, and lazy loading while scrolling.
 - Repeat navigation, touch, scrolling, pagination and readable focus/contrast checks in both system light and dark themes, including Safari toolbars expanded/collapsed.
 - Confirm there are no check-in creation/edit/delete controls. Untappd is the source of truth; modify imported check-ins in Untappd. This read-only rule does not restrict native inventory, goals or settings functionality.

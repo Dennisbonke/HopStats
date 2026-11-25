@@ -14,6 +14,7 @@ type Props = {
   coordinate?: Coordinate;
   chartRef: RefObject<HTMLElement | null>;
   children: ReactNode;
+  contentRef?: RefObject<HTMLDivElement | null>;
 };
 
 /** Render chart tooltip content in the document layer and keep it in view. */
@@ -22,8 +23,10 @@ export default function AnalyticsChartTooltip({
   coordinate,
   chartRef,
   children,
+  contentRef: suppliedRef,
 }: Props) {
-  const contentRef = useRef<HTMLDivElement>(null);
+  const fallbackRef = useRef<HTMLDivElement>(null);
+  const contentRef = suppliedRef ?? fallbackRef;
   const x = coordinate?.x;
   const y = coordinate?.y;
 
@@ -87,7 +90,7 @@ export default function AnalyticsChartTooltip({
       window.visualViewport?.removeEventListener("resize", place);
       window.visualViewport?.removeEventListener("scroll", place);
     };
-  }, [active, chartRef, x, y, children]);
+  }, [active, chartRef, contentRef, x, y, children]);
 
   if (!active || x === undefined || y === undefined) return null;
 

@@ -1,5 +1,10 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { Link, useLocation, useSearchParams } from "react-router-dom";
+import {
+  Link,
+  useLocation,
+  useNavigationType,
+  useSearchParams,
+} from "react-router-dom";
 import {
   ExploreBeer,
   ExploreEntity,
@@ -11,7 +16,12 @@ import {
 import { Button, FormField } from "../components/ui";
 
 import BeerArtwork from "../components/BeerArtwork";
-import { beerDetailUrl, saveExplorerScroll } from "../utils/explorer";
+import {
+  beerDetailUrl,
+  saveExplorerScroll,
+  readExplorerScroll,
+  explorerEntryKey,
+} from "../utils/explorer";
 
 import { FilterPanel, FilterSheet, OptionNames } from "./ExplorerFilters";
 import {
@@ -68,7 +78,10 @@ function BeerCard({ beer }: { beer: ExploreBeer }) {
     <Link
       className="ui-card ui-card--standard explorer-beer-card"
       to={beerDetailUrl(beer.id, location.search)}
-      onClick={() => saveExplorerScroll(location.search)}
+      state={{ explorerEntryKey: explorerEntryKey(location.key) }}
+      onClick={() =>
+        saveExplorerScroll(explorerEntryKey(location.key), location.search)
+      }
     >
       <BeerArtwork beer={beer} />
       <div className="explorer-beer-card-content">
@@ -101,6 +114,8 @@ function BeerCard({ beer }: { beer: ExploreBeer }) {
 export default function ExplorerBeers() {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
+  const navigationType = useNavigationType();
+  const restoredEntry = useRef<string | null>(null);
   const querySearch = (searchParams.get("search") ?? "").slice(0, 200);
   const sort = selectedSort(searchParams.get("sort"));
   const page = selectedPage(searchParams.get("page"));
@@ -242,19 +257,29 @@ export default function ExplorerBeers() {
   const currentData = dataKey === urlStateKey ? data : null;
   useEffect(() => {
     if (dataKey !== urlStateKey || !data) return;
-    let saved: string | null = null;
-    try {
-      saved = sessionStorage.getItem(`explorer-scroll:${location.search}`);
-    } catch {
-      /* Storage is optional. */
-    }
-    if (saved !== null) {
-      const frame = requestAnimationFrame(() =>
-        window.scrollTo(0, Number(saved) || 0),
-      );
-      return () => cancelAnimationFrame(frame);
-    }
-  }, [dataKey, urlStateKey, data, location.search]);
+    if (restoredEntry.current === location.key) return;
+    const saved = readExplorerScroll(
+      navigationType === "POP"
+        ? (window.history.state?.hopstatsExplorerSavedKey ??
+            location.state?.explorerReturnKey)
+        : location.state?.explorerReturnKey,
+      location.search,
+    );
+    const frame = requestAnimationFrame(() => {
+      restoredEntry.current = location.key;
+      if (saved !== null) window.scrollTo(0, saved);
+      else if (navigationType === "PUSH") window.scrollTo(0, 0);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [
+    dataKey,
+    urlStateKey,
+    data,
+    location.key,
+    location.search,
+    location.state,
+    navigationType,
+  ]);
   const currentError = errorKey === urlStateKey;
   const showLoading = loading || (!currentData && !currentError);
 
@@ -563,8 +588,16 @@ export default function ExplorerBeers() {
                               <Link
                                 className="explorer-beer-link"
                                 to={beerDetailUrl(beer.id, location.search)}
+                                state={{
+                                  explorerEntryKey: explorerEntryKey(
+                                    location.key,
+                                  ),
+                                }}
                                 onClick={() =>
-                                  saveExplorerScroll(location.search)
+                                  saveExplorerScroll(
+                                    explorerEntryKey(location.key),
+                                    location.search,
+                                  )
                                 }
                               >
                                 <strong>{beer.name}</strong>

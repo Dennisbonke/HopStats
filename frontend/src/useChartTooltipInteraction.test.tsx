@@ -288,3 +288,59 @@ test("touch selects exact full-height bucket regions, not stale Recharts hover s
   fireEvent.pointerDown(document.body);
   expect(chart.querySelector("output")).toHaveTextContent("none");
 });
+
+test("an optional tooltip boundary retains pinned selection while outside presses dismiss it", () => {
+  function Chart() {
+    const chartRef = useRef<HTMLDivElement>(null);
+    const tooltipRef = useRef<HTMLDivElement>(null);
+    const interaction = useChartTooltipInteraction(
+      chartRef,
+      "stable",
+      tooltipRef,
+    );
+    return (
+      <>
+        <div
+          ref={chartRef}
+          data-testid="boundary-chart"
+          onPointerDown={interaction.onPointerDown}
+          onPointerUp={interaction.onPointerUp}
+        >
+          <svg>
+            <rect data-chart-bucket="0" />
+          </svg>
+        </div>
+        <div ref={tooltipRef} data-testid="boundary-tooltip" />
+        <output>{interaction.selection ? "Pinned" : "Dismissed"}</output>
+      </>
+    );
+  }
+  const view = render(<Chart />);
+  const chart = screen.getByTestId("boundary-chart");
+  const bounds = {
+    x: 0,
+    y: 0,
+    left: 0,
+    top: 0,
+    right: 100,
+    bottom: 100,
+    width: 100,
+    height: 100,
+    toJSON: () => ({}),
+  };
+  vi.spyOn(chart, "getBoundingClientRect").mockReturnValue(bounds);
+  vi.spyOn(
+    view.container.querySelector("rect")!,
+    "getBoundingClientRect",
+  ).mockReturnValue(bounds);
+  fireEvent(chart, pointerEvent("pointerdown", "touch"));
+  fireEvent(chart, pointerEvent("pointerup", "touch"));
+  expect(screen.getByText("Pinned")).toBeInTheDocument();
+  fireEvent(
+    screen.getByTestId("boundary-tooltip"),
+    pointerEvent("pointerdown", "touch"),
+  );
+  expect(screen.getByText("Pinned")).toBeInTheDocument();
+  fireEvent(document.body, pointerEvent("pointerdown", "touch"));
+  expect(screen.getByText("Dismissed")).toBeInTheDocument();
+});

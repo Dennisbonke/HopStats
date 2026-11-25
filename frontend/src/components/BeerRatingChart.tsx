@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import type { RefObject } from "react";
 import {
   CartesianGrid,
@@ -24,33 +24,69 @@ function RatingTooltip({
   coordinate,
   payload,
   chartRef,
+  groups,
+  tooltipRef,
 }: {
   active?: boolean;
   coordinate?: Coordinate;
   payload?: Array<{ payload?: Datum }>;
   chartRef: RefObject<HTMLElement | null>;
+  tooltipRef: RefObject<HTMLDivElement | null>;
+  groups: Array<Datum & { observations: Datum[] }>;
 }) {
   const point = payload?.[0]?.payload;
-  if (!active || !point) return null;
+  const observations = groups.find(
+    (group) => group.timestamp === point?.timestamp,
+  )?.observations;
+  if (!active || !point || !observations) return null;
   return (
     <AnalyticsChartTooltip
       active={active}
       coordinate={coordinate}
       chartRef={chartRef}
+      contentRef={tooltipRef}
     >
-      <strong>{checkinDate(point.occurred_at_utc, true)}</strong>
-      <div>My rating: {personalRating(point.rating)}</div>
+      <div className="beer-rating-tooltip-content">
+        <strong>{checkinDate(point.occurred_at_utc, true)}</strong>
+        {observations.length === 1 ? (
+          <div>My rating: {personalRating(point.rating)}</div>
+        ) : (
+          <>
+            <div>{observations.length} rated check-ins:</div>
+            <ul>
+              {observations.map((observation) => (
+                <li key={observation.id}>
+                  {personalRating(observation.rating)}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
     </AnalyticsChartTooltip>
   );
 }
 
 export default function BeerRatingChart({ points }: { points: RatingPoint[] }) {
   const chartRef = useRef<HTMLDivElement>(null);
-  const interaction = useChartTooltipInteraction(chartRef, points);
-  const data = points.map((p) => ({
-    ...p,
-    timestamp: new Date(p.occurred_at_utc).getTime(),
-  }));
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const interaction = useChartTooltipInteraction(chartRef, points, tooltipRef);
+  const { data, groups } = useMemo(() => {
+    const data = points
+      .map((point) => ({
+        ...point,
+        timestamp: new Date(point.occurred_at_utc).getTime(),
+      }))
+      .sort((a, b) => a.timestamp - b.timestamp || a.id - b.id);
+    const groups: Array<Datum & { observations: Datum[] }> = [];
+    for (const point of data) {
+      const previous = groups[groups.length - 1];
+      if (previous?.timestamp === point.timestamp)
+        previous.observations.push(point);
+      else groups.push({ ...point, observations: [point] });
+    }
+    return { data, groups };
+  }, [points]);
   return (
     <section
       className="beer-rating-section"
@@ -113,7 +149,7 @@ export default function BeerRatingChart({ points }: { points: RatingPoint[] }) {
                 />
                 <YAxis domain={[0, 5]} ticks={[0, 1, 2, 3, 4, 5]} width={28} />
                 <ChartBucketSelection
-                  data={data}
+                  data={groups}
                   axisKey="timestamp"
                   selection={interaction.selection}
                   series={[
@@ -123,12 +159,24 @@ export default function BeerRatingChart({ points }: { points: RatingPoint[] }) {
                       color: "var(--color-chart-primary)",
                     },
                   ]}
-                  content={<RatingTooltip chartRef={chartRef} />}
+                  content={
+                    <RatingTooltip
+                      chartRef={chartRef}
+                      groups={groups}
+                      tooltipRef={tooltipRef}
+                    />
+                  }
                 />
                 <Tooltip
                   active={interaction.active}
                   trigger={interaction.trigger}
-                  content={<RatingTooltip chartRef={chartRef} />}
+                  content={
+                    <RatingTooltip
+                      chartRef={chartRef}
+                      groups={groups}
+                      tooltipRef={tooltipRef}
+                    />
+                  }
                   portal={document.body}
                   wrapperStyle={ANALYTICS_TOOLTIP_WRAPPER_STYLE}
                 />
@@ -148,7 +196,7 @@ export default function BeerRatingChart({ points }: { points: RatingPoint[] }) {
           <details className="beer-rating-data">
             <summary>View rating history as text</summary>
             <ol>
-              {points.map((p) => (
+              {data.map((p) => (
                 <li key={p.id}>
                   {checkinDate(p.occurred_at_utc, true)}:{" "}
                   {personalRating(p.rating)}
