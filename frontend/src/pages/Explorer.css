@@ -812,6 +812,11 @@
   flex: 0 0 auto;
   object-fit: contain;
 }
+.beer-profile a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
 .beer-profile h1 {
   margin: 0;
   font-size: clamp(1.5rem, 3vw, 2.25rem);

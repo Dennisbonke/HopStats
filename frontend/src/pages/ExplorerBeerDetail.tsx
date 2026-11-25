@@ -170,6 +170,9 @@ function ResourceError({
 }
 export default function ExplorerBeerDetail() {
   const { beerId = "" } = useParams();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [beerId]);
   const validId =
     /^[1-9][0-9]*$/.test(beerId) && BigInt(beerId) <= 9223372036854775807n;
   const [params, setParams] = useSearchParams();

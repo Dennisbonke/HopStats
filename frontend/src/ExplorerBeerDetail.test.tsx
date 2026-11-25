@@ -388,3 +388,39 @@ test("return URLs and image URLs are validated", () => {
   ])
     expect(safeImageUrl(value)).toBeNull();
 });
+
+test("invalid beer IDs avoid requests and provide a safe return link", async () => {
+  show("/explore/beers/invalid?returnTo=https%3A%2F%2Fevil.test");
+  expect(await screen.findByRole("alert")).toHaveTextContent("Beer not found");
+  expect(fetchBeerDetail).not.toHaveBeenCalled();
+  expect(fetchBeerHistory).not.toHaveBeenCalled();
+  expect(
+    screen.getByRole("link", { name: /Back to Beer Explorer/ }),
+  ).toHaveAttribute("href", "/explore/beers");
+});
+
+test("sparse history omits empty metadata and shows missing ratings explicitly", async () => {
+  vi.mocked(fetchBeerHistory).mockResolvedValue({
+    ...history,
+    items: [
+      {
+        ...history.items[0],
+        rating: null,
+        comment: null,
+        venue: null,
+        serving_type: null,
+        purchase_venue: null,
+        photo_url: null,
+        untappd_url: null,
+      },
+    ],
+  });
+  show();
+  await screen.findByText("Not rated");
+  expect(screen.queryByText("Check-in venue")).not.toBeInTheDocument();
+  expect(screen.queryByText("Purchased at")).not.toBeInTheDocument();
+  expect(screen.queryByText("Serving")).not.toBeInTheDocument();
+  expect(
+    screen.queryByAltText("Imported check-in photo"),
+  ).not.toBeInTheDocument();
+});

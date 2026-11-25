@@ -58,12 +58,14 @@ async function stub(
         : {}),
   };
   const counts = { detail: 0 };
-  await page.route("https://images.example.test/**", async (route) => {
-    if (route.request().url().endsWith("photo.svg"))
-      await route.fulfill({ contentType: "image/svg+xml", body: photo });
-    else await route.abort();
-  });
-  await page.route("**/api/v1/**", async (route) => {
+  await page
+    .context()
+    .route("https://images.example.test/**", async (route) => {
+      if (route.request().url().endsWith("photo.svg"))
+        await route.fulfill({ contentType: "image/svg+xml", body: photo });
+      else await route.abort();
+    });
+  await page.context().route("**/api/v1/**", async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname;
     const pageNumber = Number(url.searchParams.get("page") ?? 1);
@@ -224,6 +226,11 @@ for (const theme of ["light", "dark"] as const) {
       await expect(page.getByText("Sparse metadata entry")).toBeVisible();
       await expect(page.getByText("Check-in photo unavailable")).toBeVisible();
       expect(counts.detail).toBe(profileRequests);
+      if ([390, 1280].includes(width))
+        await page.screenshot({
+          path: testInfo.outputPath(`beer-sparse-${width}-${theme}.png`),
+          fullPage: true,
+        });
       await page.reload();
       await expect(page.getByText("Sparse metadata entry")).toBeVisible();
       await page.getByLabel("History order").selectOption("oldest");
@@ -321,3 +328,72 @@ test("beer rating tooltips use temporal spacing, touch taps and keyboard in shor
   await expect(page.locator(".beer-rating-data li")).toHaveCount(4);
   await noOverflow(page);
 });
+
+test("beer catalogue links open details in a new tab", async ({
+  page,
+  context,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await stub(page);
+  await page.goto("/explore/beers?future=preserved");
+  const popupPromise = context.waitForEvent("page");
+  await page
+    .locator(".explorer-beer-link")
+    .click({ modifiers: ["ControlOrMeta"] });
+  const popup = await popupPromise;
+  await expect(popup.getByRole("heading", { name: beer.name })).toBeVisible();
+  await expect(
+    popup.getByRole("link", { name: /Back to Beer Explorer/ }),
+  ).toHaveAttribute("href", "/explore/beers?future=preserved");
+  await expect(page).toHaveURL(/\/explore\/beers\?future=preserved$/);
+  await popup.close();
+});
+
+test("beer chart supports real touchscreen taps and viewport-safe tooltips", async ({
+  browser,
+  browserName,
+}) => {
+  test.skip(
+    browserName === "firefox",
+    "Playwright Firefox has no hasTouch context; pointer and keyboard coverage runs separately.",
+  );
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    colorScheme: "dark",
+  });
+  const page = await context.newPage();
+  try {
+    await stub(page);
+    await page.goto("/explore/beers/1");
+    const chart = page.locator(".beer-rating-chart");
+    await chart.scrollIntoViewIfNeeded();
+    const region = page.locator("[data-chart-bucket='0']");
+    await expect(region).toHaveCount(1);
+    const box = (await region.boundingBox())!;
+    await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(page.locator(".analytics-tooltip")).toContainText("0.00");
+    const tooltip = (await page.locator(".analytics-tooltip").boundingBox())!;
+    expect(tooltip.x).toBeGreaterThanOrEqual(0);
+    expect(tooltip.x + tooltip.width).toBeLessThanOrEqual(390);
+    await page.touchscreen.tap(5, 5);
+    await expect(page.locator(".analytics-tooltip")).toHaveCount(0);
+    await noOverflow(page);
+  } finally {
+    await context.close();
+  }
+});
+
+for (const width of [700, 701, 1100, 1101]) {
+  test(`beer detail exact layout breakpoint ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 390 });
+    await stub(page);
+    await page.goto("/explore/beers/1");
+    await expect(page.getByRole("heading", { name: beer.name })).toBeVisible();
+    const chart = (await page.locator(".beer-rating-section").boundingBox())!;
+    const history = (await page.locator(".beer-history").boundingBox())!;
+    if (width <= 1100) expect(history.y).toBeGreaterThan(chart.y);
+    else expect(history.x).toBeGreaterThan(chart.x + chart.width);
+    await noOverflow(page);
+  });
+}

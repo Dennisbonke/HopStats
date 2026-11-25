@@ -567,7 +567,7 @@ export default function ExplorerBeers() {
                                   saveExplorerScroll(location.search)
                                 }
                               >
-                                {beer.name}
+                                <strong>{beer.name}</strong>
                               </Link>
                             </div>
                           </td>
