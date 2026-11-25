@@ -1120,6 +1120,12 @@ async function expectButtonVariantStyles(
     },
   }[variant];
 
+  // The pointer survives route changes and can land on a newly positioned
+  // fixture button. Establish an unhovered baseline before testing :hover.
+  await page.mouse.move(0, 0);
+  await expect
+    .poll(() => button.evaluate((element) => element.matches(":hover")))
+    .toBe(false);
   const normal = await readButtonCascadeStyles(button);
   if (variant === "ghost") {
     expect(

@@ -33,3 +33,23 @@ export async function fetchExploreBeers(
     throw new Error(`Unable to load beer catalogue (${response.status})`);
   return (await response.json()) as ExploreBeersResponse;
 }
+
+export type ExploreOptionsResponse = {
+  items: ExploreEntity[];
+  has_more: boolean;
+};
+export async function fetchExploreOptions(
+  category: "breweries" | "styles",
+  params = new URLSearchParams(),
+): Promise<ExploreOptionsResponse> {
+  const response = await apiFetch(
+    `/api/v1/explore/filter-options/${category}?${params}`,
+  );
+  if (!response.ok) throw new Error("Unable to load filter options");
+  return response.json() as Promise<ExploreOptionsResponse>;
+}
+export async function fetchExploreBounds(): Promise<{ abv_max: number }> {
+  const response = await apiFetch("/api/v1/explore/filter-bounds");
+  if (!response.ok) throw new Error("Unable to load ABV bounds");
+  return response.json() as Promise<{ abv_max: number }>;
+}
