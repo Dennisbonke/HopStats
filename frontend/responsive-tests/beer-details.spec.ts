@@ -861,6 +861,14 @@ test("beer large coincident tooltip stays inside a short viewport and remains sc
   );
   await page.goto("/explore/beers/1");
   await page.locator(".beer-rating-chart").scrollIntoViewIfNeeded();
+  // Deliver the scroll event before starting a stationary touch gesture. The
+  // interaction intentionally cancels touches that overlap page scrolling.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
   const region = page.locator("[data-chart-bucket='0']");
   const bounds = (await region.boundingBox())!;
   const pointer = {
