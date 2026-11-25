@@ -1434,6 +1434,9 @@ for (const bounds of [
     const params = new URL(page.url()).searchParams;
     params.set("page", "2");
     await page.goto(`/explore/beers?${params}`);
+    // Restored controls can precede the catalogue effects, especially in WebKit.
+    // Exclude the reload's startup requests from the no-op interaction baseline.
+    await expect(page.getByRole("table")).toBeVisible();
     await expect(minimum).toHaveValue("3.70");
     const equivalentUrl = page.url();
     const equivalentCount = requests.length;
@@ -1466,6 +1469,7 @@ test("Explorer review fixes: unchanged mobile Apply preserves explicit ranges an
   await page.goto(
     "/explore/beers?page=2&brewery_id=1&style_id=2&rating_min=0&rating_max=5&abv_min=0&abv_max=100.01&future=kept",
   );
+  await expect(page.locator(".explorer-beer-card").first()).toBeVisible();
   await page.getByRole("button", { name: "Filters (4)" }).click();
   const sheet = page.getByRole("dialog");
   const original = page.url();
@@ -1497,6 +1501,7 @@ test("Explorer review fixes: unchanged mobile Apply preserves explicit ranges an
   await expect(page).toHaveURL(/\/explore\/beers\?future=kept$/);
   await expect.poll(() => requests.length).toBe(count + 1);
   await page.goto("/explore/beers?page=2&future=kept");
+  await expect(page.locator(".explorer-beer-card").first()).toBeVisible();
   await page.getByRole("button", { name: "Filters (0)" }).click();
   const inactive = page.url();
   const inactiveCount = requests.length;
