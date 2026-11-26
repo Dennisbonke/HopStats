@@ -132,26 +132,11 @@
   .login-page .login-card {
     padding: 1rem;
   }
-  .explorer-filter-sheet header {
+  .explorer-filter-sheet.theme-aware header {
     padding-block: 0.25rem;
   }
 }
 
-/* Overlays own their safe area, outside main-content padding. Whole form
- * dialogs scroll so actions remain reachable even with the keyboard open. */
-.milestone-dialog-backdrop {
-  padding: max(0.5rem, var(--safe-top)) max(0.5rem, var(--safe-right))
-    max(0.5rem, var(--safe-bottom)) max(0.5rem, var(--safe-left));
-}
-.milestone-dialog-backdrop .milestone-dialog {
-  min-height: 0;
-  max-height: calc(
-    100vh - max(0.5rem, var(--safe-top)) - max(0.5rem, var(--safe-bottom))
-  );
-  max-height: calc(
-    100dvh - max(0.5rem, var(--safe-top)) - max(0.5rem, var(--safe-bottom))
-  );
-}
 .app .inventory-page .inventory-dialog {
   padding: max(1rem, var(--safe-top)) max(1rem, var(--safe-right))
     max(1rem, var(--safe-bottom)) max(1rem, var(--safe-left));

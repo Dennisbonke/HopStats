@@ -38,9 +38,8 @@ const links = [
   ["/imports", "Imports"],
 ];
 
-// Keep dark theme activation tied to complete, migrated route surfaces.
-// Analytics includes its URL-selected Overview and Drinking Trends panels;
-// unfinished Explorer catalogues and the wildcard placeholder remain light.
+// Keep explicit route theme boundaries for migrated surfaces. The document
+// also owns theme tokens so exposed safe areas match these local surfaces.
 const themeAwareRoutes = [
   "/",
   "/inventory",

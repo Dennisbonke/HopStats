@@ -93,6 +93,31 @@ for (const theme of ["light", "dark"] as const) {
           });
         }
       }
+      const explorer = await page.context().newPage();
+      await stubBeer(explorer);
+      await explorer.setViewportSize({ width, height });
+      await explorer.goto("/explore/beers");
+      await expect(
+        explorer.locator(
+          compact ? ".explorer-beer-cards" : ".explorer-beer-table",
+        ),
+      ).toBeVisible();
+      if (compact) {
+        const firstResult = (await explorer
+          .locator(".explorer-beer-card")
+          .first()
+          .boundingBox())!;
+        expect(firstResult.y).toBeLessThan(height - 30);
+        await contained(explorer.getByLabel("Sort beers"), explorer);
+        await explorer.getByRole("button", { name: "Filters (0)" }).click();
+        const sheet = explorer.getByRole("dialog");
+        await contained(
+          sheet.getByRole("button", { name: "Apply filters" }),
+          explorer,
+        );
+        await sheet.getByRole("button", { name: "Cancel" }).click();
+      }
+      await explorer.close();
     });
   }
   test(`short landscape Explorer rotation, safe areas and overlays ${theme}`, async ({
@@ -103,6 +128,10 @@ for (const theme of ["light", "dark"] as const) {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/explore/beers?sort=name_asc&rating_min=3");
     await expect(page.locator(".explorer-beer-cards")).toBeVisible();
+    const portraitContentTop = (await page
+      .locator(".explorer-beer-card")
+      .first()
+      .boundingBox())!.y;
     await page.screenshot({ path: info.outputPath(`portrait-${theme}.png`) });
     await page.getByRole("button", { name: "Filters (1)" }).click();
     await page.setViewportSize({ width: 844, height: 280 });
@@ -131,8 +160,9 @@ for (const theme of ["light", "dark"] as const) {
       .locator(".explorer-beer-card")
       .first()
       .boundingBox())!;
-    // First result starts in the initial 240px even on the shortest phone.
-    expect(card.y).toBeLessThan(240);
+    // Even with an active chip, expose at least 30px of the first result.
+    expect(card.y).toBeLessThan(250);
+    expect(card.y).toBeLessThan(portraitContentTop - 60);
     await page.screenshot({ path: info.outputPath(`catalogue-${theme}.png`) });
     await page.getByRole("button", { name: "Main menu" }).click();
     const menu = page.getByRole("navigation", { name: "Main navigation" });
@@ -167,6 +197,19 @@ for (const theme of ["light", "dark"] as const) {
       await page.screenshot({
         path: info.outputPath(`safe-${left}-${right}-${theme}.png`),
       });
+      await page.getByRole("button", { name: "Filters (1)" }).click();
+      const closeBox = (await sheet
+        .getByRole("button", { name: "Close filters" })
+        .boundingBox())!;
+      expect(closeBox.x + closeBox.width).toBeLessThanOrEqual(844 - right);
+      await contained(
+        sheet.getByRole("button", { name: "Apply filters" }),
+        page,
+      );
+      await page.screenshot({
+        path: info.outputPath(`safe-sheet-${left}-${right}-${theme}.png`),
+      });
+      await sheet.getByRole("button", { name: "Cancel" }).click();
     }
     await page.emulateMedia({
       colorScheme: theme === "dark" ? "light" : "dark",
@@ -207,6 +250,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.screenshot({ path: info.outputPath(`form-${theme}.png`) });
     for (const viewport of [
       { width: 568, height: 240 },
+      { width: 568, height: 160 },
       { width: 390, height: 844 },
       { width: 844, height: 280 },
     ]) {
@@ -269,5 +313,35 @@ test("landscape screenshot comparisons against master", async ({
       }
       await context.close();
     }
+  }
+});
+
+test("compact backend failure remains actionable", async ({ page }) => {
+  await stubPages(page);
+  await page.route("**/api/v1/health", (route) =>
+    route.fulfill({ status: 503, json: { detail: "Unavailable" } }),
+  );
+  await page.setViewportSize({ width: 568, height: 240 });
+  await page.goto("/");
+  await expect(page.locator(".app-status")).toBeVisible();
+  await expect(page.locator(".app-status")).toHaveText("Backend: unavailable");
+  await expect(page.locator(".header-connection")).toHaveCount(0);
+});
+
+test("landscape authentication and keyboard-height form scrolling", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/auth/me", (route) =>
+    route.fulfill({ status: 401, json: { detail: "Sign in required" } }),
+  );
+  for (const theme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.setViewportSize({ width: 568, height: 240 });
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+    const submit = page.getByRole("button", { name: "Sign in" });
+    await submit.scrollIntoViewIfNeeded();
+    await contained(submit, page);
+    await expect(page.locator("html")).toHaveCSS("color-scheme", theme);
   }
 });

@@ -590,6 +590,7 @@
   max-width: 40rem;
   height: 90vh;
   height: 90dvh;
+  max-height: 95vh;
   max-height: 95dvh;
   margin: 0 auto;
   padding: 0;

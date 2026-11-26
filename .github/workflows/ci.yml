@@ -48,6 +48,7 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium firefox webkit
       - name: Prepare exact master baseline for screenshot comparisons
+        working-directory: ${{ github.workspace }}
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
