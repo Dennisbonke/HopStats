@@ -632,6 +632,15 @@ for (const width of [320, 1280]) {
       await expect(page.locator("[data-chart-bucket]")).toHaveCount(
         width === 1280 ? 2 : 1,
       );
+      // Programmatic scrolling can return before its scroll event is delivered.
+      // A stationary tap must begin after that event, or the touch controller
+      // correctly treats it as an overlapping scroll gesture and cancels it.
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
       const region = page.locator(
         `[data-chart-bucket='${width === 1280 ? 1 : 0}']`,
       );
