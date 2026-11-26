@@ -21,6 +21,7 @@ async function contained(control: Locator, page: Page) {
   expect(box.height).toBeGreaterThanOrEqual(43);
 }
 async function canvas(page: Page, theme: string) {
+  await expect(page.locator(".app")).toBeVisible();
   const geometry = await page.evaluate(() => {
     const html = document.documentElement;
     const app = document.querySelector(".app")!;
@@ -29,6 +30,10 @@ async function canvas(page: Page, theme: string) {
         (el) => getComputedStyle(el).backgroundColor,
       ),
       scheme: getComputedStyle(html).colorScheme,
+      viewportWidth: html.clientWidth,
+      heights: [html, document.body, document.querySelector("#root")!, app].map(
+        (el) => el.getBoundingClientRect().height,
+      ),
       widths: [html, document.body, document.querySelector("#root")!, app].map(
         (el) => el.getBoundingClientRect().width,
       ),
@@ -39,7 +44,10 @@ async function canvas(page: Page, theme: string) {
   expect(new Set(geometry.colors).size).toBe(1);
   expect(geometry.colors[0]).not.toBe("rgba(0, 0, 0, 0)");
   geometry.widths.forEach((width) =>
-    expect(Math.abs(width - page.viewportSize()!.width)).toBeLessThanOrEqual(1),
+    expect(Math.abs(width - geometry.viewportWidth)).toBeLessThanOrEqual(1),
+  );
+  geometry.heights.forEach((height) =>
+    expect(height).toBeGreaterThanOrEqual(page.viewportSize()!.height),
   );
   expect(geometry.overflow).toBeLessThanOrEqual(1);
 }
