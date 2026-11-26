@@ -1014,7 +1014,13 @@
   outline-offset: 4px;
 }
 .beer-rating-tooltip-content {
-  max-height: calc(100dvh - 64px);
+  max-height: calc(100vh - 64px);
+  max-height: min(
+    calc(100dvh - 64px),
+    calc(
+      100dvh - max(8px, var(--safe-top)) - max(8px, var(--safe-bottom)) - 32px
+    )
+  );
   overflow: auto;
   pointer-events: auto;
 }

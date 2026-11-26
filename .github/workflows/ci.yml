@@ -56,6 +56,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/hopstats-before"
           git archive "$BASE_SHA" frontend | tar -x -C "$RUNNER_TEMP/hopstats-before"
           ln -s "$GITHUB_WORKSPACE/frontend/node_modules" "$RUNNER_TEMP/hopstats-before/frontend/node_modules"
+          # Shared read-only dependencies, separate Vite optimization caches.
+          sed -i 's/defineConfig({/defineConfig({ cacheDir: ".vite-baseline",/' "$RUNNER_TEMP/hopstats-before/frontend/vite.config.ts"
           echo "HOPSTATS_BASELINE_DIR=$RUNNER_TEMP/hopstats-before/frontend" >> "$GITHUB_ENV"
       - run: npx playwright test mobile-landscape.spec.ts --max-failures=1
       - uses: actions/upload-artifact@v7

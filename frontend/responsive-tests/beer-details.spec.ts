@@ -702,6 +702,12 @@ test("beer large coincident tooltip stays inside a short viewport and remains sc
     }),
   );
   await page.goto("/explore/beers/1");
+  // Simulate a notch/home indicator: placement and scrollable height must use
+  // the same safe boundaries, including when all timestamps coincide.
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty("--safe-top", "47px");
+    document.documentElement.style.setProperty("--safe-bottom", "34px");
+  });
   await page.locator(".beer-rating-chart").scrollIntoViewIfNeeded();
   // Deliver the scroll event before starting a stationary touch gesture. The
   // interaction intentionally cancels touches that overlap page scrolling.
@@ -728,8 +734,8 @@ test("beer large coincident tooltip stays inside a short viewport and remains sc
   const box = (await tooltip.boundingBox())!;
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(320);
-  expect(box.y).toBeGreaterThanOrEqual(0);
-  expect(box.y + box.height).toBeLessThanOrEqual(390);
+  expect(box.y).toBeGreaterThanOrEqual(47);
+  expect(box.y + box.height).toBeLessThanOrEqual(390 - 34);
   const content = tooltip.locator(".beer-rating-tooltip-content");
   await content.dispatchEvent("pointerdown", pointer);
   await content.evaluate((node) => {
