@@ -54,7 +54,10 @@ mode. Active chips and every filter group remain available.
 
 Shared page heading spacing and main top padding are reduced. Dashboard and
 Milestones overview omit their introductory copy, retain statistics and actions,
-and reduce grid gaps. Milestone detail instructions remain visible. Beer detail
+and reduce grid gaps. At 700–960px in compact mode, primary Dashboard statistics
+and Milestone counts share a single row; Dashboard cards use less padding while
+retaining their text sizes and intrinsic content height. Narrower windows retain
+two columns. Milestone detail instructions remain visible. Beer detail
 retains back navigation, stats, history pagination/focus, photos, long comments
 and scroll restoration. Its chart is 200px high in compact mode; chart selection
 and coincident timestamp bucketing are unchanged. Dashboard and Analytics chart
@@ -89,7 +92,9 @@ synthetic fixtures. No production database is used. Artifacts include catalogue,
 beer profile/chart, Dashboard, Analytics, Milestones, Inventory, Locations,
 Imports, menu, filter sheet, form, simulated safe areas and portrait/desktop
 comparisons. Browser emulation and synthetic CSS insets are not physical iPhone
-acceptance. All six normal CI jobs remain required.
+acceptance. All six normal CI jobs remain required. The suite currently collects 489
+responsive cases (63 new landscape cases), alongside 196 frontend unit tests
+and 190 backend tests.
 
 On this production Pi, browser/Docker checks are deferred to CI per AGENTS.md.
 The initial full local frontend run was stopped after worker-concurrency timeouts;

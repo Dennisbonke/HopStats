@@ -51,6 +51,27 @@ async function canvas(page: Page, theme: string) {
   );
   expect(geometry.overflow).toBeLessThanOrEqual(1);
 }
+// Capture chart artifacts after their entrance animation reaches a stable,
+// nonempty geometry, rather than taking an image of the initial zero-height bars.
+async function settleBars(page: Page) {
+  let previous = "";
+  await expect
+    .poll(async () => {
+      const heights = await page
+        .locator(".chart-canvas .recharts-bar-rectangle path")
+        .evaluateAll((nodes) =>
+          nodes.map(
+            (node) => Math.round(node.getBoundingClientRect().height * 10) / 10,
+          ),
+        );
+      const current = JSON.stringify(heights);
+      const stable =
+        heights.some((height) => height > 0) && previous === current;
+      previous = current;
+      return stable;
+    })
+    .toBe(true);
+}
 for (const theme of ["light", "dark"] as const) {
   for (const [width, height] of viewports) {
     test(`short landscape application geometry ${width}x${height} ${theme}`, async ({
@@ -58,7 +79,7 @@ for (const theme of ["light", "dark"] as const) {
     }, info) => {
       await page.emulateMedia({ colorScheme: theme });
       await page.setViewportSize({ width, height });
-      await stubPages(page);
+      await stubPages(page, true);
       const compact = width <= 960;
       for (const route of [
         "/",
@@ -71,6 +92,10 @@ for (const theme of ["light", "dark"] as const) {
       ]) {
         await page.goto(route);
         await expect(page.locator(".app-header")).toBeVisible();
+        if (route === "/")
+          await expect(
+            page.locator(".dashboard-primary strong").first(),
+          ).toHaveText("12");
         await canvas(page, theme);
         const header = (await page.locator(".app-header").boundingBox())!;
         const main = (await page.locator(".app-main").boundingBox())!;
@@ -88,12 +113,30 @@ for (const theme of ["light", "dark"] as const) {
             page,
           );
         }
+        if (
+          compact &&
+          width >= 700 &&
+          (route === "/" || route === "/milestones")
+        ) {
+          const cells = page.locator(
+            route === "/"
+              ? ".dashboard-primary .dashboard-metric-card"
+              : ".milestone-counts > *",
+          );
+          const tops = await cells.evaluateAll((nodes) =>
+            nodes.map((node) => node.getBoundingClientRect().top),
+          );
+          expect(tops).toHaveLength(4);
+          expect(Math.max(...tops) - Math.min(...tops)).toBeLessThanOrEqual(1);
+        }
         if (width === 844 && height === 280) {
-          if (route === "/analytics")
+          if (route === "/analytics") {
             await page
               .locator(".chart-canvas")
               .first()
               .scrollIntoViewIfNeeded();
+            await settleBars(page);
+          }
           await page.screenshot({
             path: info.outputPath(
               `${route.replaceAll("/", "-") || "dashboard"}-${theme}.png`,
@@ -243,12 +286,15 @@ for (const theme of ["light", "dark"] as const) {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/explore/beers");
     await expect(page.locator(".explorer-filter-sidebar")).toBeVisible();
+    await expect(page.locator(".explorer-filter-sidebar")).not.toContainText(
+      "Loading",
+    );
     await page.screenshot({ path: info.outputPath(`desktop-${theme}.png`) });
   });
   test(`short landscape form dialog rotates and scrolls ${theme}`, async ({
     page,
   }, info) => {
-    await stubPages(page);
+    await stubPages(page, true);
     await page.emulateMedia({ colorScheme: theme });
     await page.setViewportSize({ width: 844, height: 280 });
     await page.goto("/milestones");
@@ -267,6 +313,9 @@ for (const theme of ["light", "dark"] as const) {
       await cancel.scrollIntoViewIfNeeded();
       await contained(cancel, page);
     }
+    await page.screenshot({
+      path: info.outputPath(`form-actions-${theme}.png`),
+    });
     await dialog.getByRole("button", { name: "Cancel" }).click();
     await expect(dialog).toHaveCount(0);
     await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
@@ -286,7 +335,7 @@ test("landscape screenshot comparisons against master", async ({
         colorScheme: theme,
       });
       const page = await context.newPage();
-      await stubPages(page);
+      await stubPages(page, true);
       const origin =
         version === "before"
           ? "http://127.0.0.1:5174"
@@ -325,7 +374,7 @@ test("landscape screenshot comparisons against master", async ({
 });
 
 test("compact backend failure remains actionable", async ({ page }) => {
-  await stubPages(page);
+  await stubPages(page, true);
   await page.route("**/api/v1/health", (route) =>
     route.fulfill({ status: 503, json: { detail: "Unavailable" } }),
   );

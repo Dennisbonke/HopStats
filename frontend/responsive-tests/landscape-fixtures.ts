@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-export async function stubPages(page: Page) {
+export async function stubPages(page: Page, populated = false) {
   await page.route("**/api/v1/**", async (route) => {
     const requestUrl = new URL(route.request().url());
     const path = requestUrl.pathname;
@@ -11,12 +11,12 @@ export async function stubPages(page: Page) {
       body = { status: "ok" };
     } else if (path.endsWith("/dashboard")) {
       body = {
-        total_checkins: 0,
-        unique_beers: 0,
-        unique_breweries: 0,
-        unique_styles: 0,
-        average_personal_rating: null,
-        rated_checkins: 0,
+        total_checkins: populated ? 20 : 0,
+        unique_beers: populated ? 12 : 0,
+        unique_breweries: populated ? 6 : 0,
+        unique_styles: populated ? 5 : 0,
+        average_personal_rating: populated ? 4.25 : null,
+        rated_checkins: populated ? 18 : 0,
         inventory_units: 0,
         unique_inventory_beers: 0,
         not_confirmed_checked_in: 0,
