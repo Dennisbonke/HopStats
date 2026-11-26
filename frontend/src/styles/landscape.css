@@ -132,6 +132,13 @@
   .login-page.theme-aware .login-card {
     padding: 1rem;
   }
+  .app .inventory-page .inventory-dialog {
+    padding: max(1rem, var(--safe-top)) max(1rem, var(--safe-right))
+      max(1rem, var(--safe-bottom)) max(1rem, var(--safe-left));
+  }
+  .explorer-filter-sheet.theme-aware footer {
+    padding-block: 0.5rem max(0.5rem, var(--safe-bottom));
+  }
   .explorer-filter-sheet.theme-aware header {
     padding-block: 0.25rem;
   }
@@ -152,9 +159,4 @@
     min-height: 6.5rem;
     padding: 0.75rem;
   }
-}
-
-.app .inventory-page .inventory-dialog {
-  padding: max(1rem, var(--safe-top)) max(1rem, var(--safe-right))
-    max(1rem, var(--safe-bottom)) max(1rem, var(--safe-left));
 }

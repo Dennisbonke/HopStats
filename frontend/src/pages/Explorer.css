@@ -622,8 +622,8 @@
 .explorer-filter-sheet footer {
   display: flex;
   gap: 0.75rem;
-  padding: 0.5rem max(0.75rem, var(--safe-right))
-    max(0.5rem, var(--safe-bottom)) max(0.75rem, var(--safe-left));
+  padding: 0.75rem max(0.75rem, var(--safe-right))
+    max(0.75rem, var(--safe-bottom)) max(0.75rem, var(--safe-left));
   border-top: 1px solid var(--color-border);
 }
 .explorer-filter-sheet footer button {
