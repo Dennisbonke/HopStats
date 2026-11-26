@@ -1602,7 +1602,7 @@ test("Imports use the semantic theme and keep controls and history readable", as
     await expect(page.locator(".app")).toHaveCSS("color-scheme", colorScheme);
 
     const root = page.locator("html");
-    await expect(root).toHaveCSS("color-scheme", "light");
+    await expect(root).toHaveCSS("color-scheme", colorScheme);
     const uploadCard = page.getByRole("region", {
       name: "Untappd check-in CSV",
     });
@@ -1727,7 +1727,7 @@ test("shared Button variants keep token colors across migrated theme contexts", 
     await page.emulateMedia({ colorScheme });
     await page.goto("/imports");
     await expect(page.getByRole("heading", { name: "Imports" })).toBeVisible();
-    await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
+    await expect(page.locator("html")).toHaveCSS("color-scheme", colorScheme);
     await expect(page.locator(".app")).toHaveClass(/theme-aware/);
     await expect(page.locator(".app")).toHaveCSS("color-scheme", colorScheme);
     await installButtonCascadeFixture(page, ".history-card");
@@ -1772,7 +1772,7 @@ test("Analytics and Drinking Trends use semantic themes without affecting the sh
     await expect(page.getByText("Check-in Breakdown")).toBeVisible();
     await expect(page.locator(".app")).toHaveClass(/theme-aware/);
     await expect(page.locator(".app")).toHaveCSS("color-scheme", colorScheme);
-    await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
+    await expect(page.locator("html")).toHaveCSS("color-scheme", colorScheme);
     await expect(page.locator(".analytics-chart-panel").first()).toHaveCSS(
       "background-color",
       colorScheme === "dark" ? "rgb(23, 37, 51)" : "rgb(255, 255, 255)",
@@ -2081,7 +2081,7 @@ test("Analytics charts keep controls, labels, and legends usable across viewport
     await expect(page.getByText("Check-in Breakdown")).toBeVisible();
     await expect(page.locator(".app")).toHaveClass(/theme-aware/);
     await expect(page.locator(".app")).toHaveCSS("color-scheme", colorScheme);
-    await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
+    await expect(page.locator("html")).toHaveCSS("color-scheme", colorScheme);
 
     for (const width of [320, 390, 768, 1280]) {
       await page.setViewportSize({
@@ -2103,7 +2103,7 @@ test("Analytics charts keep controls, labels, and legends usable across viewport
         )
         .toBeLessThanOrEqual(width);
       await expectNoDocumentOverflow(page);
-      await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
+      await expect(page.locator("html")).toHaveCSS("color-scheme", colorScheme);
       await expect(breakdown).toHaveCSS(
         "background-color",
         colorScheme === "dark" ? "rgb(23, 37, 51)" : "rgb(255, 255, 255)",
@@ -3275,7 +3275,7 @@ test("Milestones keep semantic statuses, progress, forms, and long names readabl
   await expectNoDocumentOverflow(page);
 });
 
-test("unfinished Explorer catalogues remain on the compatibility palette", async ({
+test("unfinished Explorer catalogues inherit the document theme", async ({
   page,
 }) => {
   await stubApplication(page);
@@ -3291,10 +3291,10 @@ test("unfinished Explorer catalogues remain on the compatibility palette", async
       await expect(page.locator(".explorer-page")).not.toHaveClass(
         /theme-aware/,
       );
-      await expect(page.locator(".app")).toHaveCSS("color-scheme", "light");
+      await expect(page.locator(".app")).toHaveCSS("color-scheme", colorScheme);
       await expect(page.locator(".explorer-upcoming")).toHaveCSS(
         "background-color",
-        "rgb(238, 242, 247)",
+        colorScheme === "dark" ? "rgb(37, 55, 71)" : "rgb(238, 242, 247)",
       );
       await expectNoDocumentOverflow(page);
     }
