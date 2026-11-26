@@ -59,6 +59,8 @@ jobs:
           # Shared read-only dependencies, separate Vite optimization caches.
           sed -i 's/defineConfig({/defineConfig({ cacheDir: ".vite-baseline",/' "$RUNNER_TEMP/hopstats-before/frontend/vite.config.ts"
           echo "HOPSTATS_BASELINE_DIR=$RUNNER_TEMP/hopstats-before/frontend" >> "$GITHUB_ENV"
+      - name: Verify document palette and chart tooltip theme regressions
+        run: npx playwright test --grep 'document and Explorer use the shared semantic palette|Analytics tooltips stay readable' --max-failures=1
       - run: npx playwright test mobile-landscape.spec.ts --max-failures=1
       - uses: actions/upload-artifact@v7
         if: always()

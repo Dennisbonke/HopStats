@@ -1305,7 +1305,7 @@ test("grouped Inventory stays readable and wraps at mobile and desktop widths", 
   }
 });
 
-test("semantic themes stay scoped while Explorer uses the shared palette", async ({
+test("document and Explorer use the shared semantic palette", async ({
   page,
 }) => {
   await stubApplication(page);
@@ -1453,12 +1453,21 @@ test("semantic themes stay scoped while Explorer uses the shared palette", async
         surfaceToken: style.getPropertyValue("--color-surface").trim(),
       };
     });
-    expect(rootPalette).toEqual({
-      colorScheme: "light",
-      canvas: "rgb(245, 247, 251)",
-      foreground: "rgb(23, 32, 51)",
-      surfaceToken: "#ffffff",
-    });
+    expect(rootPalette).toEqual(
+      colorScheme === "light"
+        ? {
+            colorScheme,
+            canvas: "rgb(245, 247, 251)",
+            foreground: "rgb(23, 32, 51)",
+            surfaceToken: "#ffffff",
+          }
+        : {
+            colorScheme,
+            canvas: "rgb(16, 25, 35)",
+            foreground: "rgb(241, 245, 249)",
+            surfaceToken: "#172533",
+          },
+    );
 
     for (const width of [320, 390, 768, 1280]) {
       await page.setViewportSize({ width, height: width === 1280 ? 800 : 844 });
@@ -2715,7 +2724,9 @@ test("Analytics tooltips stay readable and inside the viewport at chart edges", 
     expect(geometry.tooltipToken, context).toBe(
       colorScheme === "dark" ? "#0b121a" : "#172033",
     );
-    expect(geometry.bodyTooltipToken, context).toBe("#172033");
+    expect(geometry.bodyTooltipToken, context).toBe(
+      colorScheme === "dark" ? "#0b121a" : "#172033",
+    );
     expect(geometry.colorScheme, context).toBe(colorScheme);
     expect(geometry.hasThemeBoundary, context).toBe(true);
     expect(geometry.bodyHasThemeBoundary, context).toBe(false);
