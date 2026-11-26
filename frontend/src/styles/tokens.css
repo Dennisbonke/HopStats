@@ -67,14 +67,16 @@
 }
 
 /*
- * Dark values are opt-in. Keep the document root light until each route is
- * migrated as a complete foreground/background surface.
+ * Theme the document as well as portaled surfaces so safe areas and overscroll
+ * use the same canvas. Theme selection follows the existing system preference.
  */
+:root,
 .theme-aware {
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
+  :root,
   .theme-aware {
     color-scheme: dark;
 

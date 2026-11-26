@@ -125,7 +125,9 @@ test("Explorer colors and active tab stay distinct in light and dark themes", as
         .getPropertyValue("--color-surface")
         .trim(),
     }));
-    expect(themeIsolation.pageBackground).toBe("rgb(245, 247, 251)");
+    expect(themeIsolation.pageBackground).toBe(
+      colorScheme === "dark" ? "rgb(16, 25, 35)" : "rgb(245, 247, 251)",
+    );
     expect(themeIsolation.explorerBackground).toBe(
       colorScheme === "dark" ? "rgb(16, 25, 35)" : "rgb(245, 247, 251)",
     );
@@ -970,10 +972,10 @@ for (const colorScheme of ["light", "dark"] as const) {
     await sheet.getByRole("button", { name: "Cancel" }).click();
     await expect(page.locator(".explorer-filter-content")).toHaveCount(0);
     // Crossing the exact breakpoint discards drafts and releases body locking.
-    await page.setViewportSize({ width: 700, height: 400 });
+    await page.setViewportSize({ width: 700, height: 600 });
     await page.getByRole("button", { name: "Filters (3)" }).click();
     await sheet.getByRole("button", { name: "Clear all", exact: true }).click();
-    await page.setViewportSize({ width: 701, height: 400 });
+    await page.setViewportSize({ width: 701, height: 600 });
     await expect(sheet).toHaveCount(0);
     await expect(page.locator(".explorer-filter-content")).toHaveCount(1);
     await expect(page.locator("body")).not.toHaveCSS("position", "fixed");

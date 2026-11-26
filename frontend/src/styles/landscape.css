@@ -1,0 +1,158 @@
+/* Shared short-phone mode. Keep Explorer's MOBILE_QUERY in sync. The width
+ * ceiling protects desktop windows; 600px-high tablets retain normal spacing. */
+@media (max-width: 960px) and (orientation: landscape) and (max-height: 500px) {
+  .app .app-header {
+    min-height: 0;
+    padding-block: max(0.25rem, var(--safe-top)) 0.25rem;
+    gap: 0.65rem;
+  }
+  .app .app-header .brand {
+    font-size: 1.15rem;
+    margin-right: auto;
+  }
+  .app .app-header .header-connection {
+    display: inline-flex;
+    color: var(--color-status-success);
+  }
+  .app .app-header nav {
+    max-height: calc(100vh - 3.5rem - var(--safe-top));
+    max-height: calc(100dvh - 3.5rem - var(--safe-top));
+  }
+  .app .app-main .app-status--connected {
+    display: none;
+  }
+  .app > .app-main {
+    padding-top: 0.5rem;
+  }
+  .app .page-heading,
+  .app .explorer-tabs {
+    margin-bottom: 0.35rem;
+  }
+  .app .page-heading h2,
+  .app .milestone-page-heading h1,
+  .app .milestone-page-heading h2,
+  .app .dashboard-heading h1 {
+    font-size: 1.35rem;
+    margin-block: 0 0.25rem;
+  }
+  .app .explorer-page > .page-heading > p,
+  .app .dashboard-heading > p,
+  .app .milestone-page:not(.milestone-detail) > .milestone-page-heading p {
+    display: none;
+  }
+  .app .dashboard-heading {
+    padding: 0;
+  }
+  .app .dashboard-page,
+  .app .milestone-page {
+    gap: 0.65rem;
+  }
+  .app .milestone-page-heading {
+    flex-direction: row;
+    align-items: center;
+  }
+  .app .milestone-page-heading > .ui-button {
+    width: auto;
+  }
+  .app .explorer-page {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 0.75rem;
+  }
+  .app .explorer-page > .page-heading {
+    align-self: center;
+    margin: 0;
+  }
+  .app .explorer-page > :not(.page-heading):not(.explorer-tabs) {
+    grid-column: 1 / -1;
+  }
+  .app .explorer-controls .ui-form-field > label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .app .explorer-active-filters {
+    padding-block: 0.25rem;
+    margin-bottom: 0.4rem;
+  }
+  .app .explorer-chip {
+    min-height: 2.75rem;
+  }
+  .app .explorer-catalogue-heading > div {
+    display: none;
+  }
+  .app .explorer-catalogue-heading {
+    margin-bottom: 0;
+  }
+  .app .explorer-page .explorer-controls {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .app .explorer-page .explorer-search-control {
+    flex: 1 1 9rem;
+  }
+  .app .explorer-page .explorer-sort-control {
+    flex: 1 1 10rem;
+  }
+  .app .explorer-page .explorer-controls .ui-button {
+    width: auto;
+    flex: 0 0 auto;
+  }
+  .app .explorer-page .explorer-mobile-filters {
+    display: block;
+    margin: 0;
+  }
+  .app .beer-detail-back {
+    margin-bottom: 0.25rem;
+  }
+  .app .beer-profile,
+  .app .beer-personal-stats {
+    margin-bottom: 0.75rem;
+  }
+  .app .beer-personal-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .app .beer-rating-chart {
+    height: 200px;
+  }
+  .app .dashboard-chart,
+  .app .analytics-page .chart-canvas {
+    height: 14rem;
+  }
+  .login-page .login-brand {
+    margin-bottom: 0.5rem;
+  }
+  .login-page .login-card {
+    padding: 1rem;
+  }
+  .explorer-filter-sheet header {
+    padding-block: 0.25rem;
+  }
+}
+
+/* Overlays own their safe area, outside main-content padding. Whole form
+ * dialogs scroll so actions remain reachable even with the keyboard open. */
+.milestone-dialog-backdrop {
+  padding: max(0.5rem, var(--safe-top)) max(0.5rem, var(--safe-right))
+    max(0.5rem, var(--safe-bottom)) max(0.5rem, var(--safe-left));
+}
+.milestone-dialog-backdrop .milestone-dialog {
+  min-height: 0;
+  max-height: calc(
+    100vh - max(0.5rem, var(--safe-top)) - max(0.5rem, var(--safe-bottom))
+  );
+  max-height: calc(
+    100dvh - max(0.5rem, var(--safe-top)) - max(0.5rem, var(--safe-bottom))
+  );
+}
+.app .inventory-page .inventory-dialog {
+  padding: max(1rem, var(--safe-top)) max(1rem, var(--safe-right))
+    max(1rem, var(--safe-bottom)) max(1rem, var(--safe-left));
+}

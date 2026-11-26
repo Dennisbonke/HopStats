@@ -161,6 +161,16 @@ export default function App() {
     <div className={`app${themeAware ? " theme-aware" : ""}`}>
       <header className="app-header theme-aware">
         <div className="brand">🍺 HopStats</div>
+        {status === "connected" && (
+          <span
+            className="header-connection"
+            role="status"
+            aria-label="Backend: connected"
+            title="Backend: connected"
+          >
+            <span aria-hidden="true">●</span>
+          </span>
+        )}
         <Button
           type="button"
           className="mobile-menu-toggle"
@@ -211,7 +221,7 @@ export default function App() {
           </p>
         )}
         <StatusBadge
-          className="app-status theme-aware"
+          className={`app-status theme-aware${status === "connected" ? " app-status--connected" : ""}`}
           variant={
             status === "connected"
               ? "success"
