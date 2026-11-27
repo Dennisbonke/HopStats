@@ -584,7 +584,11 @@ async function stubApplication(
   page: Page,
   checkinsFixture = checkins,
   drinkingTrendsFixture = drinkingTrends,
-  options: { anonymous?: boolean; dashboard?: boolean } = {},
+  options: {
+    anonymous?: boolean;
+    dashboard?: boolean;
+    inventoryItems?: typeof inventoryItems;
+  } = {},
 ) {
   await page.route("**/api/v1/**", async (route) => {
     const url = new URL(route.request().url());
@@ -739,7 +743,7 @@ async function stubApplication(
     if (path === "/api/v1/inventory") {
       await route.fulfill({
         json: {
-          items: inventoryItems,
+          items: options.inventoryItems ?? inventoryItems,
           page: 1,
           page_size: 25,
           total: inventoryItems.length,
@@ -1230,10 +1234,63 @@ async function expectLegacyButtonCompatibility(page: Page, context: string) {
   expect(disabledStyles.opacity).toBe("0.5");
 }
 
+async function expectInventoryColumns(table: Locator) {
+  const geometry = await table.evaluate((element) => {
+    const headers = Array.from(element.querySelectorAll("thead th"));
+    const cells = Array.from(
+      element.querySelectorAll("tbody tr:first-child td"),
+    );
+    function textBox(cell: Element) {
+      const range = document.createRange();
+      range.selectNodeContents(cell);
+      const style = getComputedStyle(cell);
+      return {
+        lines: range.getClientRects().length,
+        textWidth: range.getBoundingClientRect().width,
+        available:
+          cell.clientWidth -
+          parseFloat(style.paddingLeft) -
+          parseFloat(style.paddingRight),
+        x: cell.getBoundingClientRect().x,
+        width: cell.getBoundingClientRect().width,
+      };
+    }
+    return {
+      headers: headers.map(textBox),
+      cells: cells.map(textBox),
+      scroll: element.parentElement!.scrollWidth,
+      client: element.parentElement!.clientWidth,
+      wrapping: [0, 1, 5].map(
+        (index) => getComputedStyle(cells[index]).whiteSpace,
+      ),
+      styleLines: textBox(cells[1]).lines,
+    };
+  });
+  for (const index of [2, 3]) {
+    expect(geometry.headers[index].lines).toBe(1);
+    expect(geometry.headers[index].width).toBeGreaterThanOrEqual(64);
+    for (const cell of [geometry.headers[index], geometry.cells[index]]) {
+      expect(cell.textWidth).toBeLessThanOrEqual(cell.available + 1);
+      expect(cell.lines).toBe(1);
+    }
+    expect(geometry.headers[index].x).toBeCloseTo(geometry.cells[index].x, 1);
+  }
+  for (const header of geometry.headers) {
+    expect(header.textWidth).toBeLessThanOrEqual(header.available + 1);
+  }
+  expect(geometry.wrapping).toEqual(["normal", "normal", "normal"]);
+  expect(geometry.styleLines).toBeGreaterThan(1);
+  expect(geometry.scroll).toBeLessThanOrEqual(geometry.client + 1);
+}
+
 test("grouped Inventory stays readable and wraps at mobile and desktop widths", async ({
   page,
 }) => {
-  await stubApplication(page);
+  await stubApplication(page, undefined, undefined, {
+    inventoryItems: inventoryItems.map((item, index) =>
+      index ? item : { ...item, quantity: 12345, abv: 12.5 },
+    ),
+  });
   await page.goto("/inventory");
   const groupToggle = page.getByLabel("Group by beer style");
   await expect(groupToggle).toBeVisible();
@@ -1248,12 +1305,19 @@ test("grouped Inventory stays readable and wraps at mobile and desktop widths", 
 
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
-    for (const width of [320, 390, 768, 1280]) {
-      await page.setViewportSize({ width, height: width === 1280 ? 800 : 844 });
+    for (const { width, height } of [
+      { width: 320, height: 568 },
+      { width: 390, height: 844 },
+      { width: 701, height: 844 },
+      { width: 768, height: 844 },
+      { width: 844, height: 280 },
+      { width: 1280, height: 800 },
+    ]) {
+      await page.setViewportSize({ width, height });
       const group = longStyleGroup;
       const groupHeading = group.locator(":scope > h3");
       const groupCount = groupHeading.locator("span");
-      const isMobile = width <= 520;
+      const isMobile = width <= 700;
       const beerName = isMobile
         ? group.locator(".inventory-card h3").first()
         : group.locator(".inventory-table td:first-child strong").first();
@@ -1284,6 +1348,9 @@ test("grouped Inventory stays readable and wraps at mobile and desktop widths", 
       expect(surfaces.cardBorder).not.toBe(surfaces.groupBorder);
       await expectNoDocumentOverflow(page);
 
+      if (!isMobile && colorScheme === "light") {
+        await expectInventoryColumns(group.locator(".inventory-table"));
+      }
       if (isMobile) {
         await expect(
           page.locator(".inventory-style-group .inventory-cards").first(),
@@ -1307,6 +1374,13 @@ test("grouped Inventory stays readable and wraps at mobile and desktop widths", 
         }
       }
     }
+  }
+  await groupToggle.uncheck();
+  await expect(page.locator(".inventory-style-group")).toHaveCount(0);
+  for (const width of [701, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expectInventoryColumns(page.locator(".inventory-table"));
+    await expectNoDocumentOverflow(page);
   }
 });
 
