@@ -191,9 +191,9 @@ for (const theme of ["light", "dark"] as const) {
       await january.focus();
       await page.keyboard.press("Enter");
       await expect(page).toHaveURL(/zoom=month/);
-      await page
-        .getByLabel("Granularity", { exact: true })
-        .selectOption("week");
+      const granularity = page.getByRole("combobox", { name: /^Granularity/ });
+      await expect(granularity).toBeVisible();
+      await granularity.selectOption("week");
       await expect(page).toHaveURL(/granularity=week/);
       await page.getByLabel("Start date", { exact: true }).fill("2026-01-02");
       await expect(page).toHaveURL(/start=2026-01-02/);
