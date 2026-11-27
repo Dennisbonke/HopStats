@@ -59,8 +59,12 @@
     grid-template-columns: auto minmax(0, 1fr);
     column-gap: 0.75rem;
   }
-  .app .explorer-page > .page-heading {
+  .app .explorer-page > .page-heading,
+  .app .explorer-page > .explorer-tabs {
     align-self: center;
+    margin: 0;
+  }
+  .app .explorer-page > .page-heading h2 {
     margin: 0;
   }
   .app .explorer-page > :not(.page-heading):not(.explorer-tabs) {
@@ -85,7 +89,7 @@
     display: none;
   }
   .app .explorer-page .explorer-catalogue-heading {
-    margin-bottom: 0;
+    margin-bottom: 0.5rem;
   }
   .app .explorer-page .explorer-controls {
     display: flex;
