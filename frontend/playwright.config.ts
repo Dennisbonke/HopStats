@@ -3,7 +3,7 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./responsive-tests",
   timeout: 90_000,
-  workers: 1,
+  workers: process.env.CI ? 2 : 1,
   use: {
     baseURL: "http://127.0.0.1:5173",
     screenshot: "only-on-failure",
