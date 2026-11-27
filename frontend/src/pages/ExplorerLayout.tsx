@@ -19,7 +19,7 @@ export default function ExplorerLayout() {
     <div className="explorer-page">
       <div className="page-heading">
         <h2>Explorer</h2>
-        <p>Browse beers from your personal check-in history.</p>
+        <p>Browse beers and breweries from your personal check-in history.</p>
       </div>
       <nav className="explorer-tabs" aria-label="Explorer sections">
         <NavLink
@@ -30,9 +30,7 @@ export default function ExplorerLayout() {
         >
           Beers
         </NavLink>
-        <span className="explorer-tab-unavailable" aria-disabled="true">
-          Breweries <span className="upcoming-label">Upcoming</span>
-        </span>
+        <NavLink to="/explore/breweries">Breweries</NavLink>
         <span className="explorer-tab-unavailable" aria-disabled="true">
           Styles <span className="upcoming-label">Upcoming</span>
         </span>

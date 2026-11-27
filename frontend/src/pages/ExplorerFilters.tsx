@@ -143,7 +143,7 @@ function MultiSelect({
   );
 }
 
-function RangeFilter({
+export function RangeFilter({
   label,
   low,
   high,
@@ -390,7 +390,7 @@ function RangeFilter({
   );
 }
 
-function FilterSection({
+export function FilterSection({
   title,
   summary,
   initialOpen,
@@ -593,7 +593,35 @@ export function FilterSheet({
   onApply: (filters: Filters) => void;
   onClose: () => void;
 }) {
-  const [draft, setDraft] = useState(applied);
+  return (
+    <ExplorerFilterSheet
+      applied={applied}
+      onApply={onApply}
+      onClose={onClose}
+      emptyFilters={emptyFilters}
+      count={activeGroups}
+      renderPanel={(value, onChange) => (
+        <FilterPanel {...props} mobile value={value} onChange={onChange} />
+      )}
+    />
+  );
+}
+export function ExplorerFilterSheet<T>({
+  applied,
+  onApply,
+  onClose,
+  emptyFilters,
+  count,
+  renderPanel,
+}: {
+  applied: T;
+  onApply: (filters: T) => void;
+  onClose: () => void;
+  emptyFilters: () => T;
+  count: (value: T) => number;
+  renderPanel: (value: T, onChange: (next: T) => void) => ReactNode;
+}) {
+  const [draft, setDraft] = useState<T>(applied);
   const [resetKey, setResetKey] = useState(0);
   const ref = useRef<HTMLDialogElement>(null);
   const applyIntent = useRef(false);
@@ -684,7 +712,7 @@ export function FilterSheet({
       >
         <header>
           <h2 id="explorer-filter-title">
-            Filters <span>{activeGroups(draft)} active</span>
+            Filters <span>{count(draft)} active</span>
           </h2>
           <button
             type="button"
@@ -700,13 +728,7 @@ export function FilterSheet({
           </button>
         </header>
         <div className="explorer-sheet-scroll">
-          <FilterPanel
-            key={resetKey}
-            {...props}
-            mobile
-            value={draft}
-            onChange={setDraft}
-          />
+          <div key={resetKey}>{renderPanel(draft, setDraft)}</div>
         </div>
         <footer>
           <Button type="button" variant="secondary" onClick={onClose}>

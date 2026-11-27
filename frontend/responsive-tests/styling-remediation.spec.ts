@@ -2243,7 +2243,9 @@ test("Analytics charts keep controls, labels, and legends usable across viewport
 
       if (width <= 390) {
         const tickRects = await hourly
-          .locator(".recharts-xAxis .recharts-cartesian-axis-tick-value")
+          .locator(
+            ".recharts-xAxis-tick-labels .recharts-cartesian-axis-tick-value",
+          )
           .evaluateAll((nodes) =>
             nodes
               .map((node) => {
@@ -2252,6 +2254,7 @@ test("Analytics charts keep controls, labels, and legends usable across viewport
               })
               .sort((a, b) => a.left - b.left),
           );
+        expect(tickRects.length).toBeGreaterThan(1);
         for (let index = 1; index < tickRects.length; index += 1) {
           expect(tickRects[index - 1].right).toBeLessThanOrEqual(
             tickRects[index].left + 1,
@@ -3287,7 +3290,7 @@ test("Milestones keep semantic statuses, progress, forms, and long names readabl
   await expectNoDocumentOverflow(page);
 });
 
-test("unfinished Explorer catalogues inherit the document theme", async ({
+test("upcoming Style catalogue inherit the document theme", async ({
   page,
 }) => {
   await stubApplication(page);
@@ -3295,9 +3298,9 @@ test("unfinished Explorer catalogues inherit the document theme", async ({
     await page.emulateMedia({ colorScheme });
     for (const width of [320, 390, 768, 1280]) {
       await page.setViewportSize({ width, height: width === 1280 ? 800 : 844 });
-      await page.goto("/explore/breweries");
+      await page.goto("/explore/styles");
       await expect(
-        page.getByRole("heading", { name: "Breweries catalogue coming later" }),
+        page.getByRole("heading", { name: "Styles catalogue coming later" }),
       ).toBeVisible();
       await expect(page.locator(".app")).not.toHaveClass(/theme-aware/);
       await expect(page.locator(".explorer-page")).not.toHaveClass(

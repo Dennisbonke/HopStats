@@ -67,7 +67,10 @@ beforeEach(() => {
           ok: true,
           json: async () => ({ abv_max: 20 }),
         });
-      if (String(url).startsWith("/api/v1/explore/beers"))
+      if (
+        String(url).startsWith("/api/v1/explore/beers") ||
+        String(url).startsWith("/api/v1/explore/breweries")
+      )
         return Promise.resolve({
           ok: true,
           json: async () => ({
@@ -191,7 +194,7 @@ test("mobile menu opens, closes on Escape and navigation, and marks the active r
   ).toBeInTheDocument();
 });
 
-test("opens Explorer beers and marks the other catalogues as upcoming", async () => {
+test("opens Explorer beers and enables Breweries while Styles remains upcoming", async () => {
   render(
     <MemoryRouter initialEntries={["/explore"]}>
       <App />
@@ -203,7 +206,7 @@ test("opens Explorer beers and marks the other catalogues as upcoming", async ()
   expect(document.querySelector(".app")).toHaveClass("theme-aware");
   expect(
     screen.getByRole("navigation", { name: "Explorer sections" }),
-  ).toHaveTextContent("Breweries Upcoming");
+  ).toHaveTextContent("Breweries");
   expect(
     screen.getByRole("navigation", { name: "Explorer sections" }),
   ).toHaveTextContent("Styles Upcoming");
@@ -211,12 +214,10 @@ test("opens Explorer beers and marks the other catalogues as upcoming", async ()
     "aria-current",
     "page",
   );
-  expect(
-    screen.getByText("Breweries", { selector: ".explorer-tab-unavailable" }),
-  ).toHaveAttribute("aria-disabled", "true");
-  expect(
-    screen.queryByRole("link", { name: /Breweries/ }),
-  ).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Breweries" })).toHaveAttribute(
+    "href",
+    "/explore/breweries",
+  );
   expect(
     await screen.findByText("No beers in your catalogue yet."),
   ).toBeInTheDocument();
@@ -224,17 +225,41 @@ test("opens Explorer beers and marks the other catalogues as upcoming", async ()
 
 test("unfinished Explorer routes still render their explanatory placeholder", async () => {
   render(
-    <MemoryRouter initialEntries={["/explore/breweries"]}>
+    <MemoryRouter initialEntries={["/explore/styles"]}>
       <App />
     </MemoryRouter>,
   );
   expect(
     await screen.findByRole("heading", {
-      name: "Breweries catalogue coming later",
+      name: "Styles catalogue coming later",
     }),
   ).toBeInTheDocument();
   expect(document.querySelector(".app")).not.toHaveClass("theme-aware");
   expect(document.querySelector(".explorer-page")).not.toHaveClass(
     "theme-aware",
+  );
+});
+
+test("HopStats brand returns to Dashboard and closes the mobile menu", async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={["/explore/beers"]}>
+      <App />
+    </MemoryRouter>,
+  );
+  await screen.findByRole("heading", { name: "Beers" });
+  await user.click(screen.getByRole("button", { name: "Main menu" }));
+  const brand = screen.getByRole("link", { name: "🍺 HopStats" });
+  expect(brand).toHaveAttribute("href", "/");
+  await user.click(brand);
+  await waitFor(() =>
+    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    ),
+  );
+  expect(screen.getByRole("button", { name: "Main menu" })).toHaveAttribute(
+    "aria-expanded",
+    "false",
   );
 });

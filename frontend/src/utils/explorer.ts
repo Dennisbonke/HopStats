@@ -13,11 +13,12 @@ export function safeImageUrl(value: string | null): string | null {
 }
 
 export function explorerReturnUrl(value: string | null): string {
-  if (!value || !value.startsWith("/explore/beers")) return "/explore/beers";
+  if (!value) return "/explore/beers";
   try {
     const url = new URL(value, window.location.origin);
     return url.origin === window.location.origin &&
-      url.pathname === "/explore/beers" &&
+      (url.pathname === "/explore/beers" ||
+        /^\/explore\/breweries\/[1-9][0-9]*$/.test(url.pathname)) &&
       !url.hash
       ? `${url.pathname}${url.search}`
       : "/explore/beers";
@@ -37,11 +38,15 @@ export function explorerEntryKey(routerKey: string): string {
     ? marked
     : `${documentScrollKey}:${routerKey}`;
 }
-export function saveExplorerScroll(entryKey: string, search: string) {
+export function saveExplorerScroll(
+  entryKey: string,
+  search: string,
+  catalogue = "/explore/beers",
+) {
   try {
     sessionStorage.setItem(
       `explorer-entry:${entryKey}`,
-      JSON.stringify({ url: `/explore/beers${search}`, y: window.scrollY }),
+      JSON.stringify({ url: `${catalogue}${search}`, y: window.scrollY }),
     );
     window.history.replaceState(
       { ...window.history.state, hopstatsExplorerSavedKey: entryKey },
@@ -54,13 +59,14 @@ export function saveExplorerScroll(entryKey: string, search: string) {
 export function readExplorerScroll(
   entryKey: unknown,
   search: string,
+  catalogue = "/explore/beers",
 ): number | null {
   if (typeof entryKey !== "string" || entryKey.length > 128) return null;
   try {
     const saved = JSON.parse(
       sessionStorage.getItem(`explorer-entry:${entryKey}`) ?? "null",
     );
-    return saved?.url === `/explore/beers${search}` &&
+    return saved?.url === `${catalogue}${search}` &&
       Number.isFinite(saved.y) &&
       saved.y >= 0
       ? saved.y
@@ -78,4 +84,32 @@ export function checkinDate(value: string, time = false) {
 }
 export function personalRating(value: number | null) {
   return value === null ? "Not rated" : value.toFixed(2);
+}
+
+export function breweryDetailUrl(id: number, search: string): string {
+  return `/explore/breweries/${id}?${new URLSearchParams({ returnTo: `/explore/breweries${search}` })}`;
+}
+export function breweryReturnUrl(value: string | null): string {
+  try {
+    const url = new URL(value ?? "/explore/breweries", window.location.origin);
+    return url.origin === window.location.origin &&
+      !url.hash &&
+      (url.pathname === "/explore/breweries" ||
+        /^\/explore\/beers\/[1-9][0-9]*$/.test(url.pathname))
+      ? `${url.pathname}${url.search}`
+      : "/explore/breweries";
+  } catch {
+    return "/explore/breweries";
+  }
+}
+export function breweryLocation(value: {
+  city: string | null;
+  state: string | null;
+  country: string | null;
+}) {
+  return (
+    [value.city, value.state, value.country]
+      .filter((v) => v?.trim())
+      .join(", ") || "Location unavailable"
+  );
 }

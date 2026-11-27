@@ -349,5 +349,5 @@ def _location(entity):
 def _untappd_url(source, identifier, kind):
     if source != "untappd" or not identifier or not re.fullmatch(r"[1-9][0-9]{0,19}", identifier):
         return None
-    prefix = "beer" if kind == "beer" else "c"
+    prefix = {"beer": "beer", "checkin": "c", "brewery": "brewery"}[kind]
     return f"https://untappd.com/{prefix}/{identifier}"

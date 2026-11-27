@@ -1029,3 +1029,33 @@
 .explorer-filter-sheet header {
   padding-inline: max(0.8rem, var(--safe-left)) max(0.8rem, var(--safe-right));
 }
+
+.brewery-detail-sections {
+  margin-top: 2rem;
+}
+.brewery-style-list,
+.brewery-top-beers {
+  list-style: none;
+  padding: 0;
+}
+.brewery-style-list li {
+  margin-block: 1rem;
+}
+.brewery-style-list meter {
+  display: block;
+  width: 100%;
+  height: 1rem;
+  accent-color: var(--color-chart-primary);
+}
+.brewery-top-beers li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-block: 1rem;
+}
+.brewery-top-beers a {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  align-content: center;
+}
