@@ -261,6 +261,17 @@
   color: var(--color-text-primary);
   font: inherit;
 }
+/* Native single-line controls need an explicit outer size: Safari otherwise
+ * gives selects and date inputs different intrinsic heights. Grow with text. */
+input.ui-form-field__control,
+select.ui-form-field__control {
+  height: max(2.75rem, calc(1.2em + 1rem + 2px));
+  line-height: 1.2;
+}
+input.ui-form-field__control[type="date"]::-webkit-date-and-time-value {
+  min-width: 0;
+  text-align: start;
+}
 .ui-form-field__control:focus-visible {
   outline: 3px solid var(--color-focus);
   outline-offset: 2px;

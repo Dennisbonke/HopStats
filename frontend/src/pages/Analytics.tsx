@@ -908,6 +908,7 @@ export default function Analytics() {
         <label className="filter-control">
           Reporting period
           <select
+            className="ui-form-field__control"
             value={period}
             onChange={(event) => choosePeriod(event.target.value as Period)}
           >
@@ -924,6 +925,7 @@ export default function Analytics() {
             <label className="filter-control">
               Start date
               <input
+                className="ui-form-field__control"
                 aria-label="Start date"
                 type="date"
                 required
@@ -943,6 +945,7 @@ export default function Analytics() {
             <label className="filter-control">
               End date
               <input
+                className="ui-form-field__control"
                 aria-label="End date"
                 type="date"
                 required
@@ -965,6 +968,7 @@ export default function Analytics() {
           <label className="filter-control">
             Granularity
             <select
+              className="ui-form-field__control"
               value={granularity}
               onChange={(event) => {
                 setGranularity(event.target.value as Granularity);
@@ -1500,7 +1504,10 @@ function BucketActions({
   onSelect: (bucket: AnalyticsBucket) => void;
 }) {
   return (
-    <div className="bucket-actions" aria-label="Available drilldown periods">
+    <div
+      className={`bucket-actions${buckets.some((bucket) => bucket.label.length > 10) ? " bucket-actions--long-labels" : ""}`}
+      aria-label="Available drilldown periods"
+    >
       {buckets.map((bucket) => (
         <Button
           key={bucket.key}
