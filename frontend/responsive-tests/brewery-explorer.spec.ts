@@ -112,13 +112,27 @@ for (const viewport of cases) {
       await page
         .getByRole("button", { name: "Remove Netherlands", exact: true })
         .click();
+      await expect(
+        page.getByRole("button", { name: "Remove Netherlands", exact: true }),
+      ).toHaveCount(0);
     } else {
       await expect(
         page.getByRole("complementary", { name: "Brewery filters" }),
       ).toBeVisible();
     }
     // Save this exact committed catalogue state, then verify explicit and browser return.
-    const returnUrl = new URL(page.url()).pathname + new URL(page.url()).search;
+    const committedParams = new URLSearchParams(
+      new URL(catalogue, page.url()).search,
+    );
+    if (mobile) committedParams.delete("page"); // Filter changes reset pagination.
+    const returnUrl = `/explore/breweries?${committedParams}`;
+    await expect(page).toHaveURL(returnUrl);
+    const link = page
+      .locator(mobile ? ".explorer-beer-card" : ".explorer-beer-link")
+      .first();
+    const detailUrl = `/explore/breweries/2?${new URLSearchParams({ returnTo: returnUrl })}`;
+    // Router URL changes can precede the React commit that updates link props.
+    await expect(link).toHaveAttribute("href", detailUrl);
     if (!mobile)
       await page
         .getByRole("button", { name: "Next", exact: true })
@@ -132,11 +146,9 @@ for (const viewport of cases) {
         path: testInfo.outputPath("brewery-catalogue.png"),
         fullPage: true,
       });
-    const link = page
-      .locator(mobile ? ".explorer-beer-card" : ".explorer-beer-link")
-      .first();
     await link.focus();
     await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(detailUrl);
     await expect(
       page.getByRole("heading", { level: 1, name: brewery.name }),
     ).toBeVisible();
