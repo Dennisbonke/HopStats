@@ -1,3 +1,4 @@
+import { stubExplorerOptions } from "./explorer-option-fixtures";
 import type { Page } from "@playwright/test";
 
 export async function stubPages(page: Page, populated = false) {
@@ -220,4 +221,5 @@ export async function stubPages(page: Page, populated = false) {
     }
     await route.fulfill({ json: body });
   });
+  await stubExplorerOptions(page, {});
 }

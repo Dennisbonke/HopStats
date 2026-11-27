@@ -1,3 +1,4 @@
+import { stubExplorerOptions } from "./explorer-option-fixtures";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const longBeerName =
@@ -760,6 +761,10 @@ async function stubApplication(
       status: path in body ? 200 : 404,
       json: body[path] ?? { detail: "Not found" },
     });
+  });
+  await stubExplorerOptions(page, {
+    breweries: [{ id: 1, name: "North Storage Brewing Company" }],
+    styles: [{ id: 2, name: "West Coast IPA" }],
   });
 }
 

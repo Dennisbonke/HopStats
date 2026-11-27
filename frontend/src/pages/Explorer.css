@@ -400,9 +400,19 @@
 .explorer-options {
   max-height: 10rem;
   overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.25rem 0.5rem 0.5rem;
+  scroll-padding-block: 0.5rem;
+  overscroll-behavior-y: contain;
   margin-top: 0.5rem;
 }
+.explorer-options p {
+  margin: 0.5rem 0;
+  font-size: 0.875rem;
+}
 .explorer-options label {
+  flex-shrink: 0;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 0.5rem;

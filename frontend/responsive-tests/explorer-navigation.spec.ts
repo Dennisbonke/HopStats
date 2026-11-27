@@ -1,3 +1,4 @@
+import { optionResponse } from "./explorer-option-fixtures";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 function luminance(color: string): number {
@@ -51,7 +52,7 @@ async function stubExplorer(
     },
   ],
 ) {
-  await page.route("**/api/v1/**", async (route) => {
+  await page.context().route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const responses: Record<string, unknown> = {
       "/api/v1/auth/me": {
@@ -85,6 +86,23 @@ async function stubExplorer(
         total_pages: items.length ? 2 : 0,
       },
     };
+    const optionData = {
+      breweries: (
+        responses["/api/v1/explore/filter-options/breweries"] as {
+          items: { id: number; name: string }[];
+        }
+      ).items,
+      styles: (
+        responses["/api/v1/explore/filter-options/styles"] as {
+          items: { id: number; name: string }[];
+        }
+      ).items,
+    };
+    const options = optionResponse(new URL(route.request().url()), optionData);
+    if (options) {
+      await route.fulfill({ json: options });
+      return;
+    }
     await route.fulfill({
       status: path in responses ? 200 : 404,
       json: responses[path] ?? { detail: "Not found" },

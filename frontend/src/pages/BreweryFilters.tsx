@@ -1,11 +1,14 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { fetchBreweryCountries } from "../api/explore";
+import { Button } from "../components/ui";
+import { useFilterOptions } from "./useFilterOptions";
 import {
   ExplorerFilterSheet,
   FilterSection,
   RangeFilter,
 } from "./ExplorerFilters";
 import { Filters, emptyFilters, activeGroups } from "./breweryState";
+const countryKey = (country: string) => country;
 function Countries({
   value,
   onChange,
@@ -14,41 +17,18 @@ function Countries({
   onChange: (v: Filters) => void;
 }) {
   const [search, setSearch] = useState("");
-  const [offset, setOffset] = useState(0);
-  const [items, setItems] = useState<string[]>([]);
-  const [unknown, setUnknown] = useState(false);
-  const [more, setMore] = useState(false);
-  const [pending, setPending] = useState(true);
-  const [error, setError] = useState(false);
-  const [attempt, setAttempt] = useState(0);
-  useEffect(() => {
-    let current = true;
-    setPending(true);
-    setError(false);
-    const timer = setTimeout(() => {
-      fetchBreweryCountries(
-        new URLSearchParams({ search, offset: String(offset) }),
-      )
-        .then((r) => {
-          if (current) {
-            setItems((old) => (offset ? [...old, ...r.items] : r.items));
-            setUnknown(r.unknown_available);
-            setMore(r.has_more);
-          }
-        })
-        .catch(() => {
-          if (current) setError(true);
-        })
-        .finally(() => {
-          if (current) setPending(false);
-        });
-    }, 200);
-    return () => {
-      current = false;
-      clearTimeout(timer);
-    };
-  }, [search, offset, attempt]);
-  const options = [...new Set([...value.country, ...items])];
+  const {
+    items,
+    unknown,
+    loading: pending,
+    error,
+    retry,
+  } = useFilterOptions(fetchBreweryCountries, countryKey, "", true);
+  const options = [...new Set([...value.country, ...items])].filter(
+    (country) =>
+      value.country.includes(country) ||
+      country.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
+  );
   return (
     <>
       <label>
@@ -58,12 +38,15 @@ function Countries({
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
-            setOffset(0);
           }}
         />
       </label>
-      <div className="explorer-options">
-        {unknown && (
+      <div
+        className="explorer-options"
+        aria-label="Available countries"
+        tabIndex={0}
+      >
+        {(unknown || value.unknown_country) && (
           <label>
             <input
               type="checkbox"
@@ -83,6 +66,9 @@ function Countries({
             <input
               type="checkbox"
               checked={value.country.includes(country)}
+              disabled={
+                !value.country.includes(country) && value.country.length >= 100
+              }
               onChange={(e) =>
                 onChange({
                   ...value,
@@ -95,21 +81,19 @@ function Countries({
             {country}
           </label>
         ))}
+        {pending && <p role="status">Loading countries…</p>}
+        {error && (
+          <p role="alert">
+            Countries unavailable.{" "}
+            <Button type="button" variant="secondary" onClick={retry}>
+              Try again
+            </Button>
+          </p>
+        )}
+        {!pending && !error && !options.length && !unknown && (
+          <p>No matching countries.</p>
+        )}
       </div>
-      {pending && <p role="status">Loading countries…</p>}
-      {error && (
-        <p role="alert">
-          Countries unavailable.{" "}
-          <button type="button" onClick={() => setAttempt((v) => v + 1)}>
-            Try again
-          </button>
-        </p>
-      )}
-      {more && !pending && (
-        <button type="button" onClick={() => setOffset((v) => v + 25)}>
-          More countries
-        </button>
-      )}
     </>
   );
 }
