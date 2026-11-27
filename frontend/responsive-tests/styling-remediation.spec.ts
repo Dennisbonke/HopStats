@@ -3287,7 +3287,7 @@ test("Milestones keep semantic statuses, progress, forms, and long names readabl
   await expectNoDocumentOverflow(page);
 });
 
-test("unfinished Explorer catalogues inherit the document theme", async ({
+test("upcoming Style catalogue inherit the document theme", async ({
   page,
 }) => {
   await stubApplication(page);
@@ -3295,9 +3295,9 @@ test("unfinished Explorer catalogues inherit the document theme", async ({
     await page.emulateMedia({ colorScheme });
     for (const width of [320, 390, 768, 1280]) {
       await page.setViewportSize({ width, height: width === 1280 ? 800 : 844 });
-      await page.goto("/explore/breweries");
+      await page.goto("/explore/styles");
       await expect(
-        page.getByRole("heading", { name: "Breweries catalogue coming later" }),
+        page.getByRole("heading", { name: "Styles catalogue coming later" }),
       ).toBeVisible();
       await expect(page.locator(".app")).not.toHaveClass(/theme-aware/);
       await expect(page.locator(".explorer-page")).not.toHaveClass(

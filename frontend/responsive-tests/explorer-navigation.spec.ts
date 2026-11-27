@@ -245,13 +245,16 @@ test("mobile navigation stays compact, usable, and does not overflow", async ({
   ).toBeVisible();
 });
 
-test("upcoming Explorer sections remain unavailable in the tab strip", async ({
+test("Breweries is enabled and Styles remains unavailable in the tab strip", async ({
   page,
 }) => {
   await stubExplorer(page);
   await page.goto("/explore/beers");
   const tabs = page.getByRole("navigation", { name: "Explorer sections" });
-  for (const name of ["Breweries", "Styles"]) {
+  await expect(
+    tabs.getByRole("link", { name: "Breweries", exact: true }),
+  ).toHaveAttribute("href", "/explore/breweries");
+  for (const name of ["Styles"]) {
     const unavailable = tabs.locator(".explorer-tab-unavailable", {
       hasText: name,
     });
@@ -267,14 +270,11 @@ test("upcoming Explorer sections remain unavailable in the tab strip", async ({
   }
 });
 
-test("Brewery and Style placeholders remain readable in both themes", async ({
-  page,
-}) => {
+test("Style placeholder remains readable in both themes", async ({ page }) => {
   await stubExplorer(page);
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
     for (const [route, heading] of [
-      ["/explore/breweries", "Breweries catalogue coming later"],
       ["/explore/styles", "Styles catalogue coming later"],
     ]) {
       await page.goto(route);

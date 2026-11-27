@@ -23,35 +23,39 @@ async function stub(page: Page) {
       },
     }),
   );
-  await page.route("**/api/v1/explore/breweries*", (route) => {
-    const url = new URL(route.request().url());
-    return route.fulfill({
-      json: url.pathname.endsWith("/2")
-        ? {
-            ...brewery,
-            style_count: 1,
-            highest_rating: 5,
-            lowest_rating: 0,
-            untappd_url: "https://untappd.com/brewery/765",
-            rating_distribution: Array.from({ length: 10 }, (_, i) => ({
-              lower: i / 2,
-              upper: (i + 1) / 2,
-              count: i === 0 ? 1 : i === 7 ? 1 : i === 8 ? 1 : i === 9 ? 1 : 0,
-            })),
-            most_explored_styles: [
-              { id: 3, name: beer.style.name, unique_beer_count: 2 },
-            ],
-            highest_rated_beers: [beer],
-          }
-        : {
-            items: [brewery],
-            page: Number(url.searchParams.get("page") || 1),
-            page_size: 25,
-            total: 26,
-            total_pages: 2,
-          },
-    });
-  });
+  await page.route(
+    /\/api\/v1\/explore\/breweries(?:\/[0-9]+)?(?:\?.*)?$/,
+    (route) => {
+      const url = new URL(route.request().url());
+      return route.fulfill({
+        json: url.pathname.endsWith("/2")
+          ? {
+              ...brewery,
+              style_count: 1,
+              highest_rating: 5,
+              lowest_rating: 0,
+              untappd_url: "https://untappd.com/brewery/765",
+              rating_distribution: Array.from({ length: 10 }, (_, i) => ({
+                lower: i / 2,
+                upper: (i + 1) / 2,
+                count:
+                  i === 0 ? 1 : i === 7 ? 1 : i === 8 ? 1 : i === 9 ? 1 : 0,
+              })),
+              most_explored_styles: [
+                { id: 3, name: beer.style.name, unique_beer_count: 2 },
+              ],
+              highest_rated_beers: [beer],
+            }
+          : {
+              items: [brewery],
+              page: Number(url.searchParams.get("page") || 1),
+              page_size: 25,
+              total: 26,
+              total_pages: 2,
+            },
+      });
+    },
+  );
 }
 async function noOverflow(page: Page) {
   expect(
