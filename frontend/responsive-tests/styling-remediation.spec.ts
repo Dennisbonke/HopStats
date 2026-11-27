@@ -2243,7 +2243,9 @@ test("Analytics charts keep controls, labels, and legends usable across viewport
 
       if (width <= 390) {
         const tickRects = await hourly
-          .locator(".recharts-xAxis .recharts-cartesian-axis-tick-value")
+          .locator(
+            ".recharts-xAxis-tick-labels .recharts-cartesian-axis-tick-value",
+          )
           .evaluateAll((nodes) =>
             nodes
               .map((node) => {
@@ -2252,6 +2254,7 @@ test("Analytics charts keep controls, labels, and legends usable across viewport
               })
               .sort((a, b) => a.left - b.left),
           );
+        expect(tickRects.length).toBeGreaterThan(1);
         for (let index = 1; index < tickRects.length; index += 1) {
           expect(tickRects[index - 1].right).toBeLessThanOrEqual(
             tickRects[index].left + 1,

@@ -155,7 +155,9 @@ for (const viewport of cases) {
     await expect(chart.locator("svg.recharts-surface")).toBeVisible();
     await expect(
       chart
-        .locator(".recharts-xAxis .recharts-cartesian-axis-tick-value")
+        .locator(
+          ".recharts-xAxis-tick-labels .recharts-cartesian-axis-tick-value",
+        )
         .last(),
     ).toHaveText("4.5");
     const plot = chart.locator('[data-chart-bucket="9"]');
