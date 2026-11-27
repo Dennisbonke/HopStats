@@ -37,8 +37,9 @@ import {
   writeFilters,
 } from "./explorerState";
 
-// Keep this breakpoint aligned with Explorer.css's max-width: 700px.
-const MOBILE_QUERY = "(max-width: 700px)";
+// Keep aligned with Explorer.css: narrow screens OR short phone landscape.
+const MOBILE_QUERY =
+  "(max-width: 700px), (max-width: 960px) and (orientation: landscape) and (max-height: 500px)";
 function useMobileExplorer() {
   const [mobile, setMobile] = useState(
     () => window.matchMedia(MOBILE_QUERY).matches,

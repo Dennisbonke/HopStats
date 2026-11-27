@@ -5,8 +5,8 @@
   min-height: 100vh;
   place-items: center;
   margin: 0 auto;
-  padding: max(1rem, env(safe-area-inset-top)) 1rem
-    max(1rem, env(safe-area-inset-bottom));
+  padding: max(1rem, var(--safe-top)) max(1rem, var(--safe-right))
+    max(1rem, var(--safe-bottom)) max(1rem, var(--safe-left));
   background: var(--color-canvas);
   color: var(--color-text-primary);
 }

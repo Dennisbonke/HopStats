@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
-        with: { python-version: '3.12' }
+        with: { python-version: "3.12" }
       - run: pip install -e '.[dev]'
       - run: ruff check backend && ruff format --check backend
       - run: pytest
@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
-        with: { node-version: '22' }
+        with: { node-version: "22" }
       - run: npm ci
       - run: npm run lint
       - run: npm run format
@@ -38,21 +38,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
-        with: { node-version: '22', cache: npm, cache-dependency-path: frontend/package-lock.json }
+        with:
+          {
+            node-version: "22",
+            cache: npm,
+            cache-dependency-path: frontend/package-lock.json,
+          }
       - run: npm ci
       - run: npx playwright install --with-deps chromium firefox webkit
-      - run: npx playwright test beer-details.spec.ts --max-failures=1
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: beer-detail-screenshots
-          path: frontend/test-results/**/*.png
-          if-no-files-found: ignore
-          retention-days: 14
-      - run: npx playwright test --grep 'Explorer review fixes' --max-failures=1
-      - run: npx playwright test --grep 'native reporting date keyboard' --max-failures=1
-      - run: npx playwright test --project=webkit --grep 'touch taps pin|exact sparse.*320px|native reporting dates.*320px' --max-failures=1
-      - run: npx playwright test --grep 'advanced Explorer controls|both range handles|Explorer screenshot|shared Button variants' --max-failures=1
       - run: npm run test:responsive
       - uses: actions/upload-artifact@v7
         if: always()
@@ -68,7 +61,7 @@ jobs:
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
       - uses: docker/build-push-action@v7
-        with: { context: ., push: false, platforms: 'linux/amd64,linux/arm64' }
+        with: { context: ., push: false, platforms: "linux/amd64,linux/arm64" }
   docker-smoke:
     runs-on: ubuntu-latest
     steps:

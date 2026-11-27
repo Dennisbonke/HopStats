@@ -47,32 +47,38 @@ export default function AnalyticsChartTooltip({
         document.documentElement.clientWidth || window.innerWidth;
       const viewportHeight =
         document.documentElement.clientHeight || window.innerHeight;
-      const inset = 8;
+      const style = getComputedStyle(document.documentElement);
+      const safe = (side: string) =>
+        Math.max(8, parseFloat(style.getPropertyValue(`--safe-${side}`)) || 0);
+      const leftInset = safe("left");
+      const rightInset = safe("right");
+      const topInset = safe("top");
+      const bottomInset = safe("bottom");
       const gap = 12;
       const anchorX = chartBounds.left + x;
       const anchorY = chartBounds.top + y;
       const maxLeft = Math.max(
-        inset,
-        viewportWidth - tooltipBounds.width - inset,
+        leftInset,
+        viewportWidth - tooltipBounds.width - rightInset,
       );
       const maxTop = Math.max(
-        inset,
-        viewportHeight - tooltipBounds.height - inset,
+        topInset,
+        viewportHeight - tooltipBounds.height - bottomInset,
       );
 
       let left = anchorX + gap;
-      if (left + tooltipBounds.width > viewportWidth - inset) {
+      if (left + tooltipBounds.width > viewportWidth - rightInset) {
         left = anchorX - tooltipBounds.width - gap;
       }
 
       let top = anchorY + gap;
-      if (top + tooltipBounds.height > viewportHeight - inset) {
+      if (top + tooltipBounds.height > viewportHeight - bottomInset) {
         top = anchorY - tooltipBounds.height - gap;
       }
 
       wrapper.style.position = "fixed";
-      wrapper.style.left = `${Math.min(Math.max(left, inset), maxLeft)}px`;
-      wrapper.style.top = `${Math.min(Math.max(top, inset), maxTop)}px`;
+      wrapper.style.left = `${Math.min(Math.max(left, leftInset), maxLeft)}px`;
+      wrapper.style.top = `${Math.min(Math.max(top, topInset), maxTop)}px`;
       wrapper.style.transform = "none";
       wrapper.style.pointerEvents = "none";
       wrapper.style.zIndex = "30";
