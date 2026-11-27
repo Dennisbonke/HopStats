@@ -322,57 +322,6 @@ for (const theme of ["light", "dark"] as const) {
   });
 }
 
-test("landscape screenshot comparisons against master", async ({
-  browser,
-}, info) => {
-  test.setTimeout(180_000);
-  for (const theme of ["light", "dark"] as const) {
-    for (const version of process.env.HOPSTATS_BASELINE_DIR
-      ? ["before", "after"]
-      : ["after"]) {
-      const context = await browser.newContext({
-        viewport: { width: 844, height: 280 },
-        colorScheme: theme,
-      });
-      const page = await context.newPage();
-      await stubPages(page, true);
-      const origin =
-        version === "before"
-          ? "http://127.0.0.1:5174"
-          : "http://127.0.0.1:5173";
-      for (const route of ["/", "/milestones", "/inventory", "/analytics"]) {
-        await page.goto(origin + route);
-        await expect(page.locator(".app-header")).toBeVisible();
-        await page.screenshot({
-          path: info.outputPath(
-            `${version}-${route.replaceAll("/", "-") || "dashboard"}-${theme}.png`,
-          ),
-        });
-      }
-      const beers = await context.newPage();
-      await stubBeer(beers);
-      for (const route of ["/explore/beers", "/explore/beers/1"]) {
-        await beers.goto(origin + route);
-        await expect(
-          beers
-            .locator(
-              route.endsWith("/1")
-                ? ".beer-profile"
-                : ".explorer-beer-card:visible, .explorer-beer-table:visible",
-            )
-            .first(),
-        ).toBeVisible();
-        await beers.screenshot({
-          path: info.outputPath(
-            `${version}-${route.replaceAll("/", "-")}-${theme}.png`,
-          ),
-        });
-      }
-      await context.close();
-    }
-  }
-});
-
 test("compact backend failure remains actionable", async ({ page }) => {
   await stubPages(page, true);
   await page.route("**/api/v1/health", (route) =>

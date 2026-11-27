@@ -37,7 +37,6 @@ jobs:
     defaults: { run: { working-directory: frontend } }
     steps:
       - uses: actions/checkout@v7
-        with: { fetch-depth: 0 }
       - uses: actions/setup-node@v7
         with:
           {
@@ -47,40 +46,6 @@ jobs:
           }
       - run: npm ci
       - run: npx playwright install --with-deps chromium firefox webkit
-      - name: Prepare exact master baseline for screenshot comparisons
-        working-directory: ${{ github.workspace }}
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/hopstats-before"
-          git archive "$BASE_SHA" frontend | tar -x -C "$RUNNER_TEMP/hopstats-before"
-          ln -s "$GITHUB_WORKSPACE/frontend/node_modules" "$RUNNER_TEMP/hopstats-before/frontend/node_modules"
-          # Shared read-only dependencies, separate Vite optimization caches.
-          sed -i 's/defineConfig({/defineConfig({ cacheDir: ".vite-baseline",/' "$RUNNER_TEMP/hopstats-before/frontend/vite.config.ts"
-          echo "HOPSTATS_BASELINE_DIR=$RUNNER_TEMP/hopstats-before/frontend" >> "$GITHUB_ENV"
-      - name: Verify document palette and chart tooltip theme regressions
-        run: npx playwright test --grep 'document and Explorer use the shared semantic palette|Analytics tooltips stay readable' --max-failures=1
-      - run: npx playwright test mobile-landscape.spec.ts --max-failures=1
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: mobile-landscape-screenshots
-          path: frontend/test-results/**/*.png
-          if-no-files-found: ignore
-          retention-days: 14
-      - run: npx playwright test beer-details.spec.ts --max-failures=1
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: beer-detail-screenshots
-          path: frontend/test-results/**/*.png
-          if-no-files-found: ignore
-          retention-days: 14
-      - run: npx playwright test --grep 'Explorer review fixes' --max-failures=1
-      - run: npx playwright test --grep 'native reporting date keyboard' --max-failures=1
-      - run: npx playwright test --project=webkit --grep 'touch taps pin|exact sparse.*320px|native reporting dates.*320px' --max-failures=1
-      - run: npx playwright test --grep 'advanced Explorer controls|both range handles|Explorer screenshot|shared Button variants' --max-failures=1
       - run: npm run test:responsive
       - uses: actions/upload-artifact@v7
         if: always()

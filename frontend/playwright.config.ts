@@ -14,20 +14,9 @@ export default defineConfig({
     { name: "firefox", use: { browserName: "firefox" } },
     { name: "webkit", use: { browserName: "webkit" } },
   ],
-  webServer: [
-    {
-      command: "npm run dev -- --host 127.0.0.1",
-      url: "http://127.0.0.1:5173",
-      reuseExistingServer: !process.env.CI,
-    },
-    ...(process.env.HOPSTATS_BASELINE_DIR
-      ? [
-          {
-            command: `npm --prefix "${process.env.HOPSTATS_BASELINE_DIR}" run dev -- --host 127.0.0.1 --port 5174`,
-            url: "http://127.0.0.1:5174",
-            reuseExistingServer: false,
-          },
-        ]
-      : []),
-  ],
+  webServer: {
+    command: "npm run dev -- --host 127.0.0.1",
+    url: "http://127.0.0.1:5173",
+    reuseExistingServer: !process.env.CI,
+  },
 });

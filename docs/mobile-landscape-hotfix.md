@@ -85,16 +85,22 @@ portrait/tablet/desktop and M10.3 coverage remains. Geometry checks verify:
   to portrait/desktop, dialog scrolling/rotation, and release of body locks.
 - Rating tooltip containment after chart resize and selection.
 
-The CI responsive job runs this suite first and uploads
-`mobile-landscape-screenshots`. It also starts an isolated frontend from the PR's
-exact master base SHA to capture genuine before/after screenshots with the same
-synthetic fixtures. No production database is used. Artifacts include catalogue,
-beer profile/chart, Dashboard, Analytics, Milestones, Inventory, Locations,
-Imports, menu, filter sheet, form, simulated safe areas and portrait/desktop
-comparisons. Browser emulation and synthetic CSS insets are not physical iPhone
-acceptance. All six normal CI jobs remain required. The suite currently collects 489
-responsive cases (63 new landscape cases), alongside 196 frontend unit tests
-and 190 backend tests.
+The CI responsive job runs the complete Playwright suite exactly once across
+Chromium, Firefox and WebKit, using one Vite server. A single
+`responsive-playwright-artifacts` upload retains all generated screenshots,
+traces and test results, including on failure. Standalone targeted invocations
+remain available for development but are not repeated in ordinary CI.
+
+Ordinary screenshots cover catalogue, beer profile/chart, Dashboard, Analytics,
+Milestones, Inventory, Locations, Imports, menu, filter sheet, form, simulated
+safe areas and portrait/desktop layouts. Temporary baseline extraction and
+before/after comparison code have been removed; the previously reviewed
+comparison artifacts remain linked in PR #78. No functional or geometry tests
+were removed. Browser emulation and synthetic CSS insets are not physical iPhone
+acceptance. All six normal CI jobs remain required. The suite collects 486
+responsive cases (60 landscape cases), alongside 196 frontend unit tests
+and 190 backend tests. The reduction of three cases removes only the screenshot
+comparison test's instance in each browser.
 
 On this production Pi, browser/Docker checks are deferred to CI per AGENTS.md.
 The initial full local frontend run was stopped after worker-concurrency timeouts;
