@@ -160,12 +160,16 @@ for (const viewport of cases) {
       await chart.dispatchEvent("pointerdown", {
         pointerType: "touch",
         pointerId: 1,
+        isPrimary: true,
+        bubbles: true,
         clientX: point.x,
         clientY: point.y,
       });
       await chart.dispatchEvent("pointerup", {
         pointerType: "touch",
         pointerId: 1,
+        isPrimary: true,
+        bubbles: true,
         clientX: point.x,
         clientY: point.y,
       });
