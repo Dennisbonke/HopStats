@@ -153,27 +153,35 @@ for (const viewport of cases) {
     });
     await chart.scrollIntoViewIfNeeded();
     await expect(chart.locator("svg.recharts-surface")).toBeVisible();
+    await expect(
+      chart.locator(".recharts-xAxis .recharts-cartesian-axis-tick").last(),
+    ).toHaveText("4.5");
     const plot = chart.locator('[data-chart-bucket="9"]');
-    const box = (await plot.boundingBox())!;
+    await plot.scrollIntoViewIfNeeded();
     if (mobile) {
-      const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-      await chart.dispatchEvent("pointerdown", {
-        pointerType: "touch",
-        pointerId: 1,
-        isPrimary: true,
-        bubbles: true,
-        clientX: point.x,
-        clientY: point.y,
-      });
-      await chart.dispatchEvent("pointerup", {
-        pointerType: "touch",
-        pointerId: 1,
-        isPrimary: true,
-        bubbles: true,
-        clientX: point.x,
-        clientY: point.y,
+      // Browser history restoration and scrollIntoView can queue a scroll event.
+      // Settle layout first; a stationary tap must not race a scrolling gesture.
+      await plot.evaluate(async (region) => {
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => resolve()),
+        );
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => resolve()),
+        );
+        const box = region.getBoundingClientRect();
+        const pointer = {
+          pointerType: "touch",
+          pointerId: 7,
+          isPrimary: true,
+          bubbles: true,
+          clientX: box.x + box.width / 2,
+          clientY: box.y + box.height / 2,
+        };
+        region.dispatchEvent(new PointerEvent("pointerdown", pointer));
+        region.dispatchEvent(new PointerEvent("pointerup", pointer));
       });
     } else {
+      const box = (await plot.boundingBox())!;
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     }
     await expect(page.locator(".analytics-tooltip").first()).toBeVisible();

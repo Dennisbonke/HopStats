@@ -93,7 +93,9 @@ export default function BreweryRatingChart({ buckets }: { buckets: Bucket[] }) {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis
                   dataKey="label"
-                  tickFormatter={(_, i) => String(data[i]?.lower ?? "")}
+                  tickFormatter={(label: string) =>
+                    String(Number(label.split("–")[0]))
+                  }
                   minTickGap={12}
                 />
                 <YAxis allowDecimals={false} width={28} />
