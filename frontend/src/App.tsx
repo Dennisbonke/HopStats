@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import {
+  Link,
   matchPath,
   Navigate,
   NavLink,
@@ -19,6 +20,10 @@ import MilestoneDetail from "./pages/MilestoneDetail";
 const Analytics = lazy(() => import("./pages/Analytics"));
 const ExplorerLayout = lazy(() => import("./pages/ExplorerLayout"));
 const ExplorerBeerDetail = lazy(() => import("./pages/ExplorerBeerDetail"));
+const ExplorerBreweries = lazy(() => import("./pages/ExplorerBreweries"));
+const ExplorerBreweryDetail = lazy(
+  () => import("./pages/ExplorerBreweryDetail"),
+);
 const ExplorerBeers = lazy(() => import("./pages/ExplorerBeers"));
 const ExplorerUpcoming = lazy(() =>
   import("./pages/ExplorerLayout").then((module) => ({
@@ -50,6 +55,8 @@ const themeAwareRoutes = [
   "/analytics",
   "/explore/beers",
   "/explore/beers/:beerId",
+  "/explore/breweries",
+  "/explore/breweries/:breweryId",
 ];
 
 function Placeholder({ title }: { title: string }) {
@@ -159,7 +166,9 @@ export default function App() {
   return (
     <div className={`app${themeAware ? " theme-aware" : ""}`}>
       <header className="app-header theme-aware">
-        <div className="brand">🍺 HopStats</div>
+        <Link className="brand" to="/" onClick={() => setMobileMenuOpen(false)}>
+          🍺 HopStats
+        </Link>
         {status === "connected" && (
           <span
             className="header-connection"
@@ -261,11 +270,12 @@ export default function App() {
           >
             <Route index element={<Navigate to="beers" replace />} />
             <Route path="beers" element={<ExplorerBeers />} />
-            <Route path="beers/:beerId" element={<ExplorerBeerDetail />} />
             <Route
-              path="breweries"
-              element={<ExplorerUpcoming title="Breweries" />}
+              path="breweries/:breweryId"
+              element={<ExplorerBreweryDetail />}
             />
+            <Route path="beers/:beerId" element={<ExplorerBeerDetail />} />
+            <Route path="breweries" element={<ExplorerBreweries />} />
             <Route
               path="styles"
               element={<ExplorerUpcoming title="Styles" />}

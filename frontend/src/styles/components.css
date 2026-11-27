@@ -449,3 +449,12 @@ input.ui-form-field__control[type="date"]::-webkit-date-and-time-value {
 .app-header .header-connection {
   display: none;
 }
+
+.app-header a.brand {
+  color: inherit;
+  text-decoration: none;
+}
+.app-header a.brand:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}

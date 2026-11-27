@@ -101,3 +101,49 @@ export async function fetchBeerHistory(
   if (!response.ok) throw new ApiError(response.status);
   return response.json() as Promise<BeerHistory>;
 }
+
+export type ExploreBrewery = ExploreLocation & {
+  unique_beer_count: number;
+  checkin_count: number;
+  rated_checkin_count: number;
+  personal_average_rating: number | null;
+  first_checked_in_at: string;
+  last_checked_in_at: string;
+};
+export type ExploreBreweriesResponse = Omit<ExploreBeersResponse, "items"> & {
+  items: ExploreBrewery[];
+};
+export type BreweryDetail = ExploreBrewery & {
+  style_count: number;
+  highest_rating: number | null;
+  lowest_rating: number | null;
+  untappd_url: string | null;
+  rating_distribution: { lower: number; upper: number; count: number }[];
+  most_explored_styles: (ExploreEntity & { unique_beer_count: number })[];
+  highest_rated_beers: ExploreBeer[];
+};
+export async function fetchExploreBreweries(
+  params: URLSearchParams,
+): Promise<ExploreBreweriesResponse> {
+  const response = await apiFetch(`/api/v1/explore/breweries?${params}`);
+  if (!response.ok) throw new ApiError(response.status);
+  return response.json() as Promise<ExploreBreweriesResponse>;
+}
+export async function fetchBreweryDetail(id: string): Promise<BreweryDetail> {
+  const response = await apiFetch(`/api/v1/explore/breweries/${id}`);
+  if (!response.ok) throw new ApiError(response.status);
+  return response.json() as Promise<BreweryDetail>;
+}
+export async function fetchBreweryCountries(
+  params: URLSearchParams,
+): Promise<{ items: string[]; unknown_available: boolean; has_more: boolean }> {
+  const response = await apiFetch(
+    `/api/v1/explore/brewery-countries?${params}`,
+  );
+  if (!response.ok) throw new ApiError(response.status);
+  return response.json() as Promise<{
+    items: string[];
+    unknown_available: boolean;
+    has_more: boolean;
+  }>;
+}

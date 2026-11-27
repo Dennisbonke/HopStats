@@ -18,7 +18,7 @@ import {
   safeImageUrl,
 } from "../utils/explorer";
 
-function useBeerResource<T>(
+export function useBeerResource<T>(
   key: string,
   load: (key: string) => Promise<T>,
   enabled: boolean,
@@ -250,9 +250,14 @@ export default function ExplorerBeerDetail() {
       <Link
         className="beer-detail-back"
         to={returnTo}
-        state={{ explorerReturnKey: location.state?.explorerEntryKey }}
+        state={{
+          ...location.state,
+          explorerReturnKey: location.state?.explorerEntryKey,
+        }}
       >
-        ← Back to Beer Explorer
+        {returnTo.startsWith("/explore/breweries/")
+          ? "← Back to brewery"
+          : "← Back to Beer Explorer"}
       </Link>
       {!validId ? (
         <ResourceError error={new ApiError(404)} retry={profile.retry} />
@@ -266,7 +271,17 @@ export default function ExplorerBeerDetail() {
             <BeerArtwork key={`${beer.id}:${beer.photo_url}`} beer={beer} />
             <div>
               <h1>{beer.name}</h1>
-              <p>{beer.brewery?.name ?? "Brewery unavailable"}</p>
+              <p>
+                {beer.brewery ? (
+                  <Link
+                    to={`/explore/breweries/${beer.brewery.id}?${new URLSearchParams({ returnTo: location.pathname + location.search })}`}
+                  >
+                    {beer.brewery.name}
+                  </Link>
+                ) : (
+                  "Brewery unavailable"
+                )}
+              </p>
               <p>{beer.style?.name ?? "Style unavailable"}</p>
               <dl className="beer-profile-metadata">
                 {beer.abv !== null && (

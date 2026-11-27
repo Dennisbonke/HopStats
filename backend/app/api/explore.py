@@ -11,11 +11,16 @@ from ..schemas.explore import (
     ExploreBeerListResponse,
     ExploreBeerQuery,
     ExploreBoundsResponse,
+    ExploreBreweryDetailResponse,
+    ExploreBreweryListResponse,
+    ExploreBreweryQuery,
     ExploreCheckinListResponse,
     ExploreCheckinQuery,
+    ExploreCountryOptions,
     ExploreOptionsResponse,
     PositiveId,
 )
+from ..services.breweries import BreweryExplorer
 from ..services.explore import ExploreService
 
 router = APIRouter(prefix="/api/v1/explore", tags=["explore"])
@@ -70,3 +75,32 @@ def beer_checkins(
     filters: Annotated[ExploreCheckinQuery, Query()],
 ) -> ExploreCheckinListResponse:
     return ExploreService(session).checkins(user.id, beer_id, **filters.model_dump())
+
+
+@router.get("/breweries", response_model=ExploreBreweryListResponse)
+def breweries(
+    session: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+    filters: Annotated[ExploreBreweryQuery, Query()],
+):
+    return BreweryExplorer(session).catalogue(user.id, **filters.model_dump())
+
+
+@router.get("/brewery-countries", response_model=ExploreCountryOptions)
+def brewery_countries(
+    session: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+    search: Annotated[str, Query(max_length=200)] = "",
+    offset: Annotated[int, Query(ge=0, le=2147483647)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+):
+    return BreweryExplorer(session).countries(user.id, search, offset, limit)
+
+
+@router.get("/breweries/{brewery_id}", response_model=ExploreBreweryDetailResponse)
+def brewery_detail(
+    brewery_id: Annotated[int, Path(gt=0, le=9223372036854775807)],
+    session: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    return BreweryExplorer(session).detail(user.id, brewery_id)
