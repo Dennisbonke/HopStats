@@ -1,4 +1,7 @@
-import { optionResponse } from "./explorer-option-fixtures";
+import {
+  optionResponse,
+  stubExplorerOptions,
+} from "./explorer-option-fixtures";
 import type { Page } from "@playwright/test";
 export const beer = {
   id: 1,
@@ -86,14 +89,6 @@ export async function stubBeer(
       },
       "/api/v1/health": { status: "ok" },
       "/api/v1/explore/filter-bounds": { abv_max: 20 },
-      "/api/v1/explore/filter-options/breweries": {
-        items: [beer.brewery],
-        has_more: false,
-      },
-      "/api/v1/explore/filter-options/styles": {
-        items: [beer.style],
-        has_more: false,
-      },
       "/api/v1/explore/beers": {
         items: [beer],
         page: 1,
@@ -152,27 +147,14 @@ export async function stubBeer(
       },
     };
     if (path === "/api/v1/explore/beers/1") counts.detail++;
-    const optionData = {
-      breweries: (
-        responses["/api/v1/explore/filter-options/breweries"] as {
-          items: { id: number; name: string }[];
-        }
-      ).items,
-      styles: (
-        responses["/api/v1/explore/filter-options/styles"] as {
-          items: { id: number; name: string }[];
-        }
-      ).items,
-    };
-    const options = optionResponse(new URL(route.request().url()), optionData);
-    if (options) {
-      await route.fulfill({ json: options });
-      return;
-    }
     await route.fulfill({
       status: path in responses ? 200 : 404,
       json: responses[path] ?? { detail: "Not found" },
     });
+  });
+  await stubExplorerOptions(page, {
+    breweries: [beer.brewery],
+    styles: [beer.style],
   });
   return counts;
 }

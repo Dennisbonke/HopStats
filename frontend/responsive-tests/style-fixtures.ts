@@ -74,6 +74,11 @@ export const breweryDetail = {
 } satisfies BreweryDetail;
 // Bounded, schema-complete mocks; search and pagination match the API contract.
 export async function stubStyles(page: Page) {
+  const unexpected: string[] = [];
+  page.on("response", (response) => {
+    if (response.url().includes("/api/v1/") && response.status() >= 400)
+      unexpected.push(`${response.status()} ${response.url()}`);
+  });
   await stubBeer(page);
   await stubExplorerOptions(page, {
     breweries: [beer.brewery],
@@ -155,4 +160,5 @@ export async function stubStyles(page: Page) {
       });
     },
   );
+  return unexpected;
 }

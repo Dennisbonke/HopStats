@@ -1,3 +1,4 @@
+import { isExplorerDetail } from "../utils/explorer";
 import { detailLink, detailReturn, detailBackState } from "../utils/explorer";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
@@ -254,6 +255,11 @@ export default function ExplorerBeerDetail() {
             ? "← Back to brewery"
             : "← Back to Beer Explorer"}
       </Link>
+      {isExplorerDetail(returnTo) && (
+        <Link className="beer-detail-back" to="/explore/beers">
+          Beer catalogue
+        </Link>
+      )}
       {!validId ? (
         <ResourceError error={new ApiError(404)} retry={profile.retry} />
       ) : profile.error ? (

@@ -21,7 +21,7 @@ for (const viewport of [
   }, testInfo) => {
     await page.setViewportSize(viewport);
     await page.emulateMedia({ colorScheme: viewport.theme });
-    await stubStyles(page);
+    const unexpected = await stubStyles(page);
     await page.goto("/explore/styles");
     const mobile = viewport.width <= 700 || viewport.height < 500;
     await expect(
@@ -71,9 +71,11 @@ for (const viewport of [
     await page.getByLabel("Search styles", { exact: true }).fill("Imperial");
     await page.getByRole("button", { name: "Search", exact: true }).click();
     await expect(page).toHaveURL(/search=Imperial/);
-    const first = page
-      .getByRole("link", { name: style.name, exact: true })
-      .filter({ visible: true });
+    const first = mobile
+      ? page.getByRole("link").filter({
+          has: page.getByRole("heading", { name: style.name, exact: true }),
+        })
+      : page.getByRole("link", { name: style.name, exact: true });
     await expect(first).toBeVisible();
     if (testInfo.project.name === "chromium" && viewport.width === 390)
       await page.screenshot({
@@ -112,7 +114,8 @@ for (const viewport of [
         region.dispatchEvent(new PointerEvent("pointerup", pointer));
       });
     } else {
-      await plot.hover();
+      const box = (await plot.boundingBox())!;
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     }
     await expect(page.locator(".analytics-tooltip").first()).toBeVisible();
     await chart.locator("svg.recharts-surface").focus();
@@ -141,6 +144,7 @@ for (const viewport of [
       .getByRole("link", { name: "← Back to styles", exact: true })
       .click();
     await expect(page).toHaveURL(/min_breweries=0.*search=Imperial/);
+    expect(unexpected).toEqual([]);
   });
 }
 
@@ -148,7 +152,7 @@ test("cross-entity round trips preserve catalogue identity, scroll, back and for
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await stubStyles(page);
+  const unexpected = await stubStyles(page);
   for (const [origin, destination] of [
     ["styles", "breweries"],
     ["beers", "styles"],
@@ -188,8 +192,11 @@ test("cross-entity round trips preserve catalogue identity, scroll, back and for
     await page.goBack();
     await page.goForward();
     await expect(page).toHaveURL(url);
-    await page.goto(url);
+    // A catalogue shortcut creates a fresh SPA history entry; same-URL goto is a reload.
+    await page.getByRole("link", { name: "Styles", exact: true }).click();
+    await expect(page).toHaveURL("/explore/styles");
     await expect(page.locator(".explorer-beer-link").first()).toBeVisible();
-    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   }
+  expect(unexpected).toEqual([]);
 });

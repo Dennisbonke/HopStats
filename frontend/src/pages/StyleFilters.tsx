@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import CountFilter from "./CountFilter";
+import { useEffect, useRef, useState } from "react";
+import { Button } from "../components/ui";
 import { fetchStyleBounds } from "../api/explore";
 import {
   ExplorerFilterSheet,
@@ -15,18 +17,37 @@ export function StyleFilterPanel({
   onChange: (v: Filters) => void;
   mobile?: boolean;
 }) {
-  const [abvMax, setAbvMax] = useState(0);
+  const latest = useRef(value);
+  latest.current = value;
+  function change(patch: Partial<Filters>) {
+    const next = { ...latest.current, ...patch };
+    latest.current = next;
+    onChange(next);
+  }
+  const [bounds, setBounds] = useState<
+    { status: "pending" | "failed" } | { status: "success"; maximum: number }
+  >({ status: "pending" });
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let current = true;
+    setBounds({ status: "pending" });
     fetchStyleBounds()
       .then((v) => {
-        if (current) setAbvMax(Math.max(1, Math.ceil(v.abv_max)));
+        if (!Number.isFinite(v.abv_max) || v.abv_max < 0)
+          throw new Error("Invalid ABV bounds");
+        if (current)
+          setBounds({
+            status: "success",
+            maximum: Math.max(1, Math.ceil(v.abv_max)),
+          });
       })
-      .catch(() => {});
+      .catch(() => {
+        if (current) setBounds({ status: "failed" });
+      });
     return () => {
       current = false;
     };
-  }, []);
+  }, [attempt]);
   return (
     <div className="explorer-filter-content">
       <FilterSection
@@ -49,33 +70,13 @@ export function StyleFilterPanel({
                 ["Minimum distinct breweries", "min_breweries"],
               ] as const
             ).map(([label, key]) => (
-              <label key={key}>
-                {label}
-                <input
-                  type="number"
-                  min={key === "min_breweries" ? "0" : "1"}
-                  max="2147483647"
-                  step="1"
-                  inputMode="numeric"
-                  defaultValue={value[key]}
-                  key={`${key}:${value[key]}`}
-                  onBlur={(e) => {
-                    if (e.target.validity.valid)
-                      onChange({
-                        ...value,
-                        [key]: e.target.value
-                          ? String(Number(e.target.value))
-                          : "",
-                      });
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      e.currentTarget.blur();
-                    }
-                  }}
-                />
-              </label>
+              <CountFilter
+                key={key}
+                label={label}
+                value={value[key]}
+                minimum={key === "min_breweries" ? 0 : 1}
+                onChange={(next) => change({ [key]: next })}
+              />
             ))}
           </>
         )}
@@ -91,7 +92,7 @@ export function StyleFilterPanel({
             high={value.rating_max}
             maximum={5}
             onChange={(low, high) =>
-              onChange({ ...value, rating_min: low, rating_max: high })
+              change({ rating_min: low, rating_max: high })
             }
           />
         )}
@@ -101,15 +102,31 @@ export function StyleFilterPanel({
         initialOpen={!mobile || !!(value.abv_min || value.abv_max)}
       >
         {() => (
-          <RangeFilter
-            label="Average ABV"
-            low={value.abv_min}
-            high={value.abv_max}
-            maximum={abvMax}
-            onChange={(low, high) =>
-              onChange({ ...value, abv_min: low, abv_max: high })
-            }
-          />
+          <>
+            {bounds.status === "pending" && (
+              <p role="status">Loading average ABV bounds…</p>
+            )}
+            {bounds.status === "failed" && (
+              <p role="alert">
+                Average ABV bounds unavailable.{" "}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setAttempt((v) => v + 1)}
+                >
+                  Retry average ABV bounds
+                </Button>
+              </p>
+            )}
+            <RangeFilter
+              label="Average ABV"
+              low={value.abv_min}
+              high={value.abv_max}
+              maximum={bounds.status === "success" ? bounds.maximum : null}
+              sliderAvailable={bounds.status === "success"}
+              onChange={(low, high) => change({ abv_min: low, abv_max: high })}
+            />
+          </>
         )}
       </FilterSection>
       {(
@@ -145,7 +162,7 @@ export function StyleFilterPanel({
                     value={value[key]}
                     onChange={(e) => {
                       if (e.target.validity.valid)
-                        onChange({ ...value, [key]: e.target.value });
+                        change({ [key]: e.target.value });
                     }}
                   />
                 </label>

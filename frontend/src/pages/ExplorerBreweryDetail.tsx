@@ -1,3 +1,4 @@
+import { isExplorerDetail } from "../utils/explorer";
 import { detailLink, detailReturn, detailBackState } from "../utils/explorer";
 import { useEffect } from "react";
 import {
@@ -47,7 +48,7 @@ export default function ExplorerBreweryDetail() {
             ? "← Back to beer"
             : "← Back to breweries"}
       </Link>
-      {returnTo.startsWith("/explore/beers/") && (
+      {isExplorerDetail(returnTo) && (
         <Link className="beer-detail-back" to="/explore/breweries">
           Brewery catalogue
         </Link>

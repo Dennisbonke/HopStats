@@ -3393,7 +3393,10 @@ test("Styles catalogue inherits the document theme", async ({ page }) => {
       await page.setViewportSize({ width, height: width === 1280 ? 800 : 844 });
       await page.goto("/explore/styles");
       await expect(
-        page.getByRole("heading", { name: "Styles", exact: true }),
+        page.getByRole("link", { name: "Styles", exact: true }),
+      ).toHaveAttribute("aria-current", "page");
+      await expect(
+        page.getByText("No styles in your catalogue yet.", { exact: true }),
       ).toBeVisible();
       await expect(page.locator(".app")).toHaveClass(/theme-aware/);
       await expect(page.locator(".explorer-page")).not.toHaveClass(

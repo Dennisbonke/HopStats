@@ -260,6 +260,9 @@ test("mobile sheet changes stay draft until Apply", async () => {
 test("detail statistics and semantic cross-entity links", async () => {
   show("/explore/styles/2");
   await screen.findByRole("heading", { name: item.name });
+  expect(
+    screen.queryByRole("link", { name: "Style catalogue" }),
+  ).not.toBeInTheDocument();
   expect(screen.getByText("3.94")).toBeInTheDocument();
   expect(screen.getByText("0.00")).toBeInTheDocument();
   expect(
@@ -411,4 +414,30 @@ test("pending range commits merge and unchanged search preserves pagination", as
     expect(screen.getByLabelText("URL").textContent).toContain("abv_min=0");
     expect(screen.getByLabelText("URL").textContent).toContain("rating_min=0");
   });
+});
+
+test("brewery-origin style detail offers a fresh catalogue shortcut", async () => {
+  show("/explore/styles/2?returnTo=%2Fexplore%2Fbreweries%2F1");
+  await screen.findByRole("heading", { name: item.name });
+  expect(screen.getByRole("link", { name: "Style catalogue" })).toHaveAttribute(
+    "href",
+    "/explore/styles",
+  );
+  expect(
+    screen.getByRole("link", { name: "← Back to brewery" }),
+  ).toHaveAttribute("href", "/explore/breweries/1");
+});
+
+test("invalid count edits keep pagination and committed requests unchanged", async () => {
+  show("/explore/styles?page=2&min_checkins=5");
+  await screen.findAllByText(item.name);
+  const calls = vi.mocked(fetchExploreStyles).mock.calls.length;
+  const input = screen.getByLabelText("Minimum check-ins");
+  fireEvent.change(input, { target: { value: "-2" } });
+  fireEvent.blur(input);
+  expect(input).toHaveAttribute("aria-invalid", "true");
+  expect(screen.getByLabelText("URL").textContent).toContain(
+    "page=2&min_checkins=5",
+  );
+  expect(fetchExploreStyles).toHaveBeenCalledTimes(calls);
 });

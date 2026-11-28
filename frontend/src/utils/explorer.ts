@@ -35,7 +35,46 @@ export const styleReturnUrl = (value: string | null) =>
 export function styleDetailUrl(id: number, search: string): string {
   return `/explore/styles/${id}?${new URLSearchParams({ returnTo: `/explore/styles${search}` })}`;
 }
-// Keep a bounded, flat trail in history state; never recursively nest return URLs.
+// Only catalogue URLs may carry the independent new-tab fallback.
+export function safeCatalogueReturn(value: unknown): string | null {
+  if (
+    typeof value !== "string" ||
+    !/^\/explore\/(beers|breweries|styles)(?:\?|$)/.test(value) ||
+    value.length > 8192 ||
+    !value.startsWith("/explore/")
+  )
+    return null;
+  try {
+    const url = new URL(value, window.location.origin);
+    return url.origin === window.location.origin &&
+      !url.hash &&
+      /^\/explore\/(beers|breweries|styles)$/.test(url.pathname) &&
+      !url.searchParams.has("returnTo") &&
+      !url.searchParams.has("catalogueReturn")
+      ? url.pathname + url.search
+      : null;
+  } catch {
+    return null;
+  }
+}
+export function isExplorerDetail(value: string) {
+  return /^\/explore\/(beers|breweries|styles)\/[1-9][0-9]*(?:\?|$)/.test(
+    value,
+  );
+}
+function catalogueDestination(
+  params: URLSearchParams,
+  state: Record<string, unknown> | null,
+  fallback: string,
+) {
+  return (
+    safeCatalogueReturn(state?.explorerCatalogueReturn) ??
+    safeCatalogueReturn(params.get("catalogueReturn")) ??
+    safeCatalogueReturn(params.get("returnTo")) ??
+    fallback
+  );
+}
+// Keep the same-tab trail in bounded history state and just one catalogue URL in links.
 export function detailLink(
   entity: "beers" | "breweries" | "styles",
   id: number,
@@ -46,21 +85,22 @@ export function detailLink(
   },
 ) {
   const query = new URLSearchParams(location.search);
+  const catalogue = catalogueDestination(
+    query,
+    location.state,
+    `/explore/${location.pathname.split("/")[2]}`,
+  );
   query.delete("returnTo");
+  query.delete("catalogueReturn");
   const previous = location.pathname + (query.size ? `?${query}` : "");
   const parents = Array.isArray(location.state?.explorerParents)
     ? (location.state.explorerParents as string[])
     : [];
   return {
-    to: `/explore/${entity}/${id}?${new URLSearchParams({ returnTo: previous })}`,
+    to: `/explore/${entity}/${id}?${new URLSearchParams({ returnTo: previous, catalogueReturn: catalogue })}`,
     state: {
       ...location.state,
-      explorerCatalogueReturn:
-        location.state?.explorerCatalogueReturn ??
-        safeExplorerReturn(
-          new URLSearchParams(location.search).get("returnTo"),
-          `/explore/${location.pathname.split("/")[2]}`,
-        ),
+      explorerCatalogueReturn: catalogue,
       explorerParents: [...parents, location.pathname + location.search].slice(
         -16,
       ),
@@ -75,13 +115,21 @@ export function detailReturn(
   const parents = Array.isArray(state?.explorerParents)
     ? (state.explorerParents as string[])
     : [];
-  return safeExplorerReturn(
-    parents.at(-1) ??
-      (typeof state?.explorerCatalogueReturn === "string"
-        ? state.explorerCatalogueReturn
-        : params.get("returnTo")),
-    fallback,
-  );
+  if (parents.length) return safeExplorerReturn(parents.at(-1)!, fallback);
+  const catalogue = catalogueDestination(params, state, fallback);
+  const immediate = safeExplorerReturn(params.get("returnTo"), "");
+  if (isExplorerDetail(immediate)) {
+    const url = new URL(immediate, window.location.origin);
+    url.searchParams.delete("returnTo");
+    url.searchParams.delete("catalogueReturn");
+    if (
+      safeCatalogueReturn(state?.explorerCatalogueReturn) ||
+      safeCatalogueReturn(params.get("catalogueReturn"))
+    )
+      url.searchParams.set("catalogueReturn", catalogue);
+    return url.pathname + (url.searchParams.size ? "?" + url.searchParams : "");
+  }
+  return safeCatalogueReturn(immediate) ?? catalogue;
 }
 export function detailBackState(state: Record<string, unknown> | null) {
   const parents = Array.isArray(state?.explorerParents)

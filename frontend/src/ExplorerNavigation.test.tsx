@@ -205,3 +205,49 @@ test("detail trail stays flat and bounded and rejects external return destinatio
     ),
   ).toBe("/explore/styles");
 });
+
+test("cross-entity URLs recover the original catalogue without router state and remain flat", () => {
+  const catalogue =
+    "/explore/styles?search=IPA&rating_min=0&sort=name_asc&page=3";
+  let location = {
+    pathname: "/explore/styles/3",
+    search: `?${new URLSearchParams({ returnTo: catalogue })}`,
+    state: null,
+  };
+  let firstLength = 0;
+  for (let i = 0; i < 50; i++) {
+    const link = detailLink("beers", 1, location);
+    const next = new URL(link.to, window.location.origin);
+    const returnTo = detailReturn(next.searchParams, null, "/explore/beers");
+    const parent = new URL(returnTo, window.location.origin);
+    expect(parent.pathname).toBe(location.pathname);
+    expect(detailReturn(parent.searchParams, null, "/explore/styles")).toBe(
+      catalogue,
+    );
+    expect(next.searchParams.get("catalogueReturn")).toBe(catalogue);
+    expect(next.searchParams.get("returnTo")).not.toContain("returnTo");
+    expect(next.searchParams.get("returnTo")).not.toContain("catalogueReturn");
+    if (!i) firstLength = link.to.length;
+    expect(link.to.length).toBeLessThanOrEqual(firstLength);
+    location = { pathname: next.pathname, search: next.search, state: null };
+  }
+});
+
+test.each([
+  "https://evil.test/explore/styles",
+  "//evil.test/explore/styles",
+  "/explore/styles/3",
+  "/explore/styles#fragment",
+  "/explore/styles?returnTo=/explore/beers",
+  "/explore/styles?catalogueReturn=/explore/beers",
+  "/other",
+  "/explore/styles/../styles",
+])("catalogue fallback rejects %s", (invalid) => {
+  // Normalized dot segments are rejected before accepting the route.
+  const destination = detailReturn(
+    new URLSearchParams({ catalogueReturn: invalid }),
+    null,
+    "/explore/beers",
+  );
+  expect(destination).toBe("/explore/beers");
+});
