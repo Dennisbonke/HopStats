@@ -52,7 +52,15 @@ for (const viewport of [
       : page.locator(".explorer-filter-sidebar");
     const breweries = scope.getByLabel("Available breweries");
     await expect(breweries.getByRole("checkbox")).toHaveCount(25);
-    await breweries.getByRole("checkbox").first().check();
+    const selectedBrewery = breweries.getByRole("checkbox", {
+      name: data.breweries[0].name,
+      exact: true,
+    });
+    // Desktop selection commits through the router asynchronously. A native
+    // check() asserts immediately after clicking, before that commit can finish.
+    await selectedBrewery.click();
+    await expect(selectedBrewery).toBeChecked();
+    if (!mobile) await expect(page).toHaveURL(/brewery_id=1(?:&|$)/);
     await breweries.evaluate((node) => {
       node.scrollTop = node.scrollHeight;
     });
@@ -63,7 +71,7 @@ for (const viewport of [
     expect(
       intercepted.filter((url) => url.searchParams.get("offset") === "25"),
     ).toHaveLength(2);
-    await expect(breweries.getByRole("checkbox").first()).toBeChecked();
+    await expect(selectedBrewery).toBeChecked();
     await breweries.focus();
     await page.keyboard.press("End");
     await breweries.evaluate((node) => {

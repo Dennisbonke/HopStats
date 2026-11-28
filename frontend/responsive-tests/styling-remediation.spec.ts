@@ -1245,6 +1245,7 @@ async function expectInventoryColumns(table: Locator) {
       range.selectNodeContents(cell);
       const style = getComputedStyle(cell);
       return {
+        text: cell.textContent,
         lines: range.getClientRects().length,
         textWidth: range.getBoundingClientRect().width,
         available:
@@ -1276,9 +1277,16 @@ async function expectInventoryColumns(table: Locator) {
     expect(geometry.headers[index].x).toBeCloseTo(geometry.cells[index].x, 1);
   }
   for (const header of geometry.headers) {
-    expect(header.textWidth).toBeLessThanOrEqual(header.available + 1);
+    expect(
+      header.textWidth,
+      `${header.text} header fits its column`,
+    ).toBeLessThanOrEqual(header.available + 1);
   }
   expect(geometry.wrapping).toEqual(["normal", "normal", "normal"]);
+  expect(
+    geometry.headers[5].width,
+    "Location column minimum",
+  ).toBeGreaterThanOrEqual(80);
   expect(geometry.styleLines).toBeGreaterThan(1);
   expect(geometry.scroll).toBeLessThanOrEqual(geometry.client + 1);
 }

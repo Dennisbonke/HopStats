@@ -129,8 +129,6 @@
 
 .inventory-page .inventory-table {
   width: 100%;
-  /* Reserve compact columns before distributing descriptive text space. */
-  --inventory-text-width: calc(100% - 25.5rem);
   table-layout: fixed;
   border-collapse: collapse;
   color: var(--color-text-primary);
@@ -139,22 +137,22 @@
 
 .inventory-page .inventory-table th,
 .inventory-page .inventory-table td {
-  padding: 0.7rem 0.4rem;
+  padding: 0.7rem 0.3rem;
   border-bottom: 1px solid var(--color-border);
   text-align: left;
   vertical-align: top;
 }
 
-.inventory-page .inventory-column-beer {
-  width: calc(var(--inventory-text-width) * 0.35);
-}
-
-.inventory-page .inventory-column-style {
-  width: calc(var(--inventory-text-width) * 0.27);
-}
-
+/* Mixed percentage/length calc() column widths are treated as auto by table
+ * layout. Reserve Location explicitly; Beer and Style share the remaining space. */
 .inventory-page .inventory-column-location {
-  width: calc(var(--inventory-text-width) * 0.38);
+  width: 5rem;
+}
+
+@media (min-width: 900px) {
+  .inventory-page .inventory-column-location {
+    width: 20%;
+  }
 }
 
 .inventory-page .inventory-column-units,
