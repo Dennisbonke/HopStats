@@ -9,6 +9,8 @@ import {
 import { createPortal } from "react-dom";
 import { ExploreEntity, fetchExploreOptions } from "../api/explore";
 import { Button } from "../components/ui";
+import { useFilterOptions } from "./useFilterOptions";
+
 import {
   activeGroups,
   amsterdamDay,
@@ -16,6 +18,12 @@ import {
   Filters,
   validThreshold,
 } from "./explorerState";
+
+const entityKey = (item: ExploreEntity) => item.id;
+const breweryOptions = (params: URLSearchParams) =>
+  fetchExploreOptions("breweries", params);
+const styleOptions = (params: URLSearchParams) =>
+  fetchExploreOptions("styles", params);
 
 export type OptionNames = Record<string, string>;
 function MultiSelect({
@@ -32,41 +40,22 @@ function MultiSelect({
   onNames: (items: ExploreEntity[]) => void;
 }) {
   const [search, setSearch] = useState("");
-  const [offset, setOffset] = useState(0);
-  const [items, setItems] = useState<ExploreEntity[]>([]);
-  const [more, setMore] = useState(false);
-  const [error, setError] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [retry, setRetry] = useState(0);
+  const options = useFilterOptions(
+    category === "styles" ? styleOptions : breweryOptions,
+    entityKey,
+    category === "styles" ? "" : search,
+    category === "styles",
+  );
+  const { items, loading, error } = options;
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(false);
-    const timer = window.setTimeout(() => {
-      fetchExploreOptions(
-        category,
-        new URLSearchParams({ search, offset: String(offset) }),
-      )
-        .then((result) => {
-          if (cancelled) return;
-          setItems((old) =>
-            offset ? [...old, ...result.items] : result.items,
-          );
-          setMore(result.has_more);
-          onNames(result.items);
-        })
-        .catch(() => {
-          if (!cancelled) setError(true);
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
-    }, 250);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [category, search, offset, onNames, retry]);
+    onNames(items);
+  }, [items, onNames]);
+  const visible = items.filter(
+    (item) =>
+      category !== "styles" ||
+      item.name.toLocaleLowerCase().includes(search.toLocaleLowerCase()) ||
+      selected.includes(String(item.id)),
+  );
   return (
     <>
       <label>
@@ -80,7 +69,6 @@ function MultiSelect({
           }}
           onChange={(e) => {
             setSearch(e.target.value);
-            setOffset(0);
           }}
         />
       </label>
@@ -97,48 +85,47 @@ function MultiSelect({
           </button>
         ))}
       </div>
-      {loading && <p role="status">Loading {category}…</p>}
-      {error ? (
-        <p role="alert">
-          Unable to load {category}.{" "}
-          <button type="button" onClick={() => setRetry((n) => n + 1)}>
-            Retry
-          </button>
-        </p>
-      ) : (
-        <div className="explorer-options" aria-label={`Available ${category}`}>
-          {items.map((item) => (
-            <label key={item.id}>
-              <input
-                type="checkbox"
-                checked={selected.includes(String(item.id))}
-                disabled={
-                  !selected.includes(String(item.id)) && selected.length >= 100
-                }
-                onChange={(e) =>
-                  onChange(
-                    e.target.checked
-                      ? [...selected, String(item.id)]
-                      : selected.filter((id) => id !== String(item.id)),
-                  )
-                }
-              />
-              {item.name}
-            </label>
-          ))}
-          {!loading && !items.length && <p>No matching {category}.</p>}
-          {more && (
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={loading}
-              onClick={() => setOffset(items.length)}
-            >
-              Load more {category}
+      <div
+        className="explorer-options"
+        aria-label={`Available ${category}`}
+        ref={options.container}
+        onScroll={options.checkBottom}
+        onFocus={options.checkBottom}
+        tabIndex={0}
+      >
+        {visible.map((item) => (
+          <label key={item.id}>
+            <input
+              type="checkbox"
+              checked={selected.includes(String(item.id))}
+              disabled={
+                !selected.includes(String(item.id)) && selected.length >= 100
+              }
+              onChange={(e) =>
+                onChange(
+                  e.target.checked
+                    ? [...selected, String(item.id)]
+                    : selected.filter((id) => id !== String(item.id)),
+                )
+              }
+            />
+            {item.name}
+          </label>
+        ))}
+        <div ref={options.sentinel} aria-hidden="true" />
+        {loading && <p role="status">Loading {category}…</p>}
+        {error && (
+          <p role="alert">
+            Unable to load {category}.{" "}
+            <Button type="button" variant="secondary" onClick={options.retry}>
+              Retry
             </Button>
-          )}
-        </div>
-      )}
+          </p>
+        )}
+        {!loading && !error && !visible.length && (
+          <p>No matching {category}.</p>
+        )}
+      </div>
     </>
   );
 }

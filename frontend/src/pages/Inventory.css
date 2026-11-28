@@ -129,7 +129,7 @@
 
 .inventory-page .inventory-table {
   width: 100%;
-  min-width: 58rem;
+  table-layout: fixed;
   border-collapse: collapse;
   color: var(--color-text-primary);
   font-size: 0.9rem;
@@ -137,25 +137,62 @@
 
 .inventory-page .inventory-table th,
 .inventory-page .inventory-table td {
-  padding: 0.7rem 0.5rem;
+  padding: 0.7rem 0.3rem;
   border-bottom: 1px solid var(--color-border);
   text-align: left;
   vertical-align: top;
 }
 
-.inventory-page .inventory-table td:first-child {
-  min-width: 12rem;
+/* Mixed percentage/length calc() column widths are treated as auto by table
+ * layout. Reserve Location explicitly; Beer and Style share the remaining space. */
+.inventory-page .inventory-column-location {
+  width: 5rem;
+}
+
+@media (min-width: 900px) {
+  .inventory-page .inventory-column-location {
+    width: 20%;
+  }
+}
+
+.inventory-page .inventory-column-units,
+.inventory-page .inventory-column-abv {
+  width: 4rem;
+}
+
+.inventory-page .inventory-column-date {
+  width: 6rem;
+}
+
+.inventory-page .inventory-column-match {
+  width: 6.5rem;
+}
+
+.inventory-page .inventory-column-action {
+  width: 5rem;
+}
+
+.inventory-page .inventory-table th {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.inventory-page .inventory-table td {
+  white-space: normal;
   overflow-wrap: anywhere;
 }
 
-.inventory-page .inventory-table td:not(:first-child) {
+.inventory-page .inventory-table :is(th, td):nth-child(3),
+.inventory-page .inventory-table :is(th, td):nth-child(4) {
   white-space: nowrap;
+  overflow-wrap: normal;
+  font-variant-numeric: tabular-nums;
 }
 
 .inventory-page .inventory-table .ui-button {
   min-width: 0;
   min-height: 2.75rem;
-  padding-inline: 0.65rem;
+  padding-inline: 0.55rem;
   white-space: nowrap;
 }
 

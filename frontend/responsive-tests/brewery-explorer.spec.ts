@@ -1,3 +1,4 @@
+import { stubExplorerOptions } from "./explorer-option-fixtures";
 import { expect, test, type Page } from "@playwright/test";
 import { beer, stubBeer } from "./landscape-beer-fixtures";
 const brewery = {
@@ -14,15 +15,12 @@ const brewery = {
 };
 async function stub(page: Page) {
   await stubBeer(page);
-  await page.route("**/api/v1/explore/brewery-countries*", (route) =>
-    route.fulfill({
-      json: {
-        items: ["Netherlands"],
-        unknown_available: true,
-        has_more: false,
-      },
-    }),
-  );
+  await stubExplorerOptions(page, {
+    countries: ["Netherlands"],
+    unknown: true,
+    breweries: [beer.brewery],
+    styles: [beer.style],
+  });
   await page.route(
     /\/api\/v1\/explore\/breweries(?:\/[0-9]+)?(?:\?.*)?$/,
     (route) => {

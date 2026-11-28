@@ -278,6 +278,21 @@ function DetailPanel({
   );
 }
 
+function InventoryColumns() {
+  return (
+    <colgroup>
+      <col className="inventory-column-beer" />
+      <col className="inventory-column-style" />
+      <col className="inventory-column-units" />
+      <col className="inventory-column-abv" />
+      <col className="inventory-column-date" />
+      <col className="inventory-column-location" />
+      <col className="inventory-column-match" />
+      <col className="inventory-column-action" />
+    </colgroup>
+  );
+}
+
 function InventoryRows({
   data,
   onSelect,
@@ -294,6 +309,7 @@ function InventoryRows({
         tabIndex={0}
       >
         <table className="inventory-table">
+          <InventoryColumns />
           <thead>
             <tr>
               <th>Beer</th>
@@ -419,6 +435,7 @@ function GroupedInventoryRows({
               tabIndex={0}
             >
               <table className="inventory-table">
+                <InventoryColumns />
                 <thead>
                   <tr>
                     <th>Beer</th>
