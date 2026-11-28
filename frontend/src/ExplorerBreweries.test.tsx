@@ -273,6 +273,9 @@ test("mobile sheet changes stay draft until Apply", async () => {
 test("detail statistics and semantic cross-entity links", async () => {
   show("/explore/breweries/2");
   await screen.findByRole("heading", { name: item.name });
+  expect(
+    screen.queryByRole("link", { name: "Brewery catalogue" }),
+  ).not.toBeInTheDocument();
   expect(screen.getByText("3.94")).toBeInTheDocument();
   expect(screen.getByText("0.00")).toBeInTheDocument();
   expect(
@@ -285,7 +288,10 @@ test("detail statistics and semantic cross-entity links", async () => {
   expect(
     screen.getByRole("link", { name: /View brewery on Untappd/ }),
   ).toHaveAttribute("href", "https://untappd.com/brewery/765");
-  expect(screen.queryByRole("link", { name: /IPA/ })).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /IPA/ })).toHaveAttribute(
+    "href",
+    expect.stringContaining("/explore/styles/1?"),
+  );
 });
 test("catalogue return URL and history entry restoration remain scoped", async () => {
   const url = "/explore/breweries?search=Personal&sort=name_asc&page=2";
@@ -321,7 +327,6 @@ test("beer-origin return path and unsafe redirects", async () => {
   for (const input of [
     "https://evil.test/explore/breweries",
     "//evil.test/explore/breweries",
-    "/explore/breweries/2",
     "/explore/breweries#x",
   ])
     expect(breweryReturnUrl(input)).toBe("/explore/breweries");
@@ -366,4 +371,40 @@ test("URL validation and equivalent no-op filter edits preserve state", () => {
   expect(
     sameFilters(emptyFilters(), { ...emptyFilters(), rating_min: "0" }),
   ).toBe(false);
+});
+
+test("style-origin brewery detail offers a fresh catalogue shortcut", async () => {
+  show("/explore/breweries/2?returnTo=%2Fexplore%2Fstyles%2F1");
+  await screen.findByRole("heading", { name: item.name });
+  expect(
+    screen.getByRole("link", { name: "Brewery catalogue" }),
+  ).toHaveAttribute("href", "/explore/breweries");
+});
+
+test("invalid count edits preserve applied brewery filters and rapid valid edits merge", async () => {
+  show("/explore/breweries?page=2&min_checkins=5");
+  await screen.findAllByText(item.name);
+  const calls = vi.mocked(fetchExploreBreweries).mock.calls.length;
+  const count = screen.getByLabelText("Minimum check-ins");
+  fireEvent.change(count, { target: { value: "-2" } });
+  fireEvent.blur(count);
+  expect(screen.getByLabelText("URL").textContent).toContain(
+    "page=2&min_checkins=5",
+  );
+  expect(fetchExploreBreweries).toHaveBeenCalledTimes(calls);
+  act(() => {
+    fireEvent.change(count, { target: { value: "6.0" } });
+    fireEvent.blur(count);
+    const beers = screen.getByLabelText("Minimum unique beers");
+    fireEvent.change(beers, { target: { value: "03" } });
+    fireEvent.blur(beers);
+  });
+  await waitFor(() => {
+    expect(screen.getByLabelText("URL").textContent).toContain(
+      "min_checkins=6",
+    );
+    expect(screen.getByLabelText("URL").textContent).toContain(
+      "min_unique_beers=3",
+    );
+  });
 });

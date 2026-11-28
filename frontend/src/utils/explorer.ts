@@ -12,19 +12,134 @@ export function safeImageUrl(value: string | null): string | null {
   }
 }
 
-export function explorerReturnUrl(value: string | null): string {
-  if (!value) return "/explore/beers";
+export function safeExplorerReturn(
+  value: string | null,
+  fallback = "/explore/beers",
+): string {
+  if (!value) return fallback;
   try {
     const url = new URL(value, window.location.origin);
     return url.origin === window.location.origin &&
-      (url.pathname === "/explore/beers" ||
-        /^\/explore\/breweries\/[1-9][0-9]*$/.test(url.pathname)) &&
-      !url.hash
+      !url.hash &&
+      /^\/explore\/(beers|breweries|styles)(\/[1-9][0-9]*)?$/.test(url.pathname)
       ? `${url.pathname}${url.search}`
-      : "/explore/beers";
+      : fallback;
   } catch {
-    return "/explore/beers";
+    return fallback;
   }
+}
+export const explorerReturnUrl = (value: string | null) =>
+  safeExplorerReturn(value);
+export const styleReturnUrl = (value: string | null) =>
+  safeExplorerReturn(value, "/explore/styles");
+export function styleDetailUrl(id: number, search: string): string {
+  return `/explore/styles/${id}?${new URLSearchParams({ returnTo: `/explore/styles${search}` })}`;
+}
+// Only catalogue URLs may carry the independent new-tab fallback.
+export function safeCatalogueReturn(value: unknown): string | null {
+  if (
+    typeof value !== "string" ||
+    !/^\/explore\/(beers|breweries|styles)(?:\?|$)/.test(value) ||
+    value.length > 8192 ||
+    !value.startsWith("/explore/")
+  )
+    return null;
+  try {
+    const url = new URL(value, window.location.origin);
+    return url.origin === window.location.origin &&
+      !url.hash &&
+      /^\/explore\/(beers|breweries|styles)$/.test(url.pathname) &&
+      !url.searchParams.has("returnTo") &&
+      !url.searchParams.has("catalogueReturn")
+      ? url.pathname + url.search
+      : null;
+  } catch {
+    return null;
+  }
+}
+export function isExplorerDetail(value: string) {
+  return /^\/explore\/(beers|breweries|styles)\/[1-9][0-9]*(?:\?|$)/.test(
+    value,
+  );
+}
+function catalogueDestination(
+  params: URLSearchParams,
+  state: Record<string, unknown> | null,
+  fallback: string,
+) {
+  return (
+    safeCatalogueReturn(state?.explorerCatalogueReturn) ??
+    safeCatalogueReturn(params.get("catalogueReturn")) ??
+    safeCatalogueReturn(params.get("returnTo")) ??
+    fallback
+  );
+}
+// Keep the same-tab trail in bounded history state and just one catalogue URL in links.
+export function detailLink(
+  entity: "beers" | "breweries" | "styles",
+  id: number,
+  location: {
+    pathname: string;
+    search: string;
+    state: Record<string, unknown> | null;
+  },
+) {
+  const query = new URLSearchParams(location.search);
+  const catalogue = catalogueDestination(
+    query,
+    location.state,
+    `/explore/${location.pathname.split("/")[2]}`,
+  );
+  query.delete("returnTo");
+  query.delete("catalogueReturn");
+  const previous = location.pathname + (query.size ? `?${query}` : "");
+  const parents = Array.isArray(location.state?.explorerParents)
+    ? (location.state.explorerParents as string[])
+    : [];
+  return {
+    to: `/explore/${entity}/${id}?${new URLSearchParams({ returnTo: previous, catalogueReturn: catalogue })}`,
+    state: {
+      ...location.state,
+      explorerCatalogueReturn: catalogue,
+      explorerParents: [...parents, location.pathname + location.search].slice(
+        -16,
+      ),
+    },
+  };
+}
+export function detailReturn(
+  params: URLSearchParams,
+  state: Record<string, unknown> | null,
+  fallback: string,
+) {
+  const parents = Array.isArray(state?.explorerParents)
+    ? (state.explorerParents as string[])
+    : [];
+  if (parents.length) return safeExplorerReturn(parents.at(-1)!, fallback);
+  const catalogue = catalogueDestination(params, state, fallback);
+  const immediate = safeExplorerReturn(params.get("returnTo"), "");
+  if (isExplorerDetail(immediate)) {
+    const url = new URL(immediate, window.location.origin);
+    url.searchParams.delete("returnTo");
+    url.searchParams.delete("catalogueReturn");
+    if (
+      safeCatalogueReturn(state?.explorerCatalogueReturn) ||
+      safeCatalogueReturn(params.get("catalogueReturn"))
+    )
+      url.searchParams.set("catalogueReturn", catalogue);
+    return url.pathname + (url.searchParams.size ? "?" + url.searchParams : "");
+  }
+  return safeCatalogueReturn(immediate) ?? catalogue;
+}
+export function detailBackState(state: Record<string, unknown> | null) {
+  const parents = Array.isArray(state?.explorerParents)
+    ? (state.explorerParents as string[])
+    : [];
+  return {
+    ...state,
+    explorerParents: parents.slice(0, -1),
+    explorerReturnKey: state?.explorerEntryKey,
+  };
 }
 export function beerDetailUrl(id: number, search: string): string {
   return `/explore/beers/${id}?${new URLSearchParams({ returnTo: `/explore/beers${search}` })}`;
@@ -89,19 +204,8 @@ export function personalRating(value: number | null) {
 export function breweryDetailUrl(id: number, search: string): string {
   return `/explore/breweries/${id}?${new URLSearchParams({ returnTo: `/explore/breweries${search}` })}`;
 }
-export function breweryReturnUrl(value: string | null): string {
-  try {
-    const url = new URL(value ?? "/explore/breweries", window.location.origin);
-    return url.origin === window.location.origin &&
-      !url.hash &&
-      (url.pathname === "/explore/breweries" ||
-        /^\/explore\/beers\/[1-9][0-9]*$/.test(url.pathname))
-      ? `${url.pathname}${url.search}`
-      : "/explore/breweries";
-  } catch {
-    return "/explore/breweries";
-  }
-}
+export const breweryReturnUrl = (value: string | null) =>
+  safeExplorerReturn(value, "/explore/breweries");
 export function breweryLocation(value: {
   city: string | null;
   state: string | null;

@@ -27,6 +27,7 @@ import {
 } from "./BreweryFilters";
 import {
   activeGroups,
+  FILTER_KEYS,
   DEFAULT_SORT,
   emptyFilters,
   ExploreSort,
@@ -130,6 +131,8 @@ export default function ExplorerBreweries() {
   const page = selectedPage(searchParams.get("page"));
   const urlStateKey = searchParams.toString();
   const filters = readFilters(searchParams);
+  const pendingParams = useRef(searchParams);
+  pendingParams.current = searchParams;
   const pageSize = Math.min(
     100,
     selectedPage(searchParams.get("page_size") ?? "25"),
@@ -243,26 +246,36 @@ export default function ExplorerBreweries() {
   const showLoading = loading || (!currentData && !currentError);
 
   function updateUrl(search: string, nextSort: ExploreSort, nextPage: number) {
-    const params = new URLSearchParams(searchParams);
+    const params = new URLSearchParams(pendingParams.current);
     params.delete("search");
     params.delete("sort");
     params.delete("page");
     if (search.trim()) params.set("search", search.trim());
     if (nextSort !== DEFAULT_SORT) params.set("sort", nextSort);
     if (nextPage > 1) params.set("page", String(nextPage));
+    pendingParams.current = params;
     setSearchParams(params);
   }
 
-  function applyFilters(next: Filters) {
-    if (sameFilters(filters, next)) return;
-    const params = new URLSearchParams(searchParams);
-    writeFilters(params, next);
+  function applyFilters(next: Filters, replace = false) {
+    const params = new URLSearchParams(pendingParams.current);
+    const latest = readFilters(params);
+    const merged = { ...latest };
+    for (const key of FILTER_KEYS) {
+      if (replace || filters[key] !== next[key]) {
+        if (key === "country") merged.country = next.country;
+        else merged[key] = next[key];
+      }
+    }
+    if (sameFilters(latest, merged)) return;
+    writeFilters(params, merged);
     params.delete("page");
-    if (params.toString() !== searchParams.toString()) setSearchParams(params);
+    pendingParams.current = params;
+    setSearchParams(params);
   }
   function clearFilters() {
     setFilterResetKey((key) => key + 1);
-    applyFilters(emptyFilters());
+    applyFilters(emptyFilters(), true);
   }
   function sortHeader(field: string) {
     updateUrl(

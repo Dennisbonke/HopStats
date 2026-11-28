@@ -19,6 +19,7 @@ export function useFilterOptions<T>(
   const load = useRef<() => void>(() => {});
   useEffect(() => {
     let cancelled = false;
+    let ready = eager;
     let busy = false;
     let offset = 0;
     let hasMore = true;
@@ -29,7 +30,7 @@ export function useFilterOptions<T>(
     setUnknown(false);
     if (container.current) container.current.scrollTop = 0;
     async function next() {
-      if (cancelled || busy || !hasMore) return;
+      if (cancelled || !ready || busy || !hasMore) return;
       busy = true;
       setLoading(true);
       setError(false);
@@ -65,7 +66,13 @@ export function useFilterOptions<T>(
       }
     }
     load.current = () => void next();
-    const timer = window.setTimeout(load.current, eager ? 0 : 250);
+    const timer = window.setTimeout(
+      () => {
+        ready = true;
+        void next();
+      },
+      eager ? 0 : 250,
+    );
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
@@ -93,9 +100,10 @@ export function useFilterOptions<T>(
     if (root.clientHeight > 0 && root.scrollHeight <= root.clientHeight + 100)
       load.current();
     if (typeof IntersectionObserver === "undefined") return;
+    const loadPage = load.current;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) load.current();
+        if (entries.some((entry) => entry.isIntersecting)) loadPage();
       },
       { root, rootMargin: "0px 0px 100px 0px" },
     );

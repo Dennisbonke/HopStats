@@ -25,11 +25,8 @@ const ExplorerBreweryDetail = lazy(
   () => import("./pages/ExplorerBreweryDetail"),
 );
 const ExplorerBeers = lazy(() => import("./pages/ExplorerBeers"));
-const ExplorerUpcoming = lazy(() =>
-  import("./pages/ExplorerLayout").then((module) => ({
-    default: module.ExplorerUpcoming,
-  })),
-);
+const ExplorerStyles = lazy(() => import("./pages/ExplorerStyles"));
+const ExplorerStyleDetail = lazy(() => import("./pages/ExplorerStyleDetail"));
 import Login from "./pages/Login";
 import { Button, StatusBadge } from "./components/ui";
 
@@ -57,6 +54,8 @@ const themeAwareRoutes = [
   "/explore/beers/:beerId",
   "/explore/breweries",
   "/explore/breweries/:breweryId",
+  "/explore/styles",
+  "/explore/styles/:styleId",
 ];
 
 function Placeholder({ title }: { title: string }) {
@@ -276,10 +275,8 @@ export default function App() {
             />
             <Route path="beers/:beerId" element={<ExplorerBeerDetail />} />
             <Route path="breweries" element={<ExplorerBreweries />} />
-            <Route
-              path="styles"
-              element={<ExplorerUpcoming title="Styles" />}
-            />
+            <Route path="styles/:styleId" element={<ExplorerStyleDetail />} />
+            <Route path="styles" element={<ExplorerStyles />} />
           </Route>
           <Route path="/imports" element={<Imports />} />
           <Route path="*" element={<Placeholder title="Page not found" />} />

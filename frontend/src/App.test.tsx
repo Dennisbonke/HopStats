@@ -62,14 +62,18 @@ beforeEach(() => {
           ok: true,
           json: async () => ({ items: [], has_more: false }),
         });
-      if (url === "/api/v1/explore/filter-bounds")
+      if (
+        url === "/api/v1/explore/filter-bounds" ||
+        url === "/api/v1/explore/style-bounds"
+      )
         return Promise.resolve({
           ok: true,
           json: async () => ({ abv_max: 20 }),
         });
       if (
         String(url).startsWith("/api/v1/explore/beers") ||
-        String(url).startsWith("/api/v1/explore/breweries")
+        String(url).startsWith("/api/v1/explore/breweries") ||
+        String(url).startsWith("/api/v1/explore/styles")
       )
         return Promise.resolve({
           ok: true,
@@ -194,7 +198,7 @@ test("mobile menu opens, closes on Escape and navigation, and marks the active r
   ).toBeInTheDocument();
 });
 
-test("opens Explorer beers and enables Breweries while Styles remains upcoming", async () => {
+test("opens Explorer beers and enables Breweries and Styles", async () => {
   render(
     <MemoryRouter initialEntries={["/explore"]}>
       <App />
@@ -209,7 +213,7 @@ test("opens Explorer beers and enables Breweries while Styles remains upcoming",
   ).toHaveTextContent("Breweries");
   expect(
     screen.getByRole("navigation", { name: "Explorer sections" }),
-  ).toHaveTextContent("Styles Upcoming");
+  ).toHaveTextContent("Styles");
   expect(screen.getByRole("link", { name: "Beers" })).toHaveAttribute(
     "aria-current",
     "page",
@@ -223,7 +227,7 @@ test("opens Explorer beers and enables Breweries while Styles remains upcoming",
   ).toBeInTheDocument();
 });
 
-test("unfinished Explorer routes still render their explanatory placeholder", async () => {
+test("Styles route renders the catalogue", async () => {
   render(
     <MemoryRouter initialEntries={["/explore/styles"]}>
       <App />
@@ -231,10 +235,10 @@ test("unfinished Explorer routes still render their explanatory placeholder", as
   );
   expect(
     await screen.findByRole("heading", {
-      name: "Styles catalogue coming later",
+      name: "Styles",
     }),
   ).toBeInTheDocument();
-  expect(document.querySelector(".app")).not.toHaveClass("theme-aware");
+  expect(document.querySelector(".app")).toHaveClass("theme-aware");
   expect(document.querySelector(".explorer-page")).not.toHaveClass(
     "theme-aware",
   );

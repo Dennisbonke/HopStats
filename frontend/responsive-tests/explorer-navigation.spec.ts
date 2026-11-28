@@ -263,56 +263,18 @@ test("mobile navigation stays compact, usable, and does not overflow", async ({
   ).toBeVisible();
 });
 
-test("Breweries is enabled and Styles remains unavailable in the tab strip", async ({
-  page,
-}) => {
+test("Breweries and Styles are enabled in the tab strip", async ({ page }) => {
   await stubExplorer(page);
   await page.goto("/explore/beers");
   const tabs = page.getByRole("navigation", { name: "Explorer sections" });
-  await expect(
-    tabs.getByRole("link", { name: "Breweries", exact: true }),
-  ).toHaveAttribute("href", "/explore/breweries");
-  for (const name of ["Styles"]) {
-    const unavailable = tabs.locator(".explorer-tab-unavailable", {
-      hasText: name,
-    });
-    await expect(unavailable).toContainText("Upcoming");
-    await expect(unavailable).toHaveAttribute("aria-disabled", "true");
-    await expect(unavailable).not.toHaveAttribute("href", /./);
-    expect(
-      await contrastRatio(
-        unavailable.locator(".upcoming-label"),
-        ".explorer-page",
-      ),
-    ).toBeGreaterThanOrEqual(4.5);
-  }
-});
-
-test("Style placeholder remains readable in both themes", async ({ page }) => {
-  await stubExplorer(page);
-  for (const colorScheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme });
-    for (const [route, heading] of [
-      ["/explore/styles", "Styles catalogue coming later"],
-    ]) {
-      await page.goto(route);
-      const placeholder = page.locator(".explorer-upcoming");
-      await expect(
-        placeholder.getByRole("heading", { name: heading }),
-      ).toBeVisible();
-      await expect(placeholder).toContainText(
-        "This Explorer catalogue is planned for a later HopStats milestone.",
-      );
-      expect(
-        await contrastRatio(
-          placeholder.getByRole("heading"),
-          ".explorer-upcoming",
-        ),
-      ).toBeGreaterThanOrEqual(4.5);
-      expect(
-        await contrastRatio(placeholder.locator("p"), ".explorer-upcoming"),
-      ).toBeGreaterThanOrEqual(4.5);
-    }
+  for (const [name, path] of [
+    ["Breweries", "breweries"],
+    ["Styles", "styles"],
+  ]) {
+    await expect(tabs.getByRole("link", { name, exact: true })).toHaveAttribute(
+      "href",
+      `/explore/${path}`,
+    );
   }
 });
 

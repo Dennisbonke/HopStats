@@ -1069,3 +1069,27 @@
   min-height: 44px;
   align-content: center;
 }
+
+.explorer-page .explorer-styles .explorer-beer-table th:first-child {
+  width: 28%;
+}
+.explorer-page .explorer-styles .explorer-beer-table th:nth-child(2),
+.explorer-page .explorer-styles .explorer-beer-table th:nth-child(3) {
+  width: 12%;
+}
+.brewery-style-list a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.style-top-beer-name {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  overflow-wrap: anywhere;
+}
+.style-top-beer-name small {
+  color: var(--color-text-secondary);
+}

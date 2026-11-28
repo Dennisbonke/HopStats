@@ -85,7 +85,7 @@ test("eager country and style pages support local search and retain selected lab
   });
   expect(screen.getByLabelText("Selected style")).toBeChecked();
   expect(screen.getByLabelText("Selected country")).toBeChecked();
-  expect(screen.getByLabelText("Unknown country")).toBeInTheDocument();
+  expect(screen.queryByLabelText("Unknown country")).not.toBeInTheDocument();
   expect(fetchExploreOptions).toHaveBeenCalledTimes(count);
   expect(fetchBreweryCountries).toHaveBeenCalledTimes(2);
   expect(
@@ -218,4 +218,80 @@ test("responsive option fixtures honour schemas, search, selected IDs and termin
   expect(
     optionResponse(new URL("https://test/api/v1/unmocked"), data),
   ).toBeUndefined();
+});
+
+test("obsolete observer callback cannot bypass the next search debounce", async () => {
+  const callbacks: IntersectionObserverCallback[] = [];
+  vi.stubGlobal(
+    "IntersectionObserver",
+    class {
+      constructor(callback: IntersectionObserverCallback) {
+        callbacks.push(callback);
+      }
+      observe() {}
+      disconnect() {}
+    },
+  );
+  const fetch = vi.fn().mockResolvedValue({ items: ["first"], has_more: true });
+  function List({ search }: { search: string }) {
+    const options = useFilterOptions(fetch, key, search, false);
+    return (
+      <div ref={options.container}>
+        {options.items.join(",")}
+        <div ref={options.sentinel} />
+      </div>
+    );
+  }
+  const view = render(<List search="old" />);
+  await screen.findByText("first");
+  await waitFor(() => expect(callbacks.length).toBeGreaterThan(0));
+  const obsolete = callbacks[0];
+  vi.useFakeTimers();
+  try {
+    view.rerender(<List search="new" />);
+    act(() =>
+      obsolete(
+        [{ isIntersecting: true } as IntersectionObserverEntry],
+        {} as IntersectionObserver,
+      ),
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await act(async () => vi.advanceTimersByTimeAsync(249));
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[1][0].get("search")).toBe("new");
+  } finally {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  }
+});
+
+test("unknown country follows literal label search and selected visibility", async () => {
+  vi.mocked(fetchBreweryCountries).mockResolvedValue({
+    items: ["Netherlands"],
+    unknown_available: true,
+    has_more: false,
+  });
+  const view = render(
+    <BreweryFilterPanel value={emptyBreweryFilters()} onChange={() => {}} />,
+  );
+  await screen.findByLabelText("Unknown country");
+  fireEvent.change(screen.getByLabelText("Search countries"), {
+    target: { value: "unKNOWN" },
+  });
+  expect(screen.getByLabelText("Unknown country")).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Search countries"), {
+    target: { value: "absent" },
+  });
+  expect(screen.queryByLabelText("Unknown country")).not.toBeInTheDocument();
+  expect(screen.getByText("No matching countries.")).toBeInTheDocument();
+  view.rerender(
+    <BreweryFilterPanel
+      value={{ ...emptyBreweryFilters(), unknown_country: "true" }}
+      onChange={() => {}}
+    />,
+  );
+  expect(screen.getByLabelText("Unknown country")).toBeChecked();
+  expect(screen.queryByText("No matching countries.")).not.toBeInTheDocument();
 });

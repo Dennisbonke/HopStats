@@ -135,12 +135,14 @@ export function RangeFilter({
   low,
   high,
   maximum,
+  sliderAvailable = true,
   onChange,
 }: {
   label: string;
   low: string;
   high: string;
-  maximum: number;
+  maximum: number | null;
+  sliderAvailable?: boolean;
   onChange: (low: string, high: string) => void;
 }) {
   const [draft, setDraft] = useState([low, high]);
@@ -195,7 +197,8 @@ export function RangeFilter({
   const max = rating
     ? 5
     : Math.max(
-        maximum,
+        Number.isFinite(maximum) ? maximum! : 1,
+        1,
         ...[low, high, ...draft].filter((v) => validThreshold(v)).map(Number),
       );
   const sliderValues = error ? [low, high] : draft;
@@ -244,96 +247,99 @@ export function RangeFilter({
   }
   return (
     <div className="explorer-range">
-      <div
-        className="explorer-range-track"
-        style={
-          {
-            "--range-low": Math.min(lower, upper) / max,
-            "--range-high": Math.max(lower, upper) / max,
-          } as CSSProperties
-        }
-        onPointerDown={(event) => {
-          if (event.button !== 0) return;
-          // Keep mouse focus on the handle; CSS touch-action governs touch drags.
-          if (event.pointerType !== "touch") event.preventDefault();
-          const box = event.currentTarget.getBoundingClientRect();
-          const x = ((event.clientX - box.left - 12) / (box.width - 24)) * max;
-          const collapsed =
-            (Math.abs(upper - lower) / max) * (box.width - 24) < 12;
-          gesture.current = {
-            x: event.clientX,
-            index: collapsed
-              ? null
-              : Math.abs(x - lower) < Math.abs(x - upper)
-                ? 0
-                : 1,
-            original: [...draftRef.current],
-          };
-          event.currentTarget.setPointerCapture(event.pointerId);
-          if (gesture.current.index !== null) {
-            inputs.current[gesture.current.index]?.focus({
-              preventScroll: true,
-            });
-            move(event);
+      {sliderAvailable && (
+        <div
+          className="explorer-range-track"
+          style={
+            {
+              "--range-low": Math.min(lower, upper) / max,
+              "--range-high": Math.max(lower, upper) / max,
+            } as CSSProperties
           }
-        }}
-        onPointerMove={move}
-        onPointerUp={(event) => {
-          if (!gesture.current) return;
-          move(event);
-          gesture.current = null;
-          event.currentTarget.releasePointerCapture(event.pointerId);
-          commit(draftRef.current, true);
-        }}
-        onPointerCancel={() => {
-          if (gesture.current) edit(gesture.current.original);
-          gesture.current = null;
-        }}
-      >
-        {[0, 1].map((index) => (
-          <input
-            key={index}
-            ref={(node) => {
-              inputs.current[index] = node;
-            }}
-            type="range"
-            aria-label={`${label} ${index ? "maximum" : "minimum"} slider`}
-            min={0}
-            max={max}
-            step="0.01"
-            value={index ? upper : lower}
-            aria-valuemin={index ? lower : 0}
-            aria-valuemax={index ? max : upper}
-            onChange={(event) => {
-              const next = [...draftRef.current];
-              next[index] = String(
-                index
-                  ? Math.max(lower, Number(event.target.value))
-                  : Math.min(upper, Number(event.target.value)),
-              );
-              edit(next);
-            }}
-            onKeyUp={(event) => {
-              if (
-                [
-                  "ArrowLeft",
-                  "ArrowRight",
-                  "ArrowUp",
-                  "ArrowDown",
-                  "Home",
-                  "End",
-                  "PageUp",
-                  "PageDown",
-                ].includes(event.key)
-              )
-                commit(draftRef.current, true);
-            }}
-            onBlur={() => {
-              if (!gesture.current) commit(draftRef.current);
-            }}
-          />
-        ))}
-      </div>
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            // Keep mouse focus on the handle; CSS touch-action governs touch drags.
+            if (event.pointerType !== "touch") event.preventDefault();
+            const box = event.currentTarget.getBoundingClientRect();
+            const x =
+              ((event.clientX - box.left - 12) / (box.width - 24)) * max;
+            const collapsed =
+              (Math.abs(upper - lower) / max) * (box.width - 24) < 12;
+            gesture.current = {
+              x: event.clientX,
+              index: collapsed
+                ? null
+                : Math.abs(x - lower) < Math.abs(x - upper)
+                  ? 0
+                  : 1,
+              original: [...draftRef.current],
+            };
+            event.currentTarget.setPointerCapture(event.pointerId);
+            if (gesture.current.index !== null) {
+              inputs.current[gesture.current.index]?.focus({
+                preventScroll: true,
+              });
+              move(event);
+            }
+          }}
+          onPointerMove={move}
+          onPointerUp={(event) => {
+            if (!gesture.current) return;
+            move(event);
+            gesture.current = null;
+            event.currentTarget.releasePointerCapture(event.pointerId);
+            commit(draftRef.current, true);
+          }}
+          onPointerCancel={() => {
+            if (gesture.current) edit(gesture.current.original);
+            gesture.current = null;
+          }}
+        >
+          {[0, 1].map((index) => (
+            <input
+              key={index}
+              ref={(node) => {
+                inputs.current[index] = node;
+              }}
+              type="range"
+              aria-label={`${label} ${index ? "maximum" : "minimum"} slider`}
+              min={0}
+              max={max}
+              step="0.01"
+              value={index ? upper : lower}
+              aria-valuemin={index ? lower : 0}
+              aria-valuemax={index ? max : upper}
+              onChange={(event) => {
+                const next = [...draftRef.current];
+                next[index] = String(
+                  index
+                    ? Math.max(lower, Number(event.target.value))
+                    : Math.min(upper, Number(event.target.value)),
+                );
+                edit(next);
+              }}
+              onKeyUp={(event) => {
+                if (
+                  [
+                    "ArrowLeft",
+                    "ArrowRight",
+                    "ArrowUp",
+                    "ArrowDown",
+                    "Home",
+                    "End",
+                    "PageUp",
+                    "PageDown",
+                  ].includes(event.key)
+                )
+                  commit(draftRef.current, true);
+              }}
+              onBlur={() => {
+                if (!gesture.current) commit(draftRef.current);
+              }}
+            />
+          ))}
+        </div>
+      )}
       <div className="explorer-range-inputs">
         {[0, 1].map((index) => (
           <label key={index}>
@@ -345,7 +351,9 @@ export function RangeFilter({
               min="0"
               max={rating ? 5 : undefined}
               step="0.01"
-              placeholder={index ? String(maximum) : "0"}
+              placeholder={
+                index ? (maximum === null ? "" : String(maximum)) : "0"
+              }
               value={draft[index]}
               aria-invalid={error}
               aria-describedby={error ? errorId : undefined}

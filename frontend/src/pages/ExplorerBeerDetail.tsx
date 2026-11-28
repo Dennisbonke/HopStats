@@ -1,3 +1,5 @@
+import { isExplorerDetail } from "../utils/explorer";
+import { detailLink, detailReturn, detailBackState } from "../utils/explorer";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Link,
@@ -11,12 +13,7 @@ import type { BeerCheckin, ExploreLocation } from "../api/explore";
 import BeerArtwork from "../components/BeerArtwork";
 import BeerRatingChart from "../components/BeerRatingChart";
 import { Button } from "../components/ui";
-import {
-  checkinDate,
-  explorerReturnUrl,
-  personalRating,
-  safeImageUrl,
-} from "../utils/explorer";
+import { checkinDate, personalRating, safeImageUrl } from "../utils/explorer";
 
 export function useBeerResource<T>(
   key: string,
@@ -215,7 +212,7 @@ export default function ExplorerBeerDetail() {
       });
     }
   }, [historyKey, history.data]);
-  const returnTo = explorerReturnUrl(params.get("returnTo"));
+  const returnTo = detailReturn(params, location.state, "/explore/beers");
   useEffect(() => {
     const changes: Record<string, string> = {};
     if (
@@ -250,15 +247,19 @@ export default function ExplorerBeerDetail() {
       <Link
         className="beer-detail-back"
         to={returnTo}
-        state={{
-          ...location.state,
-          explorerReturnKey: location.state?.explorerEntryKey,
-        }}
+        state={detailBackState(location.state)}
       >
-        {returnTo.startsWith("/explore/breweries/")
-          ? "← Back to brewery"
-          : "← Back to Beer Explorer"}
+        {returnTo.startsWith("/explore/styles/")
+          ? "← Back to style"
+          : returnTo.startsWith("/explore/breweries/")
+            ? "← Back to brewery"
+            : "← Back to Beer Explorer"}
       </Link>
+      {isExplorerDetail(returnTo) && (
+        <Link className="beer-detail-back" to="/explore/beers">
+          Beer catalogue
+        </Link>
+      )}
       {!validId ? (
         <ResourceError error={new ApiError(404)} retry={profile.retry} />
       ) : profile.error ? (
@@ -273,16 +274,22 @@ export default function ExplorerBeerDetail() {
               <h1>{beer.name}</h1>
               <p>
                 {beer.brewery ? (
-                  <Link
-                    to={`/explore/breweries/${beer.brewery.id}?${new URLSearchParams({ returnTo: location.pathname + location.search })}`}
-                  >
+                  <Link {...detailLink("breweries", beer.brewery.id, location)}>
                     {beer.brewery.name}
                   </Link>
                 ) : (
                   "Brewery unavailable"
                 )}
               </p>
-              <p>{beer.style?.name ?? "Style unavailable"}</p>
+              <p>
+                {beer.style ? (
+                  <Link {...detailLink("styles", beer.style.id, location)}>
+                    {beer.style.name}
+                  </Link>
+                ) : (
+                  "Style unavailable"
+                )}
+              </p>
               <dl className="beer-profile-metadata">
                 {beer.abv !== null && (
                   <div>

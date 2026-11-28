@@ -389,12 +389,12 @@ test("return URLs and image URLs are validated", () => {
   for (const value of [
     "https://evil.test/explore/beers",
     "//evil.test",
-    "/explore/beers/1",
     "/explore/beers/../imports",
     "/imports",
     "/explore/beers#unsafe",
   ])
     expect(explorerReturnUrl(value)).toBe("/explore/beers");
+  expect(explorerReturnUrl("/explore/styles/3")).toBe("/explore/styles/3");
   expect(explorerReturnUrl("/explore/beers?future=keep")).toBe(
     "/explore/beers?future=keep",
   );
@@ -588,4 +588,19 @@ test("unavailable session storage does not break detail navigation", async () =>
   await screen.findByRole("heading", { name: "Personal stout" });
   await user.click(screen.getByRole("link", { name: /Back to Beer Explorer/ }));
   await screen.findByRole("heading", { name: "Beers" });
+});
+
+test("cross-entity entry offers a fresh Beer catalogue shortcut without redundant catalogue-origin links", async () => {
+  show("/explore/beers/1?returnTo=%2Fexplore%2Fstyles%2F3");
+  await screen.findByRole("heading", { level: 1 });
+  expect(screen.getByRole("link", { name: "Beer catalogue" })).toHaveAttribute(
+    "href",
+    "/explore/beers",
+  );
+  cleanup();
+  show("/explore/beers/1");
+  await screen.findByRole("heading", { level: 1 });
+  expect(
+    screen.queryByRole("link", { name: "Beer catalogue" }),
+  ).not.toBeInTheDocument();
 });

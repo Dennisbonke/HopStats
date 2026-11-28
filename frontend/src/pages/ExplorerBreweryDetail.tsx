@@ -1,3 +1,5 @@
+import { isExplorerDetail } from "../utils/explorer";
+import { detailLink, detailReturn, detailBackState } from "../utils/explorer";
 import { useEffect } from "react";
 import {
   Link,
@@ -13,7 +15,6 @@ import BreweryRatingChart from "../components/BreweryRatingChart";
 import { Button } from "../components/ui";
 import {
   breweryLocation,
-  breweryReturnUrl,
   personalRating,
   checkinDate,
 } from "../utils/explorer";
@@ -28,7 +29,7 @@ export default function ExplorerBreweryDetail() {
     BigInt(breweryId) <= 9223372036854775807n;
   const profile = useBeerResource(breweryId, fetchBreweryDetail, valid);
   const brewery = profile.data;
-  const returnTo = breweryReturnUrl(params.get("returnTo"));
+  const returnTo = detailReturn(params, location.state, "/explore/breweries");
   const error = !valid ? new ApiError(404) : profile.error;
   const status = error instanceof ApiError ? error.status : null;
   useEffect(() => {
@@ -39,13 +40,15 @@ export default function ExplorerBreweryDetail() {
       <Link
         className="beer-detail-back"
         to={returnTo}
-        state={{ explorerReturnKey: location.state?.explorerEntryKey }}
+        state={detailBackState(location.state)}
       >
-        {returnTo.startsWith("/explore/beers/")
-          ? "← Back to beer"
-          : "← Back to breweries"}
+        {returnTo.startsWith("/explore/styles/")
+          ? "← Back to style"
+          : returnTo.startsWith("/explore/beers/")
+            ? "← Back to beer"
+            : "← Back to breweries"}
       </Link>
-      {returnTo.startsWith("/explore/beers/") && (
+      {isExplorerDetail(returnTo) && (
         <Link className="beer-detail-back" to="/explore/breweries">
           Brewery catalogue
         </Link>
@@ -127,9 +130,9 @@ export default function ExplorerBreweryDetail() {
                 <ul className="brewery-style-list">
                   {brewery.most_explored_styles.map((style) => (
                     <li key={style.id}>
-                      <span>
+                      <Link {...detailLink("styles", style.id, location)}>
                         {style.name}: {style.unique_beer_count} unique beers
-                      </span>
+                      </Link>
                       <meter
                         min={0}
                         max={brewery.most_explored_styles[0].unique_beer_count}
@@ -153,10 +156,7 @@ export default function ExplorerBreweryDetail() {
                   {brewery.highest_rated_beers.map((beer) => (
                     <li key={beer.id}>
                       <BeerArtwork beer={beer} />
-                      <Link
-                        to={`/explore/beers/${beer.id}?${new URLSearchParams({ returnTo: location.pathname + location.search })}`}
-                        state={location.state}
-                      >
+                      <Link {...detailLink("beers", beer.id, location)}>
                         {beer.name}
                       </Link>
                       <strong>

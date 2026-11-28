@@ -1,4 +1,5 @@
-import { useState } from "react";
+import CountFilter from "./CountFilter";
+import { useRef, useState } from "react";
 import { fetchBreweryCountries } from "../api/explore";
 import { Button } from "../components/ui";
 import { useFilterOptions } from "./useFilterOptions";
@@ -29,6 +30,9 @@ function Countries({
       value.country.includes(country) ||
       country.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
   );
+  const showUnknown =
+    !!value.unknown_country ||
+    (unknown && "unknown country".includes(search.toLocaleLowerCase()));
   return (
     <>
       <label>
@@ -46,7 +50,7 @@ function Countries({
         aria-label="Available countries"
         tabIndex={0}
       >
-        {(unknown || value.unknown_country) && (
+        {showUnknown && (
           <label>
             <input
               type="checkbox"
@@ -90,7 +94,7 @@ function Countries({
             </Button>
           </p>
         )}
-        {!pending && !error && !options.length && !unknown && (
+        {!pending && !error && !options.length && !showUnknown && (
           <p>No matching countries.</p>
         )}
       </div>
@@ -106,10 +110,27 @@ export function BreweryFilterPanel({
   onChange: (v: Filters) => void;
   mobile?: boolean;
 }) {
+  const latest = useRef(value);
+  latest.current = value;
+  function change(patch: Partial<Filters>) {
+    const next = { ...latest.current, ...patch };
+    latest.current = next;
+    onChange(next);
+  }
   return (
     <div className="explorer-filter-content">
       <FilterSection title="Country" initialOpen>
-        {() => <Countries value={value} onChange={onChange} />}
+        {() => (
+          <Countries
+            value={value}
+            onChange={(next) =>
+              change({
+                country: next.country,
+                unknown_country: next.unknown_country,
+              })
+            }
+          />
+        )}
       </FilterSection>
       <FilterSection
         title="Exploration"
@@ -125,28 +146,12 @@ export function BreweryFilterPanel({
                 ["Minimum check-ins", "min_checkins"],
               ] as const
             ).map(([label, key]) => (
-              <label key={key}>
-                {label}
-                <input
-                  type="number"
-                  min="1"
-                  max="2147483647"
-                  step="1"
-                  inputMode="numeric"
-                  defaultValue={value[key]}
-                  key={`${key}:${value[key]}`}
-                  onBlur={(e) => {
-                    if (e.target.validity.valid)
-                      onChange({ ...value, [key]: e.target.value });
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      e.currentTarget.blur();
-                    }
-                  }}
-                />
-              </label>
+              <CountFilter
+                key={key}
+                label={label}
+                value={value[key]}
+                onChange={(next) => change({ [key]: next })}
+              />
             ))}
           </>
         )}
@@ -162,7 +167,7 @@ export function BreweryFilterPanel({
             high={value.rating_max}
             maximum={5}
             onChange={(low, high) =>
-              onChange({ ...value, rating_min: low, rating_max: high })
+              change({ rating_min: low, rating_max: high })
             }
           />
         )}
@@ -200,7 +205,7 @@ export function BreweryFilterPanel({
                     value={value[key]}
                     onChange={(e) => {
                       if (e.target.validity.valid)
-                        onChange({ ...value, [key]: e.target.value });
+                        change({ [key]: e.target.value });
                     }}
                   />
                 </label>
