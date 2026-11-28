@@ -389,12 +389,12 @@ test("return URLs and image URLs are validated", () => {
   for (const value of [
     "https://evil.test/explore/beers",
     "//evil.test",
-    "/explore/beers/1",
     "/explore/beers/../imports",
     "/imports",
     "/explore/beers#unsafe",
   ])
     expect(explorerReturnUrl(value)).toBe("/explore/beers");
+  expect(explorerReturnUrl("/explore/styles/3")).toBe("/explore/styles/3");
   expect(explorerReturnUrl("/explore/beers?future=keep")).toBe(
     "/explore/beers?future=keep",
   );

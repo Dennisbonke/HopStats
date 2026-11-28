@@ -29,6 +29,9 @@ function Countries({
       value.country.includes(country) ||
       country.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
   );
+  const showUnknown =
+    !!value.unknown_country ||
+    (unknown && "unknown country".includes(search.toLocaleLowerCase()));
   return (
     <>
       <label>
@@ -46,7 +49,7 @@ function Countries({
         aria-label="Available countries"
         tabIndex={0}
       >
-        {(unknown || value.unknown_country) && (
+        {showUnknown && (
           <label>
             <input
               type="checkbox"
@@ -90,7 +93,7 @@ function Countries({
             </Button>
           </p>
         )}
-        {!pending && !error && !options.length && !unknown && (
+        {!pending && !error && !options.length && !showUnknown && (
           <p>No matching countries.</p>
         )}
       </div>

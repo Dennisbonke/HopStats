@@ -285,7 +285,10 @@ test("detail statistics and semantic cross-entity links", async () => {
   expect(
     screen.getByRole("link", { name: /View brewery on Untappd/ }),
   ).toHaveAttribute("href", "https://untappd.com/brewery/765");
-  expect(screen.queryByRole("link", { name: /IPA/ })).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /IPA/ })).toHaveAttribute(
+    "href",
+    expect.stringContaining("/explore/styles/1?"),
+  );
 });
 test("catalogue return URL and history entry restoration remain scoped", async () => {
   const url = "/explore/breweries?search=Personal&sort=name_asc&page=2";
@@ -321,7 +324,6 @@ test("beer-origin return path and unsafe redirects", async () => {
   for (const input of [
     "https://evil.test/explore/breweries",
     "//evil.test/explore/breweries",
-    "/explore/breweries/2",
     "/explore/breweries#x",
   ])
     expect(breweryReturnUrl(input)).toBe("/explore/breweries");

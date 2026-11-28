@@ -147,3 +147,42 @@ export async function fetchBreweryCountries(
     has_more: boolean;
   }>;
 }
+
+export type ExploreStyle = ExploreEntity & {
+  unique_beer_count: number;
+  checkin_count: number;
+  rated_checkin_count: number;
+  personal_average_rating: number | null;
+  brewery_count: number;
+  average_abv: number | null;
+  known_abv_beer_count: number;
+  first_checked_in_at: string;
+  last_checked_in_at: string;
+};
+export type ExploreStylesResponse = Omit<ExploreBeersResponse, "items"> & {
+  items: ExploreStyle[];
+};
+export type StyleDetail = ExploreStyle & {
+  highest_rating: number | null;
+  lowest_rating: number | null;
+  rating_distribution: BreweryDetail["rating_distribution"];
+  most_explored_breweries: BreweryDetail["most_explored_styles"];
+  highest_rated_beers: ExploreBeer[];
+};
+export async function fetchExploreStyles(
+  params: URLSearchParams,
+): Promise<ExploreStylesResponse> {
+  const response = await apiFetch(`/api/v1/explore/styles?${params}`);
+  if (!response.ok) throw new ApiError(response.status);
+  return response.json();
+}
+export async function fetchStyleDetail(id: string): Promise<StyleDetail> {
+  const response = await apiFetch(`/api/v1/explore/styles/${id}`);
+  if (!response.ok) throw new ApiError(response.status);
+  return response.json();
+}
+export async function fetchStyleBounds(): Promise<{ abv_max: number }> {
+  const response = await apiFetch("/api/v1/explore/style-bounds");
+  if (!response.ok) throw new ApiError(response.status);
+  return response.json();
+}

@@ -3377,26 +3377,32 @@ test("Milestones keep semantic statuses, progress, forms, and long names readabl
   await expectNoDocumentOverflow(page);
 });
 
-test("upcoming Style catalogue inherit the document theme", async ({
-  page,
-}) => {
+test("Styles catalogue inherits the document theme", async ({ page }) => {
   await stubApplication(page);
+  await page.route(/\/api\/v1\/explore\/styles\?/, (route) =>
+    route.fulfill({
+      json: { items: [], page: 1, page_size: 25, total: 0, total_pages: 0 },
+    }),
+  );
+  await page.route("**/api/v1/explore/style-bounds", (route) =>
+    route.fulfill({ json: { abv_max: 0 } }),
+  );
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
     for (const width of [320, 390, 768, 1280]) {
       await page.setViewportSize({ width, height: width === 1280 ? 800 : 844 });
       await page.goto("/explore/styles");
       await expect(
-        page.getByRole("heading", { name: "Styles catalogue coming later" }),
+        page.getByRole("heading", { name: "Styles", exact: true }),
       ).toBeVisible();
-      await expect(page.locator(".app")).not.toHaveClass(/theme-aware/);
+      await expect(page.locator(".app")).toHaveClass(/theme-aware/);
       await expect(page.locator(".explorer-page")).not.toHaveClass(
         /theme-aware/,
       );
       await expect(page.locator(".app")).toHaveCSS("color-scheme", colorScheme);
-      await expect(page.locator(".explorer-upcoming")).toHaveCSS(
+      await expect(page.locator(".explorer-page")).toHaveCSS(
         "background-color",
-        colorScheme === "dark" ? "rgb(37, 55, 71)" : "rgb(238, 242, 247)",
+        colorScheme === "dark" ? "rgb(16, 25, 35)" : "rgb(245, 247, 251)",
       );
       await expectNoDocumentOverflow(page);
     }

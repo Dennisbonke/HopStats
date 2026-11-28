@@ -18,10 +18,14 @@ from ..schemas.explore import (
     ExploreCheckinQuery,
     ExploreCountryOptions,
     ExploreOptionsResponse,
+    ExploreStyleDetailResponse,
+    ExploreStyleListResponse,
+    ExploreStyleQuery,
     PositiveId,
 )
 from ..services.breweries import BreweryExplorer
 from ..services.explore import ExploreService
+from ..services.styles import StyleExplorer
 
 router = APIRouter(prefix="/api/v1/explore", tags=["explore"])
 
@@ -104,3 +108,28 @@ def brewery_detail(
     user: Annotated[User, Depends(get_current_user)],
 ):
     return BreweryExplorer(session).detail(user.id, brewery_id)
+
+
+@router.get("/styles", response_model=ExploreStyleListResponse)
+def styles(
+    session: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+    filters: Annotated[ExploreStyleQuery, Query()],
+):
+    return StyleExplorer(session).catalogue(user.id, **filters.model_dump())
+
+
+@router.get("/style-bounds", response_model=ExploreBoundsResponse)
+def style_bounds(
+    session: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(get_current_user)]
+):
+    return StyleExplorer(session).bounds(user.id)
+
+
+@router.get("/styles/{style_id}", response_model=ExploreStyleDetailResponse)
+def style_detail(
+    style_id: Annotated[int, Path(gt=0, le=9223372036854775807)],
+    session: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    return StyleExplorer(session).detail(user.id, style_id)

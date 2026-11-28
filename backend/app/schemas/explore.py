@@ -290,3 +290,102 @@ class ExploreBreweryDetailResponse(ExploreBreweryResponse):
     rating_distribution: list[ExploreRatingBucket]
     most_explored_styles: list[ExploreStyleCount]
     highest_rated_beers: list[ExploreBeerResponse]
+
+
+class ExploreStyleQuery(BaseModel):
+    search: str | None = Field(default=None, max_length=200)
+    page: int = Field(default=1, ge=1, le=2147483647)
+    page_size: int = Field(default=25, ge=1, le=100)
+    rating_min: Decimal | None = Field(
+        default=None, ge=0, le=5, multiple_of=Decimal("0.01"), allow_inf_nan=False
+    )
+    rating_max: Decimal | None = Field(
+        default=None, ge=0, le=5, multiple_of=Decimal("0.01"), allow_inf_nan=False
+    )
+    first_tried_from: date | None = None
+    first_tried_to: date | None = None
+    last_tried_from: date | None = None
+    last_tried_to: date | None = None
+
+    @model_validator(mode="after")
+    def ordered_ranges(self):
+        for low, high in [
+            (self.rating_min, self.rating_max),
+            (self.abv_min, self.abv_max),
+            (self.first_tried_from, self.first_tried_to),
+            (self.last_tried_from, self.last_tried_to),
+        ]:
+            if low is not None and high is not None and low > high:
+                raise ValueError("Range minimum must not exceed maximum")
+        for day in [
+            self.first_tried_from,
+            self.first_tried_to,
+            self.last_tried_from,
+            self.last_tried_to,
+        ]:
+            if day is not None and (day <= date(1, 12, 31) or day == date.max):
+                raise ValueError("Dates must be between 0002-01-01 and 9999-12-30")
+        return self
+
+    sort: Literal[
+        "name_asc",
+        "name_desc",
+        "breweries_asc",
+        "breweries_desc",
+        "unique_beers_asc",
+        "unique_beers_desc",
+        "checkins_asc",
+        "checkins_desc",
+        "rating_asc",
+        "rating_desc",
+        "first_tried_asc",
+        "first_tried_desc",
+        "last_tried_asc",
+        "last_tried_desc",
+    ] = "unique_beers_desc"
+    min_unique_beers: int | None = Field(default=None, ge=1, le=2147483647)
+    min_checkins: int | None = Field(default=None, ge=1, le=2147483647)
+
+    min_breweries: int | None = Field(default=None, ge=0, le=2147483647)
+    abv_min: Decimal | None = Field(
+        default=None, ge=0, multiple_of=Decimal("0.01"), allow_inf_nan=False
+    )
+    abv_max: Decimal | None = Field(
+        default=None, ge=0, multiple_of=Decimal("0.01"), allow_inf_nan=False
+    )
+
+
+class ExploreStyleResponse(BaseModel):
+    id: int
+    name: str
+    unique_beer_count: int
+    checkin_count: int
+    rated_checkin_count: int
+    personal_average_rating: float | None
+    brewery_count: int
+    average_abv: float | None
+    known_abv_beer_count: int
+    first_checked_in_at: datetime
+    last_checked_in_at: datetime
+
+    @field_serializer("first_checked_in_at", "last_checked_in_at", when_used="json")
+    def serialize_timestamp(self, value: datetime) -> str:
+        return (
+            value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+        ).isoformat()
+
+
+class ExploreStyleListResponse(BaseModel):
+    items: list[ExploreStyleResponse]
+    page: int
+    page_size: int
+    total: int
+    total_pages: int
+
+
+class ExploreStyleDetailResponse(ExploreStyleResponse):
+    highest_rating: float | None
+    lowest_rating: float | None
+    rating_distribution: list[ExploreRatingBucket]
+    most_explored_breweries: list[ExploreStyleCount]
+    highest_rated_beers: list[ExploreBeerResponse]
